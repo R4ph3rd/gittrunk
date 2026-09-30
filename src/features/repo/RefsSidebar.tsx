@@ -1,6 +1,15 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowDownToLine, ArrowUp, GitBranch, Trash2, Undo2 } from "lucide-react";
+import {
+  ArrowDownToLine,
+  ArrowUp,
+  FileText,
+  GitBranch,
+  History,
+  Sparkles,
+  Trash2,
+  Undo2,
+} from "lucide-react";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -13,6 +22,11 @@ import { pushBranch } from "@/features/remotes/actions";
 import { RemotesSection } from "@/features/remotes/RemotesSection";
 import { SetUpstreamDialog } from "@/features/remotes/SetUpstreamDialog";
 import type { BranchInfo } from "@/ipc/bindings";
+import { openPrDescription } from "@/features/ai";
+import { HistoryViewsHost } from "@/features/history-views/HistoryViewsHost";
+import { SubmodulesSection, WorktreesSection } from "@/features/history-views/SidebarSections";
+import { openReflog } from "@/features/history-views/store";
+import { baseFor, useBranchSummary } from "@/features/history-views/useBranchSummary";
 import { useRefs } from "@/ipc/queries";
 import { useRepoStore } from "@/stores/repo";
 import { TargetEntries } from "@/features/operations/actions/ActionMenu";
@@ -24,6 +38,7 @@ export function RefsSidebar({ repoId }: { repoId: string }) {
   const select = useRepoStore((s) => s.selectCommit);
   const stash = useStashActions(repoId);
   const client = useQueryClient();
+  const branchSummary = useBranchSummary(repoId);
   const [upstreamFor, setUpstreamFor] = useState<BranchInfo | null>(null);
   const data = refs.data;
 
@@ -55,6 +70,27 @@ export function RefsSidebar({ repoId }: { repoId: string }) {
                   </ContextMenuItem>
                   <ContextMenuItem icon={<GitBranch />} onSelect={() => setUpstreamFor(b)}>
                     Set upstream…
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem
+                    icon={<History />}
+                    onSelect={() => openReflog(repoId, b.fullName)}
+                  >
+                    Show reflog
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    icon={<Sparkles />}
+                    onSelect={() => void branchSummary.summarize(b.name, baseFor(b.upstream))}
+                  >
+                    Summarize branch
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    icon={<FileText />}
+                    onSelect={() =>
+                      openPrDescription({ repoId, base: baseFor(b.upstream), head: b.name })
+                    }
+                  >
+                    Draft PR description
                   </ContextMenuItem>
                 </ContextMenuContent>
               </ContextMenu>
@@ -110,7 +146,11 @@ export function RefsSidebar({ repoId }: { repoId: string }) {
           </Section>
         </>
       )}
+      <SubmodulesSection repoId={repoId} />
+      <WorktreesSection repoId={repoId} />
       {stash.dialog}
+      {branchSummary.dialog}
+      <HistoryViewsHost repoId={repoId} />
       <SetUpstreamDialog
         repoId={repoId}
         branch={upstreamFor}

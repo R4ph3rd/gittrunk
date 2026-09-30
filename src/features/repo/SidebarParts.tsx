@@ -39,6 +39,7 @@ export function Item({
   label,
   active,
   hint,
+  badges,
   nested,
   onClick,
   dnd,
@@ -50,6 +51,8 @@ export function Item({
   label: string;
   active?: boolean;
   hint?: string;
+  /** Small status badges shown before the hint (submodule status, worktree flags). */
+  badges?: ReactNode;
   /** Indent one level (remote branches under their remote). */
   nested?: boolean;
   onClick?: () => void;
@@ -88,7 +91,12 @@ export function Item({
         )}
       >
         <span className="truncate">{label}</span>
-        {hint && <span className="ml-auto shrink-0 font-mono text-xs text-fg-subtle">{hint}</span>}
+        {badges && <span className="ml-auto flex shrink-0 items-center gap-1">{badges}</span>}
+        {hint && (
+          <span className={cn("shrink-0 font-mono text-xs text-fg-subtle", !badges && "ml-auto")}>
+            {hint}
+          </span>
+        )}
       </button>
     </li>
   );
