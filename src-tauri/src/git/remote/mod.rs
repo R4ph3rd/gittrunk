@@ -9,6 +9,7 @@
 pub mod creds;
 pub mod keychain;
 pub mod manage;
+pub mod native;
 pub mod net;
 pub mod ops;
 pub mod progress;

@@ -188,13 +188,8 @@ pub type Notifier = Arc<dyn Fn(CredentialRequested) + Send + Sync>;
 
 struct Shared {
     token: String,
-    pending: PendingCredentials,
-    notifier: Notifier,
-    op: Option<Arc<OpHandle>>,
-    secrets: Arc<dyn SecretStore>,
+    resolver: CredentialResolver,
     stop: AtomicBool,
-    last_username: Mutex<Option<String>>,
-    timeout: Duration,
 }
 
 /// Listener owned by one network operation; stops when dropped.
@@ -230,13 +225,8 @@ impl CredentialBridge {
         let token = random_hex(32);
         let shared = Arc::new(Shared {
             token: token.clone(),
-            pending,
-            notifier,
-            op,
-            secrets,
+            resolver: CredentialResolver::new(secrets, pending, notifier, timeout).with_op(op),
             stop: AtomicBool::new(false),
-            last_username: Mutex::new(None),
-            timeout,
         });
         let s = shared.clone();
         let thread = std::thread::spawn(move || accept_loop(listener, s));
@@ -273,6 +263,7 @@ impl CredentialBridge {
 impl Drop for CredentialBridge {
     fn drop(&mut self) {
         self.shared.stop.store(true, Ordering::SeqCst);
+        self.shared.resolver.stop();
         if let Some(t) = self.thread.take() {
             let _ = t.join();
         }
@@ -328,67 +319,156 @@ fn resolve_prompt(shared: &Shared, prompt: &str) -> Option<String> {
         return None;
     }
     let info = classify_prompt(prompt);
-    let username = match info.kind {
-        CredentialKind::Username => None,
-        _ => info
-            .username
-            .clone()
-            .or_else(|| shared.last_username.lock().clone()),
-    };
+    shared
+        .resolver
+        .ask(info.kind, &info.host, &info.url, info.username.as_deref())
+}
 
-    // Answer from the keychain when possible.
-    match info.kind {
-        CredentialKind::Username => {
-            if let Some(user) = shared.secrets.get(&info.host, "") {
-                *shared.last_username.lock() = Some(user.clone());
-                return Some(user);
-            }
-        }
-        _ => {
-            if let Some(user) = &username {
-                if let Some(secret) = shared.secrets.get(&info.host, user) {
-                    return Some(secret);
-                }
-            }
+// --------------------------------------------------------------- resolver
+
+/// Answers credential questions: keychain first, then the UI through a
+/// `CredentialRequested` event. Shared by the askpass bridge (desktop) and
+/// the libgit2 credentials callback (embedded builds).
+pub struct CredentialResolver {
+    secrets: Arc<dyn SecretStore>,
+    pending: PendingCredentials,
+    notifier: Notifier,
+    timeout: Duration,
+    op: Option<Arc<OpHandle>>,
+    stop: AtomicBool,
+    last_username: Mutex<Option<String>>,
+}
+
+impl CredentialResolver {
+    pub fn new(
+        secrets: Arc<dyn SecretStore>,
+        pending: PendingCredentials,
+        notifier: Notifier,
+        timeout: Duration,
+    ) -> Self {
+        Self {
+            secrets,
+            pending,
+            notifier,
+            timeout,
+            op: None,
+            stop: AtomicBool::new(false),
+            last_username: Mutex::new(None),
         }
     }
 
-    let (request_id, rx) = shared.pending.register();
-    (shared.notifier)(CredentialRequested {
-        request_id: request_id.clone(),
-        url: info.url.clone(),
-        username: username.clone(),
-        kind: info.kind,
-    });
-    let deadline = Instant::now() + shared.timeout;
-    let response = loop {
-        match rx.recv_timeout(Duration::from_millis(100)) {
-            Ok(r) => break Some(r),
-            Err(mpsc::RecvTimeoutError::Timeout) => {}
-            Err(mpsc::RecvTimeoutError::Disconnected) => break None,
-        }
-        let cancelled = shared.op.as_ref().is_some_and(|o| o.is_cancelled());
-        if cancelled || shared.stop.load(Ordering::SeqCst) || Instant::now() >= deadline {
-            break None;
-        }
-    };
-    shared.pending.forget(&request_id);
-    let response = response?;
-    let value = response.value?;
-    match info.kind {
-        CredentialKind::Username => {
-            *shared.last_username.lock() = Some(value.clone());
-        }
-        _ => {
-            if response.remember {
+    /// Prompts give up as soon as `op` is cancelled.
+    pub fn with_op(mut self, op: Option<Arc<OpHandle>>) -> Self {
+        self.op = op;
+        self
+    }
+
+    /// Makes pending and future prompts give up.
+    pub fn stop(&self) {
+        self.stop.store(true, Ordering::SeqCst);
+    }
+
+    /// Drops a rejected stored secret for `host`/`username`.
+    pub fn forget(&self, host: &str, username: &str) {
+        let _ = self.secrets.delete(host, username);
+    }
+
+    /// Keychain first, then the UI. `None` means cancelled or timed out.
+    pub fn ask(
+        &self,
+        kind: CredentialKind,
+        host: &str,
+        url: &str,
+        username: Option<&str>,
+    ) -> Option<String> {
+        let username = match kind {
+            CredentialKind::Username => None,
+            _ => username
+                .map(str::to_string)
+                .or_else(|| self.last_username.lock().clone()),
+        };
+
+        // Answer from the keychain when possible.
+        match kind {
+            CredentialKind::Username => {
+                if let Some(user) = self.secrets.get(host, "") {
+                    *self.last_username.lock() = Some(user.clone());
+                    return Some(user);
+                }
+            }
+            _ => {
                 if let Some(user) = &username {
-                    let _ = keychain::store(&*shared.secrets, &info.host, user, &value);
+                    if let Some(secret) = self.secrets.get(host, user) {
+                        return Some(secret);
+                    }
                 }
             }
         }
+        self.prompt(kind, host, url, username)
     }
-    if matches!(info.kind, CredentialKind::Username) && response.remember {
-        let _ = shared.secrets.set(&info.host, "", &value);
+
+    /// Like `ask` but never consults the keychain for the secret (used after
+    /// a stored secret was rejected). A username may still come from it.
+    pub fn ask_ui(
+        &self,
+        kind: CredentialKind,
+        host: &str,
+        url: &str,
+        username: Option<&str>,
+    ) -> Option<String> {
+        let username = match kind {
+            CredentialKind::Username => None,
+            _ => username
+                .map(str::to_string)
+                .or_else(|| self.last_username.lock().clone()),
+        };
+        self.prompt(kind, host, url, username)
     }
-    Some(value)
+
+    fn prompt(
+        &self,
+        kind: CredentialKind,
+        host: &str,
+        url: &str,
+        username: Option<String>,
+    ) -> Option<String> {
+        let (request_id, rx) = self.pending.register();
+        (self.notifier)(CredentialRequested {
+            request_id: request_id.clone(),
+            url: url.to_string(),
+            username: username.clone(),
+            kind,
+        });
+        let deadline = Instant::now() + self.timeout;
+        let response = loop {
+            match rx.recv_timeout(Duration::from_millis(100)) {
+                Ok(r) => break Some(r),
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => break None,
+            }
+            let cancelled = self.op.as_ref().is_some_and(|o| o.is_cancelled());
+            if cancelled || self.stop.load(Ordering::SeqCst) || Instant::now() >= deadline {
+                break None;
+            }
+        };
+        self.pending.forget(&request_id);
+        let response = response?;
+        let value = response.value?;
+        match kind {
+            CredentialKind::Username => {
+                *self.last_username.lock() = Some(value.clone());
+            }
+            _ => {
+                if response.remember {
+                    if let Some(user) = &username {
+                        let _ = keychain::store(&*self.secrets, host, user, &value);
+                    }
+                }
+            }
+        }
+        if matches!(kind, CredentialKind::Username) && response.remember {
+            let _ = self.secrets.set(host, "", &value);
+        }
+        Some(value)
+    }
 }

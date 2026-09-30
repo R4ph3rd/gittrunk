@@ -8,7 +8,8 @@ use std::sync::Arc;
 use git2::{BranchType, Repository};
 use parking_lot::Mutex;
 
-use super::creds::CredentialBridge;
+use super::creds::{CredentialBridge, CredentialResolver};
+use super::native;
 use super::progress::{parse_progress, Progress};
 use super::validate;
 use crate::git::cli::{CliOptions, CliOutput, GitCli, OpHandle};
@@ -30,6 +31,8 @@ pub struct NetSession {
     pub cli: GitCli,
     pub op: Option<Arc<OpHandle>>,
     pub bridge: Option<CredentialBridge>,
+    /// Credential source for the libgit2 backend (embedded builds).
+    pub resolver: Option<Arc<CredentialResolver>>,
     progress: Mutex<Box<dyn FnMut(Progress) + Send>>,
 }
 
@@ -49,8 +52,19 @@ impl NetSession {
             cli,
             op,
             bridge,
+            resolver: None,
             progress: Mutex::new(progress),
         }
+    }
+
+    pub fn with_resolver(mut self, resolver: Arc<CredentialResolver>) -> Self {
+        self.resolver = Some(resolver);
+        self
+    }
+
+    /// Forwards a progress update to the sink (used by the native backend).
+    pub fn report(&self, p: Progress) {
+        (self.progress.lock())(p);
     }
 
     /// Runs git with the credential environment, parsing progress lines.

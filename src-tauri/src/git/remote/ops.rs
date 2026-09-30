@@ -7,8 +7,9 @@ use std::time::{Duration, Instant};
 
 use tauri_specta::Event;
 
-use super::creds::{random_hex, CredentialBridge, Notifier};
+use super::creds::{random_hex, CredentialBridge, CredentialResolver, Notifier, PROMPT_TIMEOUT};
 use super::keychain::Keychain;
+use super::native;
 use super::net::NetSession;
 use super::progress::Progress;
 use crate::git::cli::GitCli;
@@ -67,6 +68,10 @@ pub fn sync_session(
     state: &GitState,
     cli: GitCli,
 ) -> AppResult<NetSession> {
+    if native::enabled() {
+        let resolver = resolver(state, app, None);
+        return Ok(NetSession::plain(cli).with_resolver(resolver));
+    }
     let bridge = CredentialBridge::start(
         state.credentials().clone(),
         credential_notifier(app.clone()),
@@ -75,6 +80,23 @@ pub fn sync_session(
     )
     .map_err(|e| AppError::new(ErrorKind::Io, format!("credential bridge: {e}")))?;
     Ok(NetSession::new(cli, None, Some(bridge), Box::new(|_| {})))
+}
+
+/// Resolver for embedded builds (no askpass bridge there).
+fn resolver(
+    state: &GitState,
+    app: &tauri::AppHandle,
+    op: Option<Arc<crate::git::cli::OpHandle>>,
+) -> Arc<CredentialResolver> {
+    Arc::new(
+        CredentialResolver::new(
+            Arc::new(Keychain),
+            state.credentials().clone(),
+            credential_notifier(app.clone()),
+            PROMPT_TIMEOUT,
+        )
+        .with_op(op),
+    )
 }
 
 /// Starts `work` on a background thread and returns its `OpId` immediately.
@@ -108,17 +130,23 @@ where
                 .emit(&progress_app);
             }
         });
-        let result = CredentialBridge::start(
-            st.credentials().clone(),
-            credential_notifier(app.clone()),
-            Some(handle.clone()),
-            Arc::new(Keychain),
-        )
-        .map_err(|e| AppError::new(ErrorKind::Io, format!("credential bridge: {e}")))
-        .and_then(|bridge| {
-            let sess = NetSession::new(st.cli().clone(), Some(handle), Some(bridge), progress);
+        let result = if native::enabled() {
+            let sess = NetSession::new(st.cli().clone(), Some(handle.clone()), None, progress)
+                .with_resolver(resolver(&st, &app, Some(handle)));
             work(&sess)
-        });
+        } else {
+            CredentialBridge::start(
+                st.credentials().clone(),
+                credential_notifier(app.clone()),
+                Some(handle.clone()),
+                Arc::new(Keychain),
+            )
+            .map_err(|e| AppError::new(ErrorKind::Io, format!("credential bridge: {e}")))
+            .and_then(|bridge| {
+                let sess = NetSession::new(st.cli().clone(), Some(handle), Some(bridge), progress);
+                work(&sess)
+            })
+        };
         st.ops().finish(&id);
         if let Some(e) = entry {
             e.invalidate_graph();
