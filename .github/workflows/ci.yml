@@ -63,6 +63,14 @@ jobs:
       - name: cargo test
         working-directory: src-tauri
         run: cargo test
+      # Git for Windows enables core.autocrlf; exercise that on the fast runner too.
+      - name: cargo test (global core.autocrlf=true)
+        if: runner.os == 'Linux'
+        working-directory: src-tauri
+        # ~/.gitconfig (not GIT_CONFIG_GLOBAL) so libgit2 sees it too; runners are ephemeral.
+        run: |
+          git config --global core.autocrlf true
+          cargo test
 
       - name: IPC bindings are up to date
         if: runner.os == 'Linux'
