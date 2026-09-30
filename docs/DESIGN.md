@@ -1,37 +1,213 @@
-# Design system
+# gittrunk design system
 
-Status: token skeleton (M0). The full component set and `/design` route arrive in M1 (design-system-agent).
+Source of truth: `src/design/tokens.css`. Tailwind utilities map to tokens in `src/index.css` (`@theme inline`). Components live in `src/design/components/` and are imported from `@/design/components`. The dev-only `/design` route shows every token and component in both themes.
 
-## Principles
+Direction: Clerk, Linear, Vercel. Dark first plus a light theme, 13px base text, 28px default control (24px small), crisp 1px borders, subtle shadows, 120-180ms motion (durations collapse to ~0 under `prefers-reduced-motion`). Gradients appear only on app chrome and empty states; content surfaces are flat.
 
-- Dark-first, with a light theme. References: Clerk, Linear, Vercel.
-- Tight spacing, crisp 1px borders, subtle shadows, restrained motion.
-- Gradients on app chrome and empty states only; content surfaces stay flat.
-- Every value is a token. Components never use raw colors.
+## Rules
 
-## Where tokens live
+- No hex or rgb literals in components. Use token classes (`bg-surface`, `text-fg-muted`, `border-border`, `bg-accent`) or `var(--token)` arbitrary values (`h-[var(--control-md)]`, `bg-[color:var(--overlay)]`).
+- Changing `--accent` restyles every accent use. Never hardcode a color class.
+- Every interactive component shows a `:focus-visible` ring from `--focus-ring`.
+- Tokens not mapped in `@theme inline` (control heights, z-index, overlay, scrollbar, danger-fg) are consumed through `var(--x)`.
 
-- `src/design/tokens.css`: CSS variables. Dark values on `:root`, light values on `[data-theme="light"]`.
-- `src/index.css`: `@theme inline` maps tokens to Tailwind utilities (Tailwind v4 CSS-first config).
+## Theming
+
+Wrap the app in `ThemeProvider` (from `src/design/theme.tsx`). It sets `data-theme="dark|light"` on `<html>`, supports `dark | light | system` (system follows `prefers-color-scheme` live) and persists the choice to `localStorage` (`gittrunk.theme`, failures ignored; moves to backend settings later).
+
+```tsx
+<ThemeProvider defaultTheme="dark">
+  <TooltipProvider>
+    <App />
+    <Toaster />
+  </TooltipProvider>
+</ThemeProvider>;
+const { theme, resolvedTheme, setTheme } = useTheme();
+```
 
 ## Tokens
 
-| Group       | Variables                                                                         | Tailwind                                     |
-| ----------- | --------------------------------------------------------------------------------- | -------------------------------------------- |
-| Surfaces    | `--bg`, `--bg-subtle`, `--surface`, `--surface-raised`, `--surface-hover`         | `bg-bg`, `bg-surface`, …                     |
-| Borders     | `--border`, `--border-strong`                                                     | `border-border`, `border-border-strong`      |
-| Text        | `--fg`, `--fg-muted`, `--fg-subtle`                                               | `text-fg`, `text-fg-muted`, `text-fg-subtle` |
-| Accent      | `--accent`, `--accent-fg`, `--accent-muted`, `--focus-ring`                       | `bg-accent`, `text-accent`, …                |
-| Status      | `--danger`, `--success`, `--warning`                                              | `text-danger`, …                             |
-| Diff        | `--diff-add-bg`, `--diff-del-bg`                                                  | via `var()`                                  |
-| Graph lanes | `--lane-0` … `--lane-7`                                                           | via `var()` (canvas)                         |
-| Type        | `--font-sans` (Inter), `--font-mono` (JetBrains Mono), `--text-xs` … `--text-2xl` | `font-sans`, `font-mono`, `text-sm`, …       |
-| Spacing     | `--space-1` … `--space-8` (4px scale)                                             | Tailwind spacing scale                       |
-| Radius      | `--radius-sm` 4px, `--radius-md` 6px, `--radius-lg` 10px                          | `rounded-sm/md/lg`                           |
-| Elevation   | `--shadow-sm`, `--shadow-md`, `--shadow-lg`                                       | `shadow-sm/md/lg`                            |
-| Motion      | `--duration-fast` 120ms, `--duration-base` 180ms, `--ease-standard`               | `ease-standard`                              |
-| Chrome      | `--gradient-chrome`                                                               | `bg-chrome`                                  |
+Values shown as dark / light where they differ.
 
-### Chrome gradient
+### Color
 
-Deep indigo (`#3730a3` at 35%) from the top-left, teal (`#0b3b3c` at 55%) rising from the bottom, and a faint warm amber glow (`#fbbf24` at 8%) at the top-right, over a near-black base. The light theme uses the same composition at lower intensity.
+| Token                                                            | Dark / Light                                                      | Use                           |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------- |
+| `--bg`                                                           | `#0b0c14` / `#fbfbfd`                                             | App background                |
+| `--bg-subtle`                                                    | `#10121c` / `#f4f5f9`                                             | Inputs, code wells            |
+| `--surface`                                                      | `#13151f` / `#ffffff`                                             | Panels                        |
+| `--surface-raised`                                               | `#181b27` / `#ffffff`                                             | Menus, dialogs, popovers      |
+| `--surface-hover`                                                | `#1e2230` / `#f1f2f7`                                             | Hover and selected rows       |
+| `--border` / `--border-strong`                                   | `#242838`, `#323750` / `#e3e5ee`, `#cfd2df`                       | Hairlines                     |
+| `--fg` / `--fg-muted` / `--fg-subtle`                            | `#e6e8f0`, `#9096ad`, `#626881` / `#151827`, `#5b6078`, `#8a8fa6` | Text                          |
+| `--accent` / `--accent-fg` / `--accent-muted`                    | teal-400 / `#0d9488`                                              | Primary actions, active state |
+| `--focus-ring`                                                   | teal at 55% / 45%                                                 | `:focus-visible` ring         |
+| `--danger` `--success` `--warning`                               | rose / green / amber (light: darker)                              | Status                        |
+| `--danger-fg`                                                    | `#ffffff`                                                         | Text on danger                |
+| `--diff-add-bg` / `--diff-del-bg`                                | green / rose at 12-14%                                            | Diff lines                    |
+| `--overlay`                                                      | near-black 60% / slate 35%                                        | Modal backdrop                |
+| `--selection`                                                    | teal at 30% / 22%                                                 | Text selection                |
+| `--scrollbar-thumb` / `-hover`                                   | `#2c3146`, `#3d4360` / `#cfd2df`, `#b3b8cb`                       | Scrollbars                    |
+| `--lane-0` .. `--lane-7`                                         | 8 graph lane colors (light: darker set)                           | Graph lane = `color % 8`      |
+| `--indigo-*` `--teal-*` `--amber-400` `--rose-500` `--green-500` | palette primitives                                                | Source colors for gradients   |
+
+### Gradient
+
+| Token               | Use                                                                                 |
+| ------------------- | ----------------------------------------------------------------------------------- |
+| `--gradient-chrome` | Indigo to teal with faint warm glow. Utility `bg-chrome`. Chrome/empty states only. |
+
+### Typography
+
+`--font-sans` (Inter Variable), `--font-mono` (JetBrains Mono Variable). Sizes: `--text-xs` 11px, `--text-sm` 12px, `--text-base` 13px, `--text-lg` 15px, `--text-xl` 18px, `--text-2xl` 24px.
+
+### Spacing, controls, radius
+
+| Token                | Value                   |
+| -------------------- | ----------------------- |
+| `--space-1..8`       | 4, 8, 12, 16, 24, 32 px |
+| `--control-sm/md/lg` | 24, 28, 32 px           |
+| `--radius-sm/md/lg`  | 4, 6, 10 px             |
+
+### Elevation, motion, z-index
+
+| Token                                                          | Value                                       |
+| -------------------------------------------------------------- | ------------------------------------------- |
+| `--shadow-sm/md/lg`                                            | Subtle to prominent; lighter in light theme |
+| `--duration-fast/base`                                         | 120ms / 180ms (0.01ms with reduced motion)  |
+| `--ease-standard`                                              | `cubic-bezier(0.2, 0, 0, 1)`                |
+| `--z-base/sticky/dropdown/overlay/modal/popover/toast/tooltip` | 0, 10, 50, 100, 110, 120, 130, 140          |
+
+## Components
+
+All exported from `src/design/components/index.ts`.
+
+**Button**: variants `primary | secondary | ghost | danger | outline`, sizes `sm | md | icon`, `loading`, `asChild`.
+
+```tsx
+<Button variant="primary" loading={saving} onClick={save}>
+  Save
+</Button>
+```
+
+**IconButton**: ghost icon button; `aria-label` is required by type.
+
+```tsx
+<IconButton aria-label="Refresh" onClick={refetch}>
+  <RefreshCw />
+</IconButton>
+```
+
+**Input / Textarea / Label**: `aria-invalid="true"` shows the danger border.
+
+```tsx
+<Label htmlFor="b">Branch</Label>
+<Input id="b" placeholder="feature/x" />
+```
+
+**Kbd**: `<Kbd>Ctrl</Kbd>`. **Spinner**: `<Spinner />` (role status). **Badge**: `neutral | accent | success | warning | danger`.
+
+```tsx
+<Badge variant="success">merged</Badge>
+```
+
+**Tooltip**: needs `TooltipProvider` above. Optional shortcut hint.
+
+```tsx
+<Tooltip content="Fetch" shortcut="Ctrl+F">
+  <IconButton aria-label="Fetch">...</IconButton>
+</Tooltip>
+```
+
+**Dialog**: `Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose`.
+
+```tsx
+<Dialog>
+  <DialogTrigger asChild>
+    <Button>New</Button>
+  </DialogTrigger>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>New branch</DialogTitle>
+    </DialogHeader>
+    ...
+  </DialogContent>
+</Dialog>
+```
+
+**AlertDialog**: destructive confirms. Props: `title`, `description`, `preview`, `confirmLabel`, `cancelLabel`, `destructive`, `onConfirm`, `onCancel`, `open/onOpenChange` or `trigger`.
+
+```tsx
+<AlertDialog
+  open={open}
+  onOpenChange={setOpen}
+  title="Delete branch?"
+  description="Cannot be undone."
+  preview={<code>feature/x</code>}
+  confirmLabel="Delete"
+  onConfirm={del}
+/>
+```
+
+**DropdownMenu / ContextMenu**: `*Trigger, *Content, *Item (icon, shortcut, destructive), *Label, *Separator`.
+
+```tsx
+<DropdownMenu>
+  <DropdownMenuTrigger asChild>
+    <Button>Actions</Button>
+  </DropdownMenuTrigger>
+  <DropdownMenuContent>
+    <DropdownMenuItem icon={<Copy />} shortcut="Ctrl+C">
+      Copy
+    </DropdownMenuItem>
+  </DropdownMenuContent>
+</DropdownMenu>
+```
+
+**Popover**: `Popover, PopoverTrigger, PopoverContent, PopoverClose`.
+
+**Tabs**: `Tabs, TabsList, TabsTrigger, TabsContent` (Radix props: `defaultValue`, `value`, `onValueChange`).
+
+**Switch**: `<Switch checked={on} onCheckedChange={setOn} aria-label="Auto fetch" />`.
+
+**Separator**: `<Separator />`, `orientation="vertical"`. **ScrollArea**: give it a fixed height.
+
+**Toaster / toast**: mount `<Toaster />` once inside `ThemeProvider`; call `toast.success("Saved")`.
+
+**ResizablePanels**: 1px handle with a wider hit area.
+
+```tsx
+<ResizablePanelGroup orientation="horizontal">
+  <ResizablePanel defaultSize={30}>...</ResizablePanel>
+  <ResizableHandle aria-label="Resize sidebar" />
+  <ResizablePanel>...</ResizablePanel>
+</ResizablePanelGroup>
+```
+
+**CommandPalette**: cmdk in a Dialog. Fuzzy filtering, arrow keys, Enter runs the item and closes.
+
+```tsx
+<CommandPalette
+  open={open}
+  onOpenChange={setOpen}
+  groups={[
+    {
+      heading: "Git",
+      items: [
+        { id: "fetch", label: "Fetch", icon: <RefreshCw />, shortcut: "Ctrl+F", onSelect: fetch },
+      ],
+    },
+  ]}
+/>
+```
+
+**EmptyState**: gradient chrome background.
+
+```tsx
+<EmptyState
+  icon={<Inbox />}
+  title="No repository"
+  description="Open one."
+  action={<Button variant="primary">Open</Button>}
+/>
+```
