@@ -13,7 +13,7 @@ Direction: Clerk, Linear, Vercel. Dark first plus a light theme, 13px base text,
 
 ## Theming
 
-Wrap the app in `ThemeProvider` (from `src/design/theme.tsx`). It sets `data-theme="dark|light"` on `<html>`, supports `dark | light | system` (system follows `prefers-color-scheme` live) and persists the choice to `localStorage` (`gittrunk.theme`, failures ignored; moves to backend settings later).
+Wrap the app in `ThemeProvider` (from `src/design/theme.tsx`). It sets `data-theme="dark|light"` on `<html>`, supports `dark | light | system` (system follows `prefers-color-scheme` live) and persists the choice to `localStorage` (`gittrunk.theme`, failures ignored). `SettingsHost` keeps it in sync with the backend `theme` setting in both directions (dialog, "Toggle theme" command, startup load).
 
 ```tsx
 <ThemeProvider defaultTheme="dark">
@@ -233,3 +233,11 @@ Button sizes: `xs` (20px), `sm` (24px), `md` (28px, default).
   action={<Button variant="primary">Open</Button>}
 />
 ```
+
+## Settings screen
+
+`src/features/settings/` builds the dialog from existing components only (Dialog, SegmentedControl, Switch, Input, Button, Kbd, Label); no new tokens. Open it with `mod+,`, the "Settings" command or `openSettings(section?)`. Mount `<SettingsHost />` once inside `ThemeProvider`, `QueryClientProvider` and beside `CommandHost`.
+
+- Sections (left nav): General (theme, confirm destructive), Git (executable path with Browse, pull strategy, graph order, diff context 0..20), Keyboard (recorder), AI (only when a command `ai.settings` is registered), About.
+- Keyboard recorder: Record captures the next chord (Escape cancels, announced through a live region), Clear unbinds, Reset restores the default, conflicts are flagged with `findConflicts` and need "Assign anyway". Overrides persist through `keybindingsSet` and apply live via `setShortcutOverrides` in `src/app/commands`.
+- State: `src/stores/settings.ts`. `useSettings()` for components; `getConfirmDestructive()`, `getPullStrategy()`, `getDiffContextLines()`, `getGraphOrder()` for commands and handlers; `updateSettings(patch)` is optimistic and rolls back with an error toast.
