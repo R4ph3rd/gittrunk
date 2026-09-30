@@ -1,6 +1,7 @@
 //! Runner for the system `git` executable: no shell, explicit argument
 //! vectors, a fixed environment, streaming stderr and cancellation.
 
+mod embedded;
 mod registry;
 
 pub use registry::{OpHandle, OpRegistry};
@@ -42,6 +43,13 @@ impl CliOutput {
     }
 
     fn error(&self) -> AppError {
+        // The embedded shim marks commands it does not serve.
+        let head = self.stderr.trim_start();
+        if head.starts_with(embedded::UNSUPPORTED_PREFIX) {
+            let msg = head.lines().next().unwrap_or(head).trim();
+            let msg = msg.strip_prefix("error: ").unwrap_or(msg);
+            return AppError::new(ErrorKind::Unsupported, msg).with_detail(self.stderr.clone());
+        }
         let first = self
             .stderr
             .lines()
@@ -80,6 +88,8 @@ static DEFAULT_PROGRAM: parking_lot::RwLock<Option<PathBuf>> = parking_lot::RwLo
 #[derive(Debug, Clone)]
 pub struct GitCli {
     program: PathBuf,
+    /// Serve every call in-process (libgit2) instead of spawning `git`.
+    embedded: bool,
 }
 
 impl Default for GitCli {
@@ -96,7 +106,10 @@ impl GitCli {
             .read()
             .clone()
             .unwrap_or_else(|| PathBuf::from("git"));
-        Self { program }
+        Self {
+            program,
+            embedded: cfg!(embedded_git),
+        }
     }
 
     /// Sets the executable used by every later `GitCli::new()`; `None`
@@ -109,6 +122,16 @@ impl GitCli {
     pub fn with_path(path: impl Into<PathBuf>) -> Self {
         Self {
             program: path.into(),
+            embedded: cfg!(embedded_git),
+        }
+    }
+
+    /// Test helper: serves calls with the embedded shim on any platform.
+    #[cfg(test)]
+    pub(crate) fn embedded_for_tests() -> Self {
+        Self {
+            embedded: true,
+            ..Self::new()
         }
     }
 
@@ -178,6 +201,9 @@ impl GitCli {
         on_stderr: &mut dyn FnMut(&str),
     ) -> AppResult<CliOutput> {
         let args: Vec<String> = args.iter().map(|a| a.as_ref().to_string()).collect();
+        if self.embedded {
+            return embedded::run(dir, &args, opts, op, on_stderr);
+        }
         let mut child = self.command(dir, &args, opts).spawn().map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
                 AppError::new(
