@@ -1,6 +1,8 @@
 import "@testing-library/jest-dom/vitest";
 import { configure } from "@testing-library/react";
 import { afterEach, beforeEach, vi } from "vitest";
+import { resetBackStackForTests } from "../app/layout/back";
+import { resetViewport } from "./viewport";
 
 // Slow CI runners: a query that misses a 1s findBy/waitFor window leaves work
 // pending and cascades into act() warnings, so give the UI room to settle.
@@ -31,4 +33,9 @@ afterEach(() => {
     actWarnings.length = 0;
     throw new Error(`React act() warnings during test:\n${list}`);
   }
+});
+
+afterEach(() => {
+  resetViewport();
+  resetBackStackForTests();
 });
