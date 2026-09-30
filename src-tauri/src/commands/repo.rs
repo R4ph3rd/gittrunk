@@ -8,7 +8,7 @@ use tauri::Manager;
 
 use crate::git::recent::{now_secs, RecentStore};
 use crate::git::{blocking, GitState};
-use crate::ipc::error::{AppError, AppResult};
+use crate::ipc::error::AppResult;
 use crate::ipc::types::*;
 
 fn recent_store(app: &tauri::AppHandle) -> Option<RecentStore> {
@@ -58,8 +58,22 @@ pub async fn repo_init(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn repo_clone(request: CloneRequest) -> AppResult<OpId> {
-    Err(AppError::not_implemented("repo_clone"))
+pub async fn repo_clone(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, GitState>,
+    request: CloneRequest,
+) -> AppResult<OpId> {
+    // Validate up front so bad input fails the command instead of the op.
+    crate::git::remote::net::clone_target(&request)?;
+    Ok(crate::git::remote::ops::spawn_op(
+        app,
+        state.inner(),
+        None,
+        move |sess| {
+            crate::git::remote::net::clone(sess, &request)?;
+            Ok(None)
+        },
+    ))
 }
 
 #[tauri::command]

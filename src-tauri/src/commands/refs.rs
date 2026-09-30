@@ -40,11 +40,23 @@ pub async fn branch_create(
 #[tauri::command]
 #[specta::specta]
 pub async fn branch_delete(
+    app: tauri::AppHandle,
     state: tauri::State<'_, GitState>,
     repo: RepoId,
     request: BranchDeleteRequest,
     dry_run: bool,
 ) -> AppResult<OpOutcome> {
+    if request.remote {
+        // Remote branches are deleted with `git push --delete`, synchronously.
+        let st = state.inner().clone();
+        return crate::git::blocking(move || {
+            let sess = crate::git::remote::ops::sync_session(&app, &st, st.cli().clone())?;
+            st.write_repo(&repo, |r| {
+                crate::git::remote::net::delete_remote_branch(&sess, r, &request, dry_run)
+            })
+        })
+        .await;
+    }
     ref_write!(state, repo, |r| LibGit.branch_delete(r, &request, dry_run))
 }
 
