@@ -234,6 +234,91 @@ Button sizes: `xs` (20px), `sm` (24px), `md` (28px, default).
 />
 ```
 
+## Mobile
+
+Touch-first primitives for the Android app (`docs/MOBILE_DESIGN.md`). Desktop rendering is unchanged: existing components only gain appended `coarse:` classes and `isCompact`/`isCoarse` branches.
+
+### Rules
+
+- **Layout** (compact vs regular) comes from the viewport via `useLayout()` (`@/app/layout/useLayout`). **Capabilities** (folder picker, SSH, worktrees, git CLI) come from `usePlatform()` (`@/app/platform`). Never infer one from the other: an Android tablet is regular layout with mobile capabilities.
+- Never branch structure with CSS `hidden`/`compact:hidden` (both trees would mount, duplicate ids and focus targets). Branch in JSX on `useLayout()`; use `compact:`/`coarse:`/`short:` classes only to tune sizing.
+- `coarse:` follows `(pointer: coarse)`, `compact:` follows the layout query, `short:` is landscape phones (height under 480px). The variants live in `src/index.css`; the query strings are shared with `useLayout` (asserted by a test).
+- Targets are at least `--touch-target` (44px) on coarse pointers, list rows at least `--touch-target-row` (52px, `min-h`, never fixed `h`). Small visuals keep their size and grow their hit area (`::after` on `Switch`, padded wrapper on `Checkbox`).
+- Every gesture has a visible or focusable alternative (swipe actions are real buttons, long-press has an overflow button).
+
+### Tokens
+
+| Token                                      | Value                                                             |
+| ------------------------------------------ | ----------------------------------------------------------------- |
+| `--touch-target` / `--touch-target-row`    | 44px / 52px                                                       |
+| `--appbar-h` / `--appbar-h-short`          | 48px / 40px (landscape)                                           |
+| `--bottomnav-h` / `--navrail-w`            | 56px / 72px                                                       |
+| `--sheet-radius`                           | `--radius-lg`                                                     |
+| `--sheet-handle` / `--sheet-handle-h`      | 32px / 4px                                                        |
+| `--sheet-max-h`                            | `85dvh` (snap `auto`)                                             |
+| `--sheet-duration` / `--swipe-duration`    | `--duration-base` (180ms) / 150ms (both 1ms with reduced motion)  |
+| `--progress-h`                             | 2px (AppBar progress line)                                        |
+| `--safe-top/bottom/left/right`             | `env(safe-area-inset-*)`                                          |
+| `--kb-inset`                               | Soft keyboard height, written by `useKeyboardInset()`             |
+| keyframes `ds-sheet-in/out/progress-slide` | Sheet enter/exit (translateY) and the indeterminate progress line |
+
+`ThemeProvider` keeps `<meta name="theme-color">` equal to the computed `--bg` whenever the resolved theme changes (the tag is created if missing), so Android system bars follow the theme.
+
+### Existing components, touch variants
+
+| Component           | Change on `coarse:`                                                                            |
+| ------------------- | ---------------------------------------------------------------------------------------------- |
+| `Button`            | `min-h-[var(--touch-target)]`                                                                  |
+| `IconButton`        | `min-h` and `min-w` `--touch-target`                                                           |
+| `Checkbox`          | Wrapper `min-h`/`min-w` `--touch-target`; clicks on the padding forward to the 14px box        |
+| `Switch`            | 44px `::after` hit area, visual size unchanged                                                 |
+| `SegmentedControl`  | Options `min-h-[var(--touch-target)]`                                                          |
+| `Input`, `Textarea` | `text-[16px]` (avoids Android zoom); `Input` also `min-h-[var(--touch-target)]`                |
+| `Tooltip`           | Renders only its trigger when `useLayout().isCoarse` (keep an `aria-label`)                    |
+| `Toaster`           | On compact, `offset`/`mobileOffset` = `calc(var(--bottomnav-h) + var(--safe-bottom))`          |
+| `CommandPalette`    | On compact renders in a full `Sheet` (input on top); `Kbd` hidden when coarse; props unchanged |
+
+### Components
+
+All exported from `@/design/components`.
+
+**Sheet**: bottom sheet on `@radix-ui/react-dialog` (`Sheet`, `SheetTrigger`, `SheetClose`, `SheetContent`, `SheetHeader`, `SheetFooter`, `SheetTitle`, `SheetDescription`). Controlled or uncontrolled; while open it registers on the Android back stack, so back closes it. `SheetContent` props: `snap` `"auto"` (content height, max `--sheet-max-h`, default) or `"full"` (100dvh minus `--safe-top`), `dragToDismiss` (default true; drag the handle past 30% of the height or faster than 0.5 px/ms), `hideHandle`. The body scrolls; `SheetFooter` sticks to the bottom and pads `--safe-bottom`. A title is required (`sr-only` is fine). Uses `bg-surface-raised`, `--border`, `--shadow-lg`, `--overlay`, `--sheet-radius`, `--sheet-duration`.
+
+```tsx
+<Sheet open={open} onOpenChange={setOpen}>
+  <SheetContent snap="auto">
+    <SheetHeader>
+      <SheetTitle>Branch</SheetTitle>
+      <SheetDescription>Pick an action</SheetDescription>
+    </SheetHeader>
+    <SheetFooter>
+      <Button variant="primary">Done</Button>
+    </SheetFooter>
+  </SheetContent>
+</Sheet>
+```
+
+**ActionSheet**: `{ open, onOpenChange, title, description?, items, groups?, cancelLabel? }`. Rows are `--touch-target-row` high; `destructive` rows use `--danger`; `groups` renders separators between arrays. Selecting a row closes the sheet, then calls `onSelect`. Items: `{ id, label, icon?, description?, destructive?, disabled?, onSelect }`.
+
+**ResponsiveDialog**: same API as `Dialog` (`ResponsiveDialogTrigger/Close/Content/Header/Footer/Title/Description`). On regular it renders exactly the `Dialog*` DOM and classes; on compact a `Sheet` (`snap="full"` unless overridden, no close button). Both register on the back stack. Swap `Dialog` for it in features gradually.
+
+**AppBar**: `{ title, subtitle?, onTitleClick?, onBack?, backLabel?, leading?, actions?, progress?, children? }`. Height `--appbar-h` (`--appbar-h-short` on `short:`) plus `--safe-top`, `bg-chrome`, bottom border. `onBack` shows a 44px `IconButton` (`aria-label` "Back" by default); `onTitleClick` renders the title as a button (repo switcher). `progress` is `0..1` or `"indeterminate"`: a 2px accent line (`role="progressbar"`). `children` render under the bar row.
+
+**BottomNav / NavRail**: `{ items: { id, label, icon, badge? }[], activeId, onSelect, hidden? }`. `<nav aria-label="Primary">` with `aria-current="page"` on the active button; `onSelect` also fires when re-tapping the active item; `badge` is a count or a dot. `BottomNav` height `--bottomnav-h` plus `--safe-bottom`; `NavRail` is vertical, `--navrail-w` plus `--safe-left`, for landscape. `hidden` renders nothing (for example while the keyboard is open).
+
+**SwipeRow**: `{ leftAction?, rightAction?, disabled?, className?, children }` with `SwipeAction = { label, icon?, tone: "success" | "danger" | "neutral", onTrigger }`. Swipe right reveals `leftAction`, swipe left reveals `rightAction`. Commits at 40% of the width or 0.5 px/ms, otherwise springs back over `--swipe-duration`; `touch-action: pan-y`. Each action is also a real `<button>` (visually hidden until focused). Always pair with a checkbox or overflow button.
+
+**PullToRefresh**: `{ onRefresh: () => Promise<unknown>, getScrollElement?, disabled?, label?, className?, children }`. Pulling more than 64px at `scrollTop` 0 calls `onRefresh`; shows a `Spinner` and a `role="status"` text while pending; sets `overscroll-behavior-y: contain` on the scroller. While the scroller is at the top the wrapper uses `touch-action: pan-x pan-up` so downward pans reach the component. A custom scroller must be the wrapper or inside it.
+
+**ListRow**: `{ title, subtitle?, leading?, trailing?, chevron?, selected?, disabled?, onClick? }`. `<button>` when `onClick` is set, else `<div>`. `min-h-[var(--touch-target-row)]`, 120ms press state (`--surface-hover`), truncating text.
+
+### Hooks
+
+Import from `@/design/hooks`.
+
+- `useLongPress(onLongPress, { delay = 450, slop = 8, disabled, vibrate = true })` returns handlers to spread on the target (`onPointerDown/Move/Up/Cancel/Leave`, `onContextMenu`). Cancels on movement over `slop` or on scroll, calls `navigator.vibrate(10)` when available, suppresses the native context menu.
+- `useKeyboardInset()` returns the soft keyboard height from `VisualViewport` (0 without it) and writes `--kb-inset` on `<html>`.
+
 ## Settings screen
 
 `src/features/settings/` builds the dialog from existing components only (Dialog, SegmentedControl, Switch, Input, Button, Kbd, Label); no new tokens. Open it with `mod+,`, the "Settings" command or `openSettings(section?)`. Mount `<SettingsHost />` once inside `ThemeProvider`, `QueryClientProvider` and beside `CommandHost`.
