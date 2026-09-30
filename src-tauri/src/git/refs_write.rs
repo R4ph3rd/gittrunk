@@ -135,10 +135,8 @@ fn checkout_conflicts(repo: &Repository, target: &Commit<'_>) -> AppResult<Vec<S
     index.read(true)?;
     let mut paths = BTreeSet::new();
     for c in changes {
-        let wt = restore::worktree_content(workdir, &c.path);
-        let from = restore::blob_content(repo, c.from)?;
-        let to = restore::blob_content(repo, c.to)?;
-        let wt_ok = wt == from || wt == to;
+        let wt = restore::worktree_blob_id(repo, workdir, &c.path);
+        let wt_ok = wt == c.from.map(|f| f.0) || wt == c.to.map(|t| t.0);
         let staged = index
             .get_path(std::path::Path::new(&c.path), 0)
             .map(|e| e.id);

@@ -190,16 +190,18 @@ fn add_worktree_file(
     let Ok(meta) = std::fs::symlink_metadata(&full) else {
         return Ok(());
     };
-    let (mode, data) = if meta.file_type().is_symlink() {
+    let (mode, id, size) = if meta.file_type().is_symlink() {
         let target = std::fs::read_link(&full)?;
-        (0o120000, target.to_string_lossy().into_owned().into_bytes())
+        let data = target.to_string_lossy().into_owned().into_bytes();
+        (0o120000, repo.blob(&data)?, data.len())
     } else if meta.is_file() {
-        (file_mode(&meta), std::fs::read(&full)?)
+        // Hashed through the clean filters (autocrlf, .gitattributes).
+        let id = repo.blob_path(&full)?;
+        (file_mode(&meta), id, repo.find_blob(id)?.size())
     } else {
         // Directories (nested repositories) are not captured.
         return Ok(());
     };
-    let id = repo.blob(&data)?;
     index.add(&IndexEntry {
         ctime: IndexTime::new(0, 0),
         mtime: IndexTime::new(0, 0),
@@ -208,7 +210,7 @@ fn add_worktree_file(
         mode,
         uid: 0,
         gid: 0,
-        file_size: data.len() as u32,
+        file_size: size as u32,
         id,
         flags: 0,
         flags_extended: 0,

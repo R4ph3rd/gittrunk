@@ -45,26 +45,20 @@ pub(crate) fn tree_changes(
     Ok(out)
 }
 
-pub(crate) fn blob_content(
-    repo: &Repository,
-    side: Option<(Oid, u32)>,
-) -> AppResult<Option<Vec<u8>>> {
-    match side {
-        None => Ok(None),
-        Some((oid, _)) => Ok(Some(repo.find_blob(oid)?.content().to_vec())),
-    }
-}
-
-pub(crate) fn worktree_content(workdir: &Path, rel: &str) -> Option<Vec<u8>> {
+/// Blob id of the working-tree entry at `rel` as git would record it: regular
+/// files go through the clean filters (`core.autocrlf`, `.gitattributes`), so a
+/// checked-out CRLF file hashes to its LF blob. `None` when nothing is there.
+pub(crate) fn worktree_blob_id(repo: &Repository, workdir: &Path, rel: &str) -> Option<Oid> {
     let full = workdir.join(rel);
     let meta = std::fs::symlink_metadata(&full).ok()?;
     if meta.file_type().is_symlink() {
-        return std::fs::read_link(&full)
-            .ok()
-            .map(|t| t.to_string_lossy().into_owned().into_bytes());
+        let target = std::fs::read_link(&full).ok()?;
+        return repo
+            .blob(target.to_string_lossy().into_owned().as_bytes())
+            .ok();
     }
     if meta.is_file() {
-        return std::fs::read(&full).ok();
+        return repo.blob_path(&full).ok();
     }
     None
 }
@@ -77,10 +71,8 @@ fn dirty_paths(repo: &Repository, changes: &[PathChange]) -> AppResult<Vec<Strin
     };
     let mut dirty = Vec::new();
     for c in changes {
-        let current = worktree_content(workdir, &c.path);
-        let from = blob_content(repo, c.from)?;
-        let to = blob_content(repo, c.to)?;
-        if current != from && current != to {
+        let current = worktree_blob_id(repo, workdir, &c.path);
+        if current != c.from.map(|f| f.0) && current != c.to.map(|t| t.0) {
             dirty.push(c.path.clone());
         }
     }
@@ -95,21 +87,45 @@ fn apply_changes(repo: &Repository, changes: &[PathChange]) -> AppResult<()> {
     for c in changes.iter().filter(|c| c.to.is_none()) {
         remove_file(&workdir, &c.path);
     }
+    let mut index = git2::Index::new()?;
+    let mut cb = git2::build::CheckoutBuilder::new();
+    cb.force().disable_pathspec_match(true).update_index(false);
+    let mut any = false;
     for c in changes {
         let Some((oid, mode)) = c.to else { continue };
         let full = workdir.join(&c.path);
         if let Ok(meta) = std::fs::symlink_metadata(&full) {
             if meta.is_dir() {
                 std::fs::remove_dir_all(&full)?;
-            } else if meta.file_type().is_symlink() || mode == 0o120000 {
+            } else {
+                // Replaced below; also drops read-only or symlink leftovers.
                 std::fs::remove_file(&full)?;
             }
         }
         if let Some(parent) = full.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let content = repo.find_blob(oid)?.content().to_vec();
-        write_entry(&full, mode, &content)?;
+        let size = repo.find_blob(oid)?.size();
+        index.add(&git2::IndexEntry {
+            ctime: git2::IndexTime::new(0, 0),
+            mtime: git2::IndexTime::new(0, 0),
+            dev: 0,
+            ino: 0,
+            mode,
+            uid: 0,
+            gid: 0,
+            file_size: size as u32,
+            id: oid,
+            flags: 0,
+            flags_extended: 0,
+            path: c.path.as_bytes().to_vec(),
+        })?;
+        cb.path(&c.path);
+        any = true;
+    }
+    if any {
+        // Checkout applies smudge filters, so the files match what git writes.
+        repo.checkout_index(Some(&mut index), Some(&mut cb))?;
     }
     Ok(())
 }
@@ -124,26 +140,6 @@ fn remove_file(workdir: &Path, rel: &str) {
         }
         dir = d.parent().map(Path::to_path_buf);
     }
-}
-
-#[cfg(unix)]
-fn write_entry(full: &Path, mode: u32, content: &[u8]) -> AppResult<()> {
-    use std::os::unix::fs::PermissionsExt;
-    if mode == 0o120000 {
-        let target = String::from_utf8_lossy(content).into_owned();
-        std::os::unix::fs::symlink(target, full)?;
-        return Ok(());
-    }
-    std::fs::write(full, content)?;
-    let perm = if mode == 0o100755 { 0o755 } else { 0o644 };
-    std::fs::set_permissions(full, std::fs::Permissions::from_mode(perm))?;
-    Ok(())
-}
-
-#[cfg(not(unix))]
-fn write_entry(full: &Path, _mode: u32, content: &[u8]) -> AppResult<()> {
-    std::fs::write(full, content)?;
-    Ok(())
 }
 
 /// What restoring to `target` would do to the working tree.
