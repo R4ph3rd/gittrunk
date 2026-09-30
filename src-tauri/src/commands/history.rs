@@ -1,52 +1,85 @@
-//! `history` commands. Phase 0 stubs: typed signatures are the contract;
-//! bodies are filled in by the owning agent.
-#![allow(unused_variables)]
+//! `history` commands: merge, rebase, cherry-pick, revert, reset and the
+//! sequencer controls.
 
-use crate::ipc::error::{AppError, AppResult};
+use crate::git::history::HistoryService;
+use crate::git::libgit::LibGit;
+use crate::git::GitState;
+use crate::ipc::error::AppResult;
 use crate::ipc::types::*;
 
-#[tauri::command]
-#[specta::specta]
-pub async fn merge(repo: RepoId, request: MergeRequest, dry_run: bool) -> AppResult<OpOutcome> {
-    Err(AppError::not_implemented("merge"))
+macro_rules! history {
+    ($state:expr, $repo:expr, |$r:ident| $body:expr) => {{
+        let st = $state.inner().clone();
+        crate::git::blocking(move || st.write_repo(&$repo, |$r| $body)).await
+    }};
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn rebase(repo: RepoId, request: RebaseRequest, dry_run: bool) -> AppResult<OpOutcome> {
-    Err(AppError::not_implemented("rebase"))
+pub async fn merge(
+    state: tauri::State<'_, GitState>,
+    repo: RepoId,
+    request: MergeRequest,
+    dry_run: bool,
+) -> AppResult<OpOutcome> {
+    history!(state, repo, |r| LibGit.merge(r, &request, dry_run))
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn rebase_todo_load(repo: RepoId, base: Oid) -> AppResult<Vec<RebaseTodoItem>> {
-    Err(AppError::not_implemented("rebase_todo_load"))
+pub async fn rebase(
+    state: tauri::State<'_, GitState>,
+    repo: RepoId,
+    request: RebaseRequest,
+    dry_run: bool,
+) -> AppResult<OpOutcome> {
+    history!(state, repo, |r| LibGit.rebase(r, &request, dry_run))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn rebase_todo_load(
+    state: tauri::State<'_, GitState>,
+    repo: RepoId,
+    base: Oid,
+) -> AppResult<Vec<RebaseTodoItem>> {
+    let st = state.inner().clone();
+    crate::git::blocking(move || st.with_repo(&repo, |_, r| LibGit.rebase_todo_load(r, &base)))
+        .await
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn rebase_interactive(
+    state: tauri::State<'_, GitState>,
     repo: RepoId,
     request: InteractiveRebaseRequest,
     dry_run: bool,
 ) -> AppResult<OpOutcome> {
-    Err(AppError::not_implemented("rebase_interactive"))
+    history!(state, repo, |r| LibGit
+        .rebase_interactive(r, &request, dry_run))
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn cherry_pick(
+    state: tauri::State<'_, GitState>,
     repo: RepoId,
     request: CherryPickRequest,
     dry_run: bool,
 ) -> AppResult<OpOutcome> {
-    Err(AppError::not_implemented("cherry_pick"))
+    history!(state, repo, |r| LibGit.cherry_pick(r, &request, dry_run))
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn revert(repo: RepoId, request: RevertRequest, dry_run: bool) -> AppResult<OpOutcome> {
-    Err(AppError::not_implemented("revert"))
+pub async fn revert(
+    state: tauri::State<'_, GitState>,
+    repo: RepoId,
+    request: RevertRequest,
+    dry_run: bool,
+) -> AppResult<OpOutcome> {
+    history!(state, repo, |r| LibGit.revert(r, &request, dry_run))
 }
 
 #[tauri::command]
@@ -69,6 +102,10 @@ pub async fn reset(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn sequencer_control(repo: RepoId, action: SequencerAction) -> AppResult<OpOutcome> {
-    Err(AppError::not_implemented("sequencer_control"))
+pub async fn sequencer_control(
+    state: tauri::State<'_, GitState>,
+    repo: RepoId,
+    action: SequencerAction,
+) -> AppResult<OpOutcome> {
+    history!(state, repo, |r| LibGit.sequencer_control(r, action))
 }

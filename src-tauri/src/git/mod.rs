@@ -7,6 +7,7 @@
 pub mod cli;
 pub mod conflicts;
 pub mod graph;
+pub mod history;
 pub mod libgit;
 pub mod oplog;
 pub mod preview;
