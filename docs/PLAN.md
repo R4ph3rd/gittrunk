@@ -91,7 +91,7 @@ Rule: an agent writes only inside its owned paths. Contract or shared config cha
 
 ## 4. IPC contract (defined in Phase 0)
 
-- Single source of truth: Rust types in `src-tauri/src/ipc/types.rs` deriving `serde` + `specta::Type`. `tauri-specta` exports `src/ipc/bindings.ts` on debug builds and via `cargo run --bin export-bindings` in CI; CI runs it and fails on `git diff --exit-code src/ipc/bindings.ts`.
+- Single source of truth: Rust types in `src-tauri/src/ipc/types.rs` deriving `serde` + `specta::Type`. `tauri-specta` exports `src/ipc/bindings.ts` on debug builds and via `cargo run --example export-bindings` in CI; CI runs it and fails on `git diff --exit-code src/ipc/bindings.ts`.
 - All commands are `async` and return `Result<T, AppError>`. `AppError.kind` is a closed enum: `NotARepo | Conflict | DirtyWorktree | AuthRequired | AuthFailed | Network | RefNotFound | InvalidInput | GitCli | AiDisabled | AiProvider | Io | Internal`.
 - Repositories are addressed by `RepoId` (an opaque handle returned by `repo_open`); backend holds a `RepoRegistry` with a file watcher that emits `repo_changed { repo_id, scopes: [refs|index|worktree|config] }` so TanStack Query invalidates precisely.
 - Long operations return an `OpId` immediately and stream `op_progress { op_id, phase, percent?, message }` then `op_finished { op_id, result }` events. Cancel via `op_cancel`.
