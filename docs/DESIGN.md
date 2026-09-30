@@ -90,12 +90,34 @@ All exported from `src/design/components/index.ts`.
 </Button>
 ```
 
-**IconButton**: ghost icon button; `aria-label` is required by type.
+Button sizes: `xs` (20px), `sm` (24px), `md` (28px, default).
+
+**IconButton**: ghost icon button; `aria-label` is required by type. `size`: `xs` 20px, `sm` 24px, `md` 28px (default).
 
 ```tsx
-<IconButton aria-label="Refresh" onClick={refetch}>
+<IconButton aria-label="Refresh" size="sm" onClick={refetch}>
   <RefreshCw />
 </IconButton>
+```
+
+**Checkbox**: native input, styled. `checked` is `boolean | "indeterminate"` (mixed shows a dash, `aria-checked="mixed"`); `onCheckedChange(boolean)`; optional `label` (wraps input so label click toggles). Without `label`, pass `aria-label`. 14px box, `--focus-ring`, accent fill.
+
+```tsx
+<Checkbox label="Stage all" checked={all} onCheckedChange={setAll} />
+```
+
+**SegmentedControl**: `role="radiogroup"` of buttons (`aria-checked`), roving tabindex; Arrow keys/Home/End move and select, skipping disabled options. `size`: `sm` | `md`. Icon-only options need `aria-label`.
+
+```tsx
+<SegmentedControl
+  aria-label="View"
+  value={view}
+  onValueChange={setView}
+  options={[
+    { value: "list", label: "List", icon: <List /> },
+    { value: "tree", label: "Tree", icon: <GitBranch /> },
+  ]}
+/>
 ```
 
 **Input / Textarea / Label**: `aria-invalid="true"` shows the danger border.
@@ -111,7 +133,7 @@ All exported from `src/design/components/index.ts`.
 <Badge variant="success">merged</Badge>
 ```
 
-**Tooltip**: needs `TooltipProvider` above. Optional shortcut hint.
+**Tooltip**: works without a provider (mounts its own when none is above). Wrap the app in `TooltipProvider` to share delay settings across tooltips. Optional shortcut hint.
 
 ```tsx
 <Tooltip content="Fetch" shortcut="Ctrl+F">

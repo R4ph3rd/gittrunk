@@ -26,6 +26,8 @@ import {
   DropdownMenuTrigger,
   EmptyState,
   IconButton,
+  SegmentedControl,
+  Checkbox,
   Input,
   Kbd,
   Label,
@@ -130,6 +132,8 @@ function Components() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [alertOpen, setAlertOpen] = useState(false);
   const [on, setOn] = useState(true);
+  const [checked, setChecked] = useState(true);
+  const [seg, setSeg] = useState("list");
 
   return (
     <>
@@ -167,6 +171,16 @@ function Components() {
             <Copy />
           </IconButton>
         </Row>
+        <Row label="IconButton sizes (xs / sm / md)">
+          {(["xs", "sm", "md"] as const).map((size) => (
+            <IconButton key={size} size={size} aria-label={`Refresh ${size}`}>
+              <RefreshCw />
+            </IconButton>
+          ))}
+        </Row>
+        <Row label="Button xs">
+          <Button size="xs">Extra small</Button>
+        </Row>
       </Section>
 
       <Section title="Inputs">
@@ -195,6 +209,32 @@ function Components() {
         </div>
       </Section>
 
+      <Section title="Checkbox, SegmentedControl">
+        <Row label="Checkbox">
+          <Checkbox label="Checked" checked={checked} onCheckedChange={setChecked} />
+          <Checkbox label="Unchecked" checked={false} />
+          <Checkbox label="Indeterminate" checked="indeterminate" />
+          <Checkbox label="Disabled" disabled />
+          <Checkbox aria-label="No label" />
+        </Row>
+        <Row label="SegmentedControl md / sm">
+          {(["md", "sm"] as const).map((size) => (
+            <SegmentedControl
+              key={size}
+              size={size}
+              aria-label={`View ${size}`}
+              value={seg}
+              onValueChange={setSeg}
+              options={[
+                { value: "list", label: "List", icon: <GitCommit /> },
+                { value: "tree", label: "Tree", icon: <GitBranch /> },
+                { value: "off", label: "Off", disabled: true },
+              ]}
+            />
+          ))}
+        </Row>
+      </Section>
+
       <Section title="Badge, Kbd, Spinner">
         <Row label="Badge">
           <Badge>neutral</Badge>
@@ -216,6 +256,13 @@ function Components() {
         <Row label="Tooltip">
           <Tooltip content="Fetch remotes" shortcut="Ctrl+F">
             <Button variant="secondary">Hover me</Button>
+          </Tooltip>
+        </Row>
+        <Row label="Tooltip (no provider needed)">
+          <Tooltip content="Works standalone">
+            <IconButton aria-label="Info">
+              <Inbox />
+            </IconButton>
           </Tooltip>
         </Row>
         <Row label="Popover">

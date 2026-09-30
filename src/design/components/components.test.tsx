@@ -2,7 +2,15 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { AlertDialog, Button, CommandPalette, IconButton } from "./index";
+import {
+  AlertDialog,
+  Button,
+  Checkbox,
+  CommandPalette,
+  IconButton,
+  SegmentedControl,
+  Tooltip,
+} from "./index";
 
 describe("Button", () => {
   it.each(["primary", "secondary", "ghost", "danger", "outline"] as const)(
@@ -132,5 +140,118 @@ describe("CommandPalette", () => {
     render(<Harness onFetch={vi.fn()} onCommit={vi.fn()} />);
     await userEvent.type(screen.getByRole("combobox"), "zzzz");
     expect(screen.getByText("No results found.")).toBeInTheDocument();
+  });
+});
+
+describe("Checkbox", () => {
+  function Harness({ initial }: { initial: boolean | "indeterminate" }) {
+    const [v, setV] = useState(initial);
+    return <Checkbox label="Stage all" checked={v} onCheckedChange={setV} />;
+  }
+
+  it("toggles on click and via label", async () => {
+    render(<Harness initial={false} />);
+    const box = screen.getByRole("checkbox", { name: "Stage all" });
+    expect(box).not.toBeChecked();
+    await userEvent.click(box);
+    expect(box).toBeChecked();
+    await userEvent.click(screen.getByText("Stage all"));
+    expect(box).not.toBeChecked();
+  });
+
+  it("supports indeterminate then resolves to checked", async () => {
+    render(<Harness initial="indeterminate" />);
+    const box = screen.getByRole("checkbox", { name: "Stage all" });
+    expect(box).toHaveAttribute("aria-checked", "mixed");
+    expect((box as HTMLInputElement).indeterminate).toBe(true);
+    await userEvent.click(box);
+    expect(box).toBeChecked();
+    expect(box).not.toHaveAttribute("aria-checked");
+  });
+
+  it("does not toggle when disabled", async () => {
+    const onChange = vi.fn();
+    render(<Checkbox label="Nope" disabled onCheckedChange={onChange} />);
+    await userEvent.click(screen.getByText("Nope"));
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
+describe("SegmentedControl", () => {
+  function Harness() {
+    const [v, setV] = useState("a");
+    return (
+      <SegmentedControl
+        aria-label="Mode"
+        value={v}
+        onValueChange={setV}
+        options={[
+          { value: "a", label: "A" },
+          { value: "b", label: "B", disabled: true },
+          { value: "c", label: "C" },
+        ]}
+      />
+    );
+  }
+
+  it("selects on click", async () => {
+    render(<Harness />);
+    await userEvent.click(screen.getByRole("radio", { name: "C" }));
+    expect(screen.getByRole("radio", { name: "C" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: "A" })).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("moves with arrow keys, skipping disabled and wrapping", async () => {
+    render(<Harness />);
+    await userEvent.tab();
+    expect(screen.getByRole("radio", { name: "A" })).toHaveFocus();
+    await userEvent.keyboard("{ArrowRight}");
+    expect(screen.getByRole("radio", { name: "C" })).toHaveFocus();
+    expect(screen.getByRole("radio", { name: "C" })).toHaveAttribute("aria-checked", "true");
+    await userEvent.keyboard("{ArrowRight}");
+    expect(screen.getByRole("radio", { name: "A" })).toHaveAttribute("aria-checked", "true");
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(screen.getByRole("radio", { name: "C" })).toHaveFocus();
+  });
+});
+
+describe("IconButton sizes", () => {
+  it.each([
+    ["xs", "size-5"],
+    ["sm", "size-[var(--control-sm)]"],
+    ["md", "size-[var(--control-md)]"],
+  ] as const)("applies %s", (size, cls) => {
+    render(
+      <IconButton aria-label="x" size={size}>
+        i
+      </IconButton>,
+    );
+    expect(screen.getByRole("button", { name: "x" })).toHaveClass(cls);
+  });
+
+  it("defaults to md", () => {
+    render(<IconButton aria-label="d">i</IconButton>);
+    expect(screen.getByRole("button", { name: "d" })).toHaveClass("size-[var(--control-md)]");
+  });
+});
+
+describe("Tooltip", () => {
+  it("renders without a TooltipProvider", () => {
+    render(
+      <Tooltip content="Hi">
+        <button>Trigger</button>
+      </Tooltip>,
+    );
+    expect(screen.getByRole("button", { name: "Trigger" })).toBeInTheDocument();
+  });
+
+  it("shows content on focus without a provider", async () => {
+    render(
+      <Tooltip content="Helpful">
+        <button>Trigger</button>
+      </Tooltip>,
+    );
+    await userEvent.tab();
+    expect((await screen.findAllByText("Helpful")).length).toBeGreaterThan(0);
   });
 });
