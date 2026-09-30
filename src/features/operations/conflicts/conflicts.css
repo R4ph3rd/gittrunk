@@ -1,0 +1,16 @@
+/* CodeMirror fills its pane. */
+.gt-cm .cm-editor {
+  height: 100%;
+}
+
+.gt-cm .cm-scroller {
+  overflow: auto;
+}
+
+/*
+ * CodeMirror's fallback highlight style is tuned for light backgrounds. In the dark theme,
+ * lift the token colors so they stay legible on `--bg-subtle`.
+ */
+:root[data-theme="dark"] .gt-cm .cm-line span[class] {
+  filter: brightness(1.7) saturate(0.85);
+}
