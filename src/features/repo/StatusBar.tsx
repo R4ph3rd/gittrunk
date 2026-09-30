@@ -1,3 +1,4 @@
+import { OpIndicator } from "@/features/ops/OpIndicator";
 import { useActiveRepo } from "@/stores/repo";
 import { useAppInfo, useStatus } from "@/ipc/queries";
 
@@ -29,6 +30,7 @@ export function StatusBar() {
     <footer className="flex h-6 shrink-0 items-center gap-4 border-t border-border bg-bg-subtle px-3 font-mono text-xs text-fg-subtle">
       {repo && headText && <span className="text-fg-muted">{headText}</span>}
       {repo && <RepoStatus repoId={repo.id} />}
+      <OpIndicator repoId={repo?.id ?? null} />
       <span className="ml-auto" data-testid="app-info">
         {info.data
           ? `v${info.data.version} · ${info.data.platform} · ${info.data.gitVersion ?? "git not found"}`

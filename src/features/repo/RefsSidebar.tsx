@@ -1,5 +1,6 @@
-import { useState, type ComponentProps, type ReactNode } from "react";
-import { ArrowDownToLine, ChevronDown, ChevronRight, Trash2, Undo2 } from "lucide-react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { ArrowDownToLine, ArrowUp, GitBranch, Trash2, Undo2 } from "lucide-react";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -8,72 +9,20 @@ import {
   ContextMenuTrigger,
 } from "@/design/components";
 import { stashLabel, useStashActions } from "@/features/stash/useStashActions";
+import { pushBranch } from "@/features/remotes/actions";
+import { RemotesSection } from "@/features/remotes/RemotesSection";
+import { SetUpstreamDialog } from "@/features/remotes/SetUpstreamDialog";
+import type { BranchInfo } from "@/ipc/bindings";
 import { useRefs } from "@/ipc/queries";
-import { cn } from "@/lib/cn";
 import { useRepoStore } from "@/stores/repo";
-
-function Section({
-  title,
-  count,
-  children,
-}: {
-  title: string;
-  count: number;
-  children: ReactNode;
-}) {
-  const [open, setOpen] = useState(true);
-  const Chevron = open ? ChevronDown : ChevronRight;
-  return (
-    <section>
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-        className="flex h-7 w-full items-center gap-1 px-2 text-xs font-medium uppercase tracking-wide text-fg-subtle hover:text-fg-muted"
-      >
-        <Chevron className="size-3" aria-hidden />
-        {title}
-        <span className="ml-auto font-mono">{count}</span>
-      </button>
-      {open && <ul>{children}</ul>}
-    </section>
-  );
-}
-
-function Item({
-  label,
-  active,
-  hint,
-  onClick,
-  ...rest
-}: {
-  label: string;
-  active?: boolean;
-  hint?: string;
-  onClick?: () => void;
-} & Omit<ComponentProps<"button">, "children" | "className" | "type">) {
-  return (
-    <li>
-      <button
-        {...rest}
-        type="button"
-        onClick={onClick}
-        className={cn(
-          "flex h-6 w-full items-center gap-2 truncate pl-6 pr-2 text-left text-sm hover:bg-surface-hover",
-          active ? "font-semibold text-accent" : "text-fg",
-        )}
-      >
-        <span className="truncate">{label}</span>
-        {hint && <span className="ml-auto shrink-0 font-mono text-xs text-fg-subtle">{hint}</span>}
-      </button>
-    </li>
-  );
-}
+import { Item, Section } from "./SidebarParts";
 
 export function RefsSidebar({ repoId }: { repoId: string }) {
   const refs = useRefs(repoId);
   const select = useRepoStore((s) => s.selectCommit);
   const stash = useStashActions(repoId);
+  const client = useQueryClient();
+  const [upstreamFor, setUpstreamFor] = useState<BranchInfo | null>(null);
   const data = refs.data;
 
   return (
@@ -83,20 +32,30 @@ export function RefsSidebar({ repoId }: { repoId: string }) {
         <>
           <Section title="Branches" count={data.local.length}>
             {data.local.map((b) => (
-              <Item
-                key={b.fullName}
-                label={b.name}
-                active={b.isHead}
-                hint={b.ahead || b.behind ? `+${b.ahead} -${b.behind}` : undefined}
-                onClick={() => select(repoId, b.oid)}
-              />
+              <ContextMenu key={b.fullName}>
+                <ContextMenuTrigger asChild>
+                  <Item
+                    label={b.name}
+                    active={b.isHead}
+                    hint={b.ahead || b.behind ? `+${b.ahead} -${b.behind}` : undefined}
+                    onClick={() => select(repoId, b.oid)}
+                  />
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  <ContextMenuItem
+                    icon={<ArrowUp />}
+                    onSelect={() => void pushBranch(client, repoId, { branch: b.name })}
+                  >
+                    Push
+                  </ContextMenuItem>
+                  <ContextMenuItem icon={<GitBranch />} onSelect={() => setUpstreamFor(b)}>
+                    Set upstream…
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
             ))}
           </Section>
-          <Section title="Remotes" count={data.remote.length}>
-            {data.remote.map((b) => (
-              <Item key={b.fullName} label={b.name} onClick={() => select(repoId, b.oid)} />
-            ))}
-          </Section>
+          <RemotesSection repoId={repoId} branches={data.remote} />
           <Section title="Tags" count={data.tags.length}>
             {data.tags.map((t) => (
               <Item key={t.name} label={t.name} onClick={() => select(repoId, t.oid)} />
@@ -133,6 +92,12 @@ export function RefsSidebar({ repoId }: { repoId: string }) {
         </>
       )}
       {stash.dialog}
+      <SetUpstreamDialog
+        repoId={repoId}
+        branch={upstreamFor}
+        remoteBranches={data?.remote ?? []}
+        onClose={() => setUpstreamFor(null)}
+      />
     </nav>
   );
 }

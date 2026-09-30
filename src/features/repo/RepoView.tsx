@@ -1,4 +1,5 @@
 import { Group, Panel, Separator } from "react-resizable-panels";
+import { RemoteToolbar } from "@/features/remotes/RemoteToolbar";
 import { GraphView } from "@/features/graph/GraphView";
 import { StagingPanel } from "@/features/staging/StagingPanel";
 import { StashDialog } from "@/features/stash/StashDialog";
@@ -15,6 +16,7 @@ export function RepoView({ repoId }: { repoId: string }) {
   const wip = useRepoStore((s) => s.selection[repoId]?.kind === "wip");
   return (
     <>
+      <RemoteToolbar repoId={repoId} />
       <Group orientation="horizontal" className="min-h-0 flex-1">
         <Panel defaultSize="18%" minSize="12%" maxSize="35%">
           <RefsSidebar repoId={repoId} />

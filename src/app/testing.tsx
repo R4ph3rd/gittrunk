@@ -14,9 +14,20 @@ import type {
 import { useRepoStore } from "@/stores/repo";
 import { App } from "./App";
 
-import { emitRepoChanged, fail, names, ok } from "./mockBindings";
+import { TooltipProvider } from "@/design/components";
+import { useRemotesUi } from "@/stores/remotes";
+import { useOpsStore } from "@/features/ops/store";
+import {
+  emitCredentialRequested,
+  emitOpFinished,
+  emitOpProgress,
+  emitRepoChanged,
+  fail,
+  names,
+  ok,
+} from "./mockBindings";
 
-export { emitRepoChanged, fail, ok };
+export { emitCredentialRequested, emitOpFinished, emitOpProgress, emitRepoChanged, fail, ok };
 
 export const repoInfo: RepoInfo = {
   id: "r1",
@@ -237,6 +248,36 @@ export async function installBackend(rowCount = 1000, searchHits: number[] = [])
   commands.stashSave.mockImplementation(() => ok(applied("Changes stashed")));
   commands.stashApply.mockImplementation(() => ok(applied("Stash applied")));
   commands.undo.mockImplementation(() => ok(applied("Undone")));
+  commands.checkout.mockImplementation(() => ok(applied("Checked out")));
+  commands.branchDelete.mockImplementation(dryRunnable("delete branch"));
+  commands.remoteList.mockImplementation(() =>
+    ok([
+      {
+        name: "origin",
+        fetchUrl: "https://example.com/demo.git",
+        pushUrl: null,
+        provider: "other",
+      },
+    ]),
+  );
+  commands.remoteAdd.mockImplementation((_r: string, req: { name: string; url: string }) =>
+    ok({ name: req.name, fetchUrl: req.url, pushUrl: null, provider: "other" }),
+  );
+  for (const name of [
+    "remoteRemove",
+    "remoteRename",
+    "remoteSetUrl",
+    "setUpstream",
+    "opCancel",
+    "credentialRespond",
+    "credentialStore",
+    "credentialClear",
+  ] as const) {
+    commands[name].mockImplementation(() => ok(null));
+  }
+  for (const name of ["fetch", "pull", "push", "repoClone"] as const) {
+    commands[name].mockImplementation(() => ok(`op-${name}`));
+  }
   return commands;
 }
 
@@ -267,6 +308,8 @@ export function resetStore() {
     filters: {},
     openError: null,
   });
+  useOpsStore.getState().reset();
+  useRemotesUi.getState().reset();
 }
 
 export function renderApp() {
@@ -275,7 +318,9 @@ export function renderApp() {
   });
   const view = render(
     <QueryClientProvider client={client}>
-      <App />
+      <TooltipProvider>
+        <App />
+      </TooltipProvider>
     </QueryClientProvider>,
   );
   return { client, ...view };

@@ -20,6 +20,7 @@ export const queryKeys = {
   info: (id: string) => ["repo", id, "info"] as const,
   refs: (id: string) => ["repo", id, "refs"] as const,
   status: (id: string) => ["repo", id, "status"] as const,
+  remotes: (id: string) => ["repo", id, "remotes"] as const,
   graph: (id: string) => ["repo", id, "graph"] as const,
   graphMeta: (id: string, filter: GraphFilter) => ["repo", id, "graph", "meta", filter] as const,
   graphRows: (id: string, generation: number, filter: GraphFilter, page: number) =>
@@ -54,6 +55,13 @@ export function useRefs(repoId: string) {
   return useQuery({
     queryKey: queryKeys.refs(repoId),
     queryFn: () => unwrap(commands.refsList(repoId)),
+  });
+}
+
+export function useRemotes(repoId: string) {
+  return useQuery({
+    queryKey: queryKeys.remotes(repoId),
+    queryFn: () => unwrap(commands.remoteList(repoId)),
   });
 }
 
@@ -170,6 +178,14 @@ export function invalidateEverything(client: QueryClient, repoId: string) {
   ]);
 }
 
+/** After a remote operation finishes: refs, graph, status, info and the remote list. */
+export function invalidateAfterOp(client: QueryClient, repoId: string) {
+  return Promise.all([
+    invalidateEverything(client, repoId),
+    client.invalidateQueries({ queryKey: queryKeys.remotes(repoId) }),
+  ]);
+}
+
 function useRepoMutation<V, R>(
   repoId: string,
   fn: (vars: V) => Promise<R>,
@@ -265,6 +281,7 @@ export function invalidateForChange(client: QueryClient, change: RepoChanged) {
       void client.invalidateQueries({ queryKey: worktreeKeys.all(id) });
     } else if (scope === "config") {
       void client.invalidateQueries({ queryKey: queryKeys.info(id) });
+      void client.invalidateQueries({ queryKey: queryKeys.remotes(id) });
     }
   }
 }
