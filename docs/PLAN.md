@@ -1,6 +1,6 @@
 # gittrunk — Implementation Plan
 
-Status: **M0–M7 complete.** All milestones merged on the integration branch; the full quality gate, the e2e suite and the Windows installer build pass. See §10.
+Status: **M0–M7 complete; M8 (Android) planned.** M0–M7 are merged on the integration branch; the full quality gate, the e2e suite and the Windows installer build pass (see §10). M8 adds an Android build; its waves, packages and dispatches are in §11.
 
 gittrunk is a cross-platform desktop Git client (alternative to GitKraken) built with Tauri 2. Windows (`.exe` + NSIS installer + MSI) is the release target; macOS and Linux build from the same codebase.
 
@@ -260,19 +260,108 @@ Plus: bindings drift check and the E2E drag-and-drop merge test from M5 onward.
 
 ## 10. Milestone status
 
-| Milestone              | Status | Evidence                                                                                                      |
-| ---------------------- | ------ | ------------------------------------------------------------------------------------------------------------- |
-| M0 Scaffold + contract | Done   | CI and Windows installer build green on the empty shell                                                       |
-| M1 Read path           | Done   | 100k-commit graph: load ≈0.5 s, 200-row window ≈0.1 ms (release)                                              |
-| M2 Working copy        | Done   | Line staging byte-exact incl. CRLF and missing final newline; e2e stage → commit → push → undo                |
-| M3 Remotes             | Done   | Fetch/pull/push/clone against bare remotes; askpass bridge; keychain                                          |
-| M4 History operations  | Done   | Merge, rebase, interactive rebase, cherry-pick, revert, conflicts, one-step undo                              |
-| M5 Drag and drop       | Done   | e2e drags `feature` onto `main`, confirms the preview, verifies the merge commit's parents with git           |
-| M6 AI + advanced Git   | Done   | Providers tested against a mock server; AI off by default; blame, file history, reflog, submodules, worktrees |
-| M7 Hardening + release | Done   | Gate below; Windows `gittrunk.exe`, NSIS `*-setup.exe` and `*.msi` produced by the Build Windows workflow     |
+| Milestone              | Status  | Evidence                                                                                                      |
+| ---------------------- | ------- | ------------------------------------------------------------------------------------------------------------- |
+| M0 Scaffold + contract | Done    | CI and Windows installer build green on the empty shell                                                       |
+| M1 Read path           | Done    | 100k-commit graph: load ≈0.5 s, 200-row window ≈0.1 ms (release)                                              |
+| M2 Working copy        | Done    | Line staging byte-exact incl. CRLF and missing final newline; e2e stage → commit → push → undo                |
+| M3 Remotes             | Done    | Fetch/pull/push/clone against bare remotes; askpass bridge; keychain                                          |
+| M4 History operations  | Done    | Merge, rebase, interactive rebase, cherry-pick, revert, conflicts, one-step undo                              |
+| M5 Drag and drop       | Done    | e2e drags `feature` onto `main`, confirms the preview, verifies the merge commit's parents with git           |
+| M6 AI + advanced Git   | Done    | Providers tested against a mock server; AI off by default; blame, file history, reflog, submodules, worktrees |
+| M7 Hardening + release | Done    | Gate below; Windows `gittrunk.exe`, NSIS `*-setup.exe` and `*.msi` produced by the Build Windows workflow     |
+| M8 Android             | Planned | See §11; dispatches in `docs/dispatch/android/`                                                               |
 
 Quality gate at completion: `cargo fmt --check`, `cargo clippy -D warnings`, 257 Rust tests (also under a global `core.autocrlf=true`), frontend lint, format, typecheck, 251 component tests, `pnpm build`, `pnpm tauri build` (Linux bundles locally, Windows installers in CI) and 3 e2e specs.
 
 Issues found by integration and CI, and fixed: Windows `core.autocrlf` breaking working-tree safety checks, a case-only filename clash that broke the Windows build, fixtures depending on the host's git identity, toasts covering the commit button, and a bundle identifier ending in `.app`.
 
 Known limitations: installers are unsigned (SmartScreen warns); undoing a multi-step AI plan reverts one step at a time; the operation banner shows generic text for rebase progress; the interactive rebase squash affordance is a button rather than drop-onto-row.
+
+## 11. Android (M8)
+
+Goal: a sideloadable, installable Android APK of gittrunk built and verified on GitHub Actions, with the mobile UI, in which **clone over HTTPS with a token, history/graph, diff, stage, commit, branches, push and pull** work. Desktop behavior stays unchanged. Inputs: `docs/ANDROID_PLAN.md` (backend portability, embedded git, CI, release) and `docs/MOBILE_DESIGN.md` (UI adaptation). This section records the orchestrator's reconciliation; where it disagrees with those documents, this section wins. Dispatch briefs: `docs/dispatch/android/` (`COMMON.md` first).
+
+### 11.1 Reconciliation decisions
+
+| Topic                     | Decision                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Platform detection        | Both mechanisms, for different questions. **Layout** (compact vs regular) comes from the viewport via `useLayout()`; **capabilities** come from the new `platform_info` IPC via `usePlatform()` (UA-based fallback on first paint). Never infer one from the other: an Android tablet is regular layout with mobile capabilities.                                                                                     |
+| Capability flags          | Planner's `PlatformInfo` plus `supports_rebase`, `supports_submodules`, `supports_file_history`, backed by constants in `src-tauri/src/platform.rs` so the stretch package R1b-2 can flip them without touching the contract.                                                                                                                                                                                         |
+| Shared UI plumbing timing | New package **S0** (Wave 0) owns `src/index.css` variants, mobile tokens, viewport meta, `useLayout`/`LayoutProvider`, the back-button stack and `setViewport()`. The designer placed `useLayout` in package A, but D's `Sheet`/`ResponsiveDialog` need it first.                                                                                                                                                     |
+| Android back button       | Webview history sentinel (S0) plus a handler stack; exit via a new `app_exit` command. No capability/permission change, no `onBackButtonPress` in v1.                                                                                                                                                                                                                                                                 |
+| Navigation contract       | A owns `src/stores/nav.ts` and `src/app/layout/registry.ts`; B and C contribute screens through `src/features/staging/mobile/contrib.ts` and `src/features/repo/mobile/contrib.ts`, created as stubs by A so ownership stays disjoint. Worktree diff (`worktreeDiff`, B) and commit file (`commitFile`, C) are distinct routes.                                                                                       |
+| AI TLS                    | `webpki-roots` is a dependency on all targets and the preconfigured rustls client is used under `cfg(embedded_git)` (host-testable with `--features embedded-git`), not only under `target_os = "android"`.                                                                                                                                                                                                           |
+| Android project           | Commit `src-tauri/gen/android`. C1 first tries `pnpm tauri android init --ci` locally with stub SDK/NDK env; if the output is complete (no stub paths, all template files) it is committed directly, otherwise the manual `android-init.yml` workflow generates and commits it. The workflow commits as `R4ph3rd <43202876+R4ph3rd@users.noreply.github.com>` with the session trailers and is kept for regeneration. |
+| `tauri.android.conf.json` | Owned by C1 (build config), not R2.                                                                                                                                                                                                                                                                                                                                                                                   |
+| Emulator smoke (C1c)      | **In this round**, folded into C1 as a non-blocking job (`continue-on-error`) that uploads logcat and a screenshot. Making it required is out of this round.                                                                                                                                                                                                                                                          |
+| Advanced shim (R1b-2)     | **In this round as stretch** (Wave 2). Non-interactive rebase, worktrees, `log --follow`. If it misses the gate it is dropped and the flags stay false; the UI hides those features.                                                                                                                                                                                                                                  |
+| Mobile test project       | Dropped. Mobile tests run in the normal Vitest run using `setViewport()`; no separate CI project.                                                                                                                                                                                                                                                                                                                     |
+| SAF / open folder         | Out of v1 (`can_pick_folder = false` on Android). Repositories live in `<app_data_dir>/repos` and arrive by clone.                                                                                                                                                                                                                                                                                                    |
+| Release job naming        | PR check job `Android APK` (required in the ruleset); release job `Android release APK`. Release signing hard-fails without the four `ANDROID_*` secrets.                                                                                                                                                                                                                                                             |
+| Doc ownership             | C2 updates `README.md` and `docs/ARCHITECTURE.md` (delegated for this milestone); the orchestrator keeps `docs/PLAN.md`.                                                                                                                                                                                                                                                                                              |
+
+### 11.2 Scope
+
+In v1 (acceptance bar in bold): **clone over HTTPS with a token**, open cloned repos, **history/graph**, commit detail, **diff** (unified), **stage/unstage** (file and hunk), discard, **commit**/amend, **branches** (create, checkout, rename, delete), **fetch/pull/push**, stash, merge, cherry-pick, revert, reset, tags, reduced conflict resolution, undo, AI features, settings, git identity prompt, repo delete. The non-bold items come with the R1b-1 shim and the existing UI and are expected, but a failure there does not block the first APK.
+
+Stretch in this round: R1b-2 (rebase incl. pull with rebase strategy, worktrees, file history follow), C1c smoke job.
+
+Out of v1: SSH remotes, opening arbitrary folders (SAF), interactive rebase, submodule update/init, git hooks and commit signing, line-level staging and split diff on compact, drag and drop on touch, blame on compact, Android Keystore wrapping of secrets (v1.1), Play Store / AAB, user-installed CA certificates.
+
+### 11.3 Waves, packages and merge order
+
+Each wave's packages have disjoint file ownership and branch from the integration branch after the previous wave is merged. The main session merges in the listed order.
+
+| Wave | Package  | Summary                                                                                       | Agent               | Model  | Depends on          |
+| ---- | -------- | --------------------------------------------------------------------------------------------- | ------------------- | ------ | ------------------- |
+| 0    | R0       | `embedded_git` cfg/feature, Android dep tables, `platform.rs`, new IPC + bindings, UI glue    | rust-git-agent      | sonnet | -                   |
+| 0    | S0       | CSS variants, mobile tokens, viewport meta, `useLayout`, back stack, `setViewport`            | frontend-agent      | sonnet | -                   |
+| 1    | R2       | File secret store, embedded startup (libgit2 config, CA), AI TLS, inert `git_path`            | rust-git-agent      | sonnet | R0                  |
+| 1    | R1b-1    | Embedded git shim: commit, stash, merge, cherry-pick, revert, sequencer, switch, add/rm       | rust-git-agent      | sonnet | R0                  |
+| 1    | R1a      | libgit2 network layer: clone/fetch/pull/push with token credentials                           | rust-git-agent      | sonnet | R0 (dialect of R1b) |
+| 1    | UI-D     | Design-system mobile primitives (Sheet, ActionSheet, ResponsiveDialog, AppBar, BottomNav, …)  | design-system-agent | sonnet | S0                  |
+| 1    | C1       | `gen/android`, customize script, build action + `Build Android` workflow, smoke, android-init | build-agent         | sonnet | R0                  |
+| 2    | UI-A     | Mobile shell, nav store, screen registry, back handling, switcher, More, settings pages       | frontend-agent      | sonnet | S0, UI-D, R0        |
+| 2    | R1b-2    | Stretch: shim rebase, worktrees, `log --follow`; flips capability constants                   | rust-git-agent      | sonnet | R1b-1, R1a          |
+| 2    | C2       | Release job, host CI for embedded-git, ruleset, BUILD/RELEASING/README/ARCHITECTURE           | build-agent         | sonnet | C1, R1a, R1b-1, R2  |
+| 3    | UI-B     | Changes, diff, composer, identity prompt, conflicts, stash, AI sheets                         | frontend-agent      | sonnet | UI-A, UI-D          |
+| 3    | UI-C     | History, commit detail, branches, remotes, clone with token, action sheets, capability gating | frontend-agent      | sonnet | UI-A, UI-D          |
+| -    | CHECK P1 | Wave 1 integrated gate + `Build Android` CI loop to a green APK (runs during Wave 2)          | checker             | opus   | Wave 1              |
+| -    | CHECK P2 | Final gate, integration and workflow review, desktop/compact checks, all CI green             | checker             | opus   | Wave 3              |
+
+Merge order: Wave 0: R0, S0. Wave 1: R2, R1b-1, R1a, UI-D, C1. Then push, CHECK P1 starts (and, if C1 used the fallback, the main session runs `android-init` first). Wave 2: UI-A, R1b-2, C2 (CHECK P1 fixes merge whenever ready; its edit scope excludes Wave 2 files). Wave 3: UI-B, UI-C. Then CHECK P2.
+
+Shared-file single owners: `Cargo.toml`/`Cargo.lock`/`build.rs`/`ipc/**`/bindings/`queries.ts`/`mockBindings.ts`/`testing.tsx` (R0, Wave 0; `testing.tsx` again UI-A in Wave 2), `src/index.css`/`index.html`/`tokens.css` (S0 in Wave 0, `tokens.css` additions by UI-D in Wave 1), `lib.rs` (R0 then R2), `platform.rs` (R0 then R1b-2), `docs/PLAN.md` (orchestrator). No package changes `package.json` or `pnpm-lock.yaml`.
+
+### 11.4 Cross-package contracts
+
+- Rust: `cfg(embedded_git)` (Android or `--features embedded-git`); `platform::{EMBEDDED, MOBILE, SUPPORTS_REBASE, SUPPORTS_WORKTREES, SUPPORTS_FILE_HISTORY}`; `ErrorKind::Unsupported`; `GitCli` shim entry `embedded::run` with per-file `run` for rebase/worktree/log; `CredentialResolver::ask`; pull merge-step dialect `merge --no-edit -m <msg> <oid>`, `merge --no-edit --ff-only <oid>`, `rebase <oid>`; `secrets::FileStore` behind `SecretStore` and `KeyStore`.
+- IPC: `platform_info() -> PlatformInfo`, `app_exit()`, `git_identity_get() -> GitIdentity`, `git_identity_set(name, email) -> GitIdentity`, `repo_delete(path)`. Commands and bindings are identical on every platform; unsupported operations fail at runtime with `Unsupported`, and the UI hides them via `PlatformInfo`.
+- UI: `usePlatform()` (`src/app/platform.ts`); `useLayout()`, `LayoutProvider`, `useBackHandler`, `installBackButton` (`src/app/layout/`); `setViewport()` (`src/test/viewport.ts`); design components listed in `UI-D.md`; `useNav()`, `Route`, `TabId` (`src/stores/nav.ts`); `ScreenContribution`, `ShellAppBar` (`src/app/layout/`); `stagingScreens` (B), `repoScreens` (C).
+- CI: composite action `.github/actions/build-android` (inputs `abis`, `sign`, `keystore-base64`, `keystore-password`, `key-alias`, `key-password`, `lto`; outputs `apk-path`, `version`); PR check context `Android APK`; release job `Android release APK`; asset `gittrunk_<version>_android-universal.apk`.
+
+### 11.5 Milestones and acceptance
+
+| Milestone | Done when                                                                                                                                                                 |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M-A0      | After Wave 1 + CHECK P1: `Build Android` green, verified APK artifact (aarch64 + x86_64, dev-signed), `cargo test --features embedded-git` green on the host.             |
+| M-A1      | Emulator smoke shows the app starting with the Welcome screen; clone/fetch/pull/push over HTTPS token pass host tests (R1a) and the flow is wired in the UI (UI-A, UI-C). |
+| M-A2      | After Wave 3 + CHECK P2: mobile UI complete at 390x844, desktop unchanged at 1400x900 (Vitest, e2e, Build Windows), all CI workflows green.                               |
+| M-A3      | Release rehearsal on a `v0.x.y-rc` with a real keystore (maintainer action: secrets). Not part of this round's builder work.                                              |
+
+Quality gate for every package: see `docs/dispatch/android/COMMON.md` (`pnpm lint`, `pnpm format:check`, `pnpm typecheck`, `pnpm test` exit code, `cargo fmt --all --check`, `cargo clippy --all-targets -- -D warnings` with and without `--features embedded-git`, `cargo test` with and without it, bindings drift).
+
+### 11.6 Risks
+
+| Risk                                                                    | Mitigation / fallback                                                                                                                                     |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vendored OpenSSL cross-build fails on CI                                | CHECK P1 fixes env first; after 3 targeted attempts, a separate dispatch replaces the transport with a reqwest smart-HTTP subtransport and drops OpenSSL. |
+| Shim fidelity (exit codes, conflict messages) diverges from git         | Existing suite as a parity test under `--features embedded-git`; unsupported paths return `Unsupported`; UI hides them by capability.                     |
+| Android-only compile errors invisible locally                           | `embedded-git` host feature covers our code; `cargo tree --target aarch64-linux-android` checks the graph; first CI run right after Wave 1.               |
+| Parallel Rust builders and limited disk                                 | Shared `CARGO_TARGET_DIR`, `CARGO_PROFILE_DEV_DEBUG=0`, `CARGO_INCREMENTAL=0`; no `cargo clean`.                                                          |
+| Local `tauri android init` with stub env produces an incomplete project | Completeness checklist in `C1.md`; fallback `android-init` workflow.                                                                                      |
+| Release blocked until secrets exist                                     | Documented in `RELEASING.md`; maintainer creates the keystore and four secrets before the next release.                                                   |
+| Required `Android APK` check adds 20-40 minutes to PRs                  | Thin LTO, caches, cancel-in-progress; if too slow, PR builds become aarch64-only (orchestrator decision).                                                 |
+| Secrets stored plaintext (0600) in the app sandbox                      | `allowBackup=false`, `SecretStore` seam for Keystore wrapping in v1.1; documented.                                                                        |
+| CI APKs are signed with throwaway keys and cannot update each other     | Workflow notice and BUILD.md; releases use the fixed keystore.                                                                                            |
