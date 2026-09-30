@@ -4,6 +4,7 @@
 //!
 //! Owned by `rust-git-agent`. Filled in during M1 (see docs/PLAN.md).
 
+pub mod advanced;
 pub mod cli;
 pub mod conflicts;
 pub mod graph;
@@ -86,7 +87,7 @@ pub struct GitState {
     repos: Arc<RwLock<HashMap<RepoId, Arc<RepoEntry>>>>,
     next_id: Arc<AtomicU64>,
     service: Arc<dyn GitService>,
-    cli: cli::GitCli,
+    cli: Arc<RwLock<cli::GitCli>>,
     ops: cli::OpRegistry,
     credentials: remote::creds::PendingCredentials,
 }
@@ -97,7 +98,7 @@ impl Default for GitState {
             repos: Arc::default(),
             next_id: Arc::new(AtomicU64::new(1)),
             service: Arc::new(libgit::LibGit),
-            cli: cli::GitCli::new(),
+            cli: Arc::new(RwLock::new(cli::GitCli::new())),
             ops: cli::OpRegistry::default(),
             credentials: remote::creds::PendingCredentials::default(),
         }
@@ -109,8 +110,19 @@ impl GitState {
         &*self.service
     }
 
-    pub fn cli(&self) -> &cli::GitCli {
-        &self.cli
+    /// The current CLI runner (a cheap copy; it follows `set_git_path`).
+    pub fn cli(&self) -> cli::GitCli {
+        self.cli.read().clone()
+    }
+
+    /// Switches the git executable for all repositories (`None` = `PATH`).
+    /// Also updates the default used by `GitCli::new()` call sites.
+    pub fn set_git_path(&self, path: Option<PathBuf>) {
+        *self.cli.write() = match &path {
+            Some(p) => cli::GitCli::with_path(p.clone()),
+            None => cli::GitCli::with_path("git"),
+        };
+        cli::GitCli::set_default_program(path);
     }
 
     pub fn ops(&self) -> &cli::OpRegistry {

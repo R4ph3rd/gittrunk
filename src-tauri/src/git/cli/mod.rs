@@ -74,6 +74,8 @@ impl CliOptions {
     }
 }
 
+static DEFAULT_PROGRAM: parking_lot::RwLock<Option<PathBuf>> = parking_lot::RwLock::new(None);
+
 /// Handle to the git executable.
 #[derive(Debug, Clone)]
 pub struct GitCli {
@@ -87,11 +89,20 @@ impl Default for GitCli {
 }
 
 impl GitCli {
-    /// Uses `git` from `PATH`.
+    /// Uses the process-wide default executable (`set_default_program`, set
+    /// from the settings), or `git` from `PATH`.
     pub fn new() -> Self {
-        Self {
-            program: PathBuf::from("git"),
-        }
+        let program = DEFAULT_PROGRAM
+            .read()
+            .clone()
+            .unwrap_or_else(|| PathBuf::from("git"));
+        Self { program }
+    }
+
+    /// Sets the executable used by every later `GitCli::new()`; `None`
+    /// restores `git` from `PATH`.
+    pub fn set_default_program(path: Option<PathBuf>) {
+        *DEFAULT_PROGRAM.write() = path;
     }
 
     /// Uses an explicit executable (a future setting).
