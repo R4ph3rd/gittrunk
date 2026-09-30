@@ -110,8 +110,10 @@ describe("mobile shell (390x844)", () => {
 
   it("re-tapping the active tab pops to its root", async () => {
     const user = await openDemo();
-    act(() => useNavStore.getState().push("r1", { name: "compose" }));
-    expect(await screen.findByText("Not available on this device yet")).toBeInTheDocument();
+    act(() => useNavStore.getState().push("r1", { name: "settings" }));
+    expect(
+      await screen.findByRole("navigation", { name: "Settings sections" }),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "History" }));
     expect(useNavStore.getState().byRepo["r1"]?.stack).toEqual([]);
     expect(await screen.findByRole("grid", { name: "Commit graph" })).toBeInTheDocument();
