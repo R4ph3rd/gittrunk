@@ -1,26 +1,39 @@
-//! `oplog` commands. Phase 0 stubs: typed signatures are the contract;
-//! bodies are filled in by the owning agent.
-#![allow(unused_variables)]
-
-use crate::ipc::error::{AppError, AppResult};
+//! `oplog` commands: journal listing, undo, redo and cancellation.
+use crate::git::oplog::Oplog;
+use crate::ipc::error::AppResult;
 use crate::ipc::types::*;
 
 #[tauri::command]
 #[specta::specta]
-pub async fn oplog_list(repo: RepoId, limit: u32) -> AppResult<Vec<OplogEntry>> {
-    Err(AppError::not_implemented("oplog_list"))
+pub async fn oplog_list(
+    state: tauri::State<'_, crate::git::GitState>,
+    repo: RepoId,
+    limit: u32,
+) -> AppResult<Vec<OplogEntry>> {
+    let st = state.inner().clone();
+    crate::git::blocking(move || st.with_repo(&repo, |_, r| Oplog::list(r, limit as usize))).await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn undo(repo: RepoId, dry_run: bool) -> AppResult<OpOutcome> {
-    Err(AppError::not_implemented("undo"))
+pub async fn undo(
+    state: tauri::State<'_, crate::git::GitState>,
+    repo: RepoId,
+    dry_run: bool,
+) -> AppResult<OpOutcome> {
+    let st = state.inner().clone();
+    crate::git::blocking(move || st.write_repo(&repo, |r| Oplog::undo(r, dry_run))).await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn redo(repo: RepoId, dry_run: bool) -> AppResult<OpOutcome> {
-    Err(AppError::not_implemented("redo"))
+pub async fn redo(
+    state: tauri::State<'_, crate::git::GitState>,
+    repo: RepoId,
+    dry_run: bool,
+) -> AppResult<OpOutcome> {
+    let st = state.inner().clone();
+    crate::git::blocking(move || st.write_repo(&repo, |r| Oplog::redo(r, dry_run))).await
 }
 
 #[tauri::command]

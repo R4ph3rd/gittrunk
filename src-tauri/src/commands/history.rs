@@ -51,8 +51,20 @@ pub async fn revert(repo: RepoId, request: RevertRequest, dry_run: bool) -> AppR
 
 #[tauri::command]
 #[specta::specta]
-pub async fn reset(repo: RepoId, request: ResetRequest, dry_run: bool) -> AppResult<OpOutcome> {
-    Err(AppError::not_implemented("reset"))
+pub async fn reset(
+    state: tauri::State<'_, crate::git::GitState>,
+    repo: RepoId,
+    request: ResetRequest,
+    dry_run: bool,
+) -> AppResult<OpOutcome> {
+    use crate::git::refs_write::RefWriteService;
+    let st = state.inner().clone();
+    crate::git::blocking(move || {
+        st.write_repo(&repo, |r| {
+            crate::git::libgit::LibGit.reset(r, &request, dry_run)
+        })
+    })
+    .await
 }
 
 #[tauri::command]

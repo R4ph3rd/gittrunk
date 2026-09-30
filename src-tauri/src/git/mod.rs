@@ -7,7 +7,10 @@
 pub mod cli;
 pub mod graph;
 pub mod libgit;
+pub mod oplog;
+pub mod preview;
 pub mod recent;
+pub mod refs_write;
 pub mod service;
 pub mod watcher;
 
@@ -169,6 +172,47 @@ impl GitState {
         f(&*self.service, &mut repo)
     }
 
+    /// Runs a mutating `f` on the locked repository, then drops the cached
+    /// graph (the watcher would do it too, but not before the next read).
+    pub fn write_repo<T>(
+        &self,
+        id: &str,
+        f: impl FnOnce(&Repository) -> AppResult<T>,
+    ) -> AppResult<T> {
+        let entry = self.entry(id)?;
+        let result = {
+            let repo = entry.repo.lock();
+            f(&repo)
+        };
+        entry.invalidate_graph();
+        result
+    }
+
+    /// Row of `oid` (full id or unique prefix) in the cached graph.
+    pub fn graph_find(&self, id: &str, oid: &str) -> AppResult<Option<u32>> {
+        let prefix = oid.trim().to_ascii_lowercase();
+        if prefix.len() < 4 || prefix.len() > 40 || !prefix.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err(AppError::new(
+                ErrorKind::InvalidInput,
+                format!("`{oid}` is not a valid object id or prefix"),
+            ));
+        }
+        let cache = self.graph(id)?;
+        let mut found = None;
+        for (i, row) in cache.rows.iter().enumerate() {
+            if row.oid.to_string().starts_with(&prefix) {
+                if found.is_some() {
+                    return Err(AppError::new(
+                        ErrorKind::InvalidInput,
+                        format!("object id prefix `{oid}` is ambiguous"),
+                    ));
+                }
+                found = Some(i as u32);
+            }
+        }
+        Ok(found)
+    }
+
     /// Closes the repository and stops its watcher.
     pub fn close(&self, id: &str) -> AppResult<()> {
         let entry = self.repos.write().remove(id).ok_or_else(|| {
@@ -241,5 +285,62 @@ fn same_path(a: &Path, b: &Path) -> bool {
     match (a.canonicalize(), b.canonicalize()) {
         (Ok(a), Ok(b)) => a == b,
         _ => a == b,
+    }
+}
+
+#[cfg(test)]
+mod state_tests {
+    use super::*;
+    use crate::git::refs_write::RefWriteService;
+    use crate::ipc::types::{ResetMode, ResetRequest};
+
+    #[test]
+    fn graph_find_by_full_id_prefix_and_absent() {
+        let (t, oids) = fixtures::linear(3);
+        let state = GitState::default();
+        let (entry, _) = state.open(&t.root()).unwrap();
+        // Lazily builds the graph with the default filter.
+        let newest = oids[2].to_string();
+        assert_eq!(state.graph_find(&entry.id, &newest).unwrap(), Some(0));
+        assert_eq!(
+            state.graph_find(&entry.id, &oids[0].to_string()).unwrap(),
+            Some(2)
+        );
+        assert_eq!(
+            state
+                .graph_find(&entry.id, &oids[1].to_string()[..8].to_uppercase())
+                .unwrap(),
+            Some(1)
+        );
+        assert_eq!(state.graph_find(&entry.id, &"0".repeat(40)).unwrap(), None);
+        assert_eq!(
+            state.graph_find(&entry.id, "zz").unwrap_err().kind,
+            ErrorKind::InvalidInput
+        );
+    }
+
+    #[test]
+    fn write_repo_invalidates_the_graph_cache() {
+        let (t, _) = fixtures::linear(2);
+        let state = GitState::default();
+        let (entry, _) = state.open(&t.root()).unwrap();
+        let before = state.graph(&entry.id).unwrap();
+        state
+            .write_repo(&entry.id, |r| {
+                libgit::LibGit
+                    .reset(
+                        r,
+                        &ResetRequest {
+                            target: "HEAD~1".into(),
+                            mode: ResetMode::Soft,
+                        },
+                        false,
+                    )
+                    .map(|_| ())
+            })
+            .unwrap();
+        let after = state.graph(&entry.id).unwrap();
+        assert!(!Arc::ptr_eq(&before, &after));
+        assert_eq!(after.meta().row_count, 1);
     }
 }
