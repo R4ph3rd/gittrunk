@@ -5,7 +5,10 @@ pub mod askpass;
 pub mod commands;
 pub mod git;
 pub mod ipc;
+#[cfg(embedded_git)]
+pub mod mobile;
 pub mod platform;
+pub mod secrets;
 pub mod settings;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -27,6 +30,12 @@ pub fn run() {
         .manage(git::GitState::default())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
+            #[cfg(embedded_git)]
+            {
+                use tauri::Manager;
+                let dir = app.path().app_data_dir()?;
+                mobile::init(&dir)?;
+            }
             builder.mount_events(app);
             Ok(())
         })

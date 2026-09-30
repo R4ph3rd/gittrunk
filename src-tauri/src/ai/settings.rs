@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::ipc::error::{AppError, AppResult, ErrorKind};
 use crate::ipc::types::{AiProviderKind, AiSettings};
 
+#[cfg(any(not(embedded_git), test))]
 use super::provider::provider_name;
 
 pub const KEYCHAIN_SERVICE: &str = "gittrunk-ai";
@@ -36,14 +37,17 @@ pub trait KeyStore: Send + Sync {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct SystemKeys;
 
+#[cfg(not(embedded_git))]
 fn entry(provider: AiProviderKind) -> Result<keyring::Entry, keyring::Error> {
     keyring::Entry::new(KEYCHAIN_SERVICE, provider_name(provider))
 }
 
+#[cfg(not(embedded_git))]
 fn store_error(e: keyring::Error) -> AppError {
     AppError::new(ErrorKind::Internal, format!("keychain: {e}"))
 }
 
+#[cfg(not(embedded_git))]
 impl KeyStore for SystemKeys {
     fn get(&self, provider: AiProviderKind) -> Option<String> {
         entry(provider).ok()?.get_password().ok()
@@ -60,6 +64,27 @@ impl KeyStore for SystemKeys {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
             Err(e) => Err(store_error(e)),
         }
+    }
+}
+
+#[cfg(embedded_git)]
+fn file_store() -> AppResult<&'static crate::secrets::FileStore> {
+    crate::secrets::global()
+        .ok_or_else(|| AppError::new(ErrorKind::Internal, "secret store not initialised"))
+}
+
+#[cfg(embedded_git)]
+impl KeyStore for SystemKeys {
+    fn get(&self, provider: AiProviderKind) -> Option<String> {
+        KeyStore::get(crate::secrets::global()?, provider)
+    }
+
+    fn set(&self, provider: AiProviderKind, key: &str) -> AppResult<()> {
+        KeyStore::set(file_store()?, provider, key)
+    }
+
+    fn clear(&self, provider: AiProviderKind) -> AppResult<()> {
+        KeyStore::clear(file_store()?, provider)
     }
 }
 
@@ -261,5 +286,24 @@ mod tests {
                 .kind,
             ErrorKind::InvalidInput
         );
+    }
+}
+
+#[cfg(all(test, embedded_git))]
+mod embedded_tests {
+    use super::*;
+
+    #[test]
+    fn system_keys_persist_through_file_store() {
+        crate::secrets::test_init();
+        SystemKeys
+            .set(AiProviderKind::OpenAiCompatible, "sk-x")
+            .unwrap();
+        assert_eq!(
+            SystemKeys.get(AiProviderKind::OpenAiCompatible).as_deref(),
+            Some("sk-x")
+        );
+        SystemKeys.clear(AiProviderKind::OpenAiCompatible).unwrap();
+        assert_eq!(SystemKeys.get(AiProviderKind::OpenAiCompatible), None);
     }
 }

@@ -76,16 +76,27 @@ pub fn build_client() -> AppResult<reqwest::Client> {
     PROVIDER.get_or_init(|| {
         let _ = rustls::crypto::ring::default_provider().install_default();
     });
-    reqwest::Client::builder()
+    let builder = reqwest::Client::builder()
         .connect_timeout(CONNECT_TIMEOUT)
-        .timeout(REQUEST_TIMEOUT)
-        .build()
-        .map_err(|e| {
-            AppError::new(
-                ErrorKind::AiProvider,
-                format!("could not create HTTP client: {}", scrub(&e)),
-            )
-        })
+        .timeout(REQUEST_TIMEOUT);
+    // Embedded builds must never construct rustls-platform-verifier (it needs
+    // JVM initialisation on Android): verify against the bundled Mozilla roots.
+    #[cfg(embedded_git)]
+    let builder = {
+        let roots = rustls::RootCertStore {
+            roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+        };
+        let tls = rustls::ClientConfig::builder()
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        builder.use_preconfigured_tls(tls)
+    };
+    builder.build().map_err(|e| {
+        AppError::new(
+            ErrorKind::AiProvider,
+            format!("could not create HTTP client: {}", scrub(&e)),
+        )
+    })
 }
 
 /// Constructs the provider for `settings`. Callers must have verified that
@@ -184,6 +195,27 @@ mod tests {
         assert!(is_local_url("http://[::1]:8080/v1"));
         assert!(!is_local_url("https://api.openai.com/v1"));
         assert!(!is_local_url("not a url"));
+    }
+
+    #[tokio::test]
+    async fn client_builds_and_reaches_plain_http() {
+        let client = build_client().unwrap();
+        let mut server = mockito::Server::new_async().await;
+        let m = server
+            .mock("GET", "/ping")
+            .with_body("pong")
+            .create_async()
+            .await;
+        let body = client
+            .get(format!("{}/ping", server.url()))
+            .send()
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap();
+        assert_eq!(body, "pong");
+        m.assert_async().await;
     }
 
     #[test]

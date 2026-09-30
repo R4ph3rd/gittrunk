@@ -22,14 +22,17 @@ pub trait SecretStore: Send + Sync {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Keychain;
 
+#[cfg(not(embedded_git))]
 fn entry(host: &str, username: &str) -> Result<keyring::Entry, keyring::Error> {
     keyring::Entry::new(SERVICE, &account(host, username))
 }
 
+#[cfg(not(embedded_git))]
 fn store_error(e: keyring::Error) -> AppError {
     AppError::new(ErrorKind::Internal, format!("keychain: {e}"))
 }
 
+#[cfg(not(embedded_git))]
 impl Keychain {
     /// Whether a secret service / keychain is reachable (false on headless CI).
     pub fn available() -> bool {
@@ -40,6 +43,7 @@ impl Keychain {
     }
 }
 
+#[cfg(not(embedded_git))]
 impl SecretStore for Keychain {
     fn get(&self, host: &str, username: &str) -> Option<String> {
         entry(host, username).ok()?.get_password().ok()
@@ -59,6 +63,35 @@ impl SecretStore for Keychain {
     }
 }
 
+#[cfg(embedded_git)]
+impl Keychain {
+    /// Whether the file-backed store has been initialised.
+    pub fn available() -> bool {
+        crate::secrets::global().is_some()
+    }
+}
+
+#[cfg(embedded_git)]
+fn file_store() -> AppResult<&'static crate::secrets::FileStore> {
+    crate::secrets::global()
+        .ok_or_else(|| AppError::new(ErrorKind::Internal, "secret store not initialised"))
+}
+
+#[cfg(embedded_git)]
+impl SecretStore for Keychain {
+    fn get(&self, host: &str, username: &str) -> Option<String> {
+        SecretStore::get(crate::secrets::global()?, host, username)
+    }
+
+    fn set(&self, host: &str, username: &str, secret: &str) -> AppResult<()> {
+        SecretStore::set(file_store()?, host, username, secret)
+    }
+
+    fn delete(&self, host: &str, username: &str) -> AppResult<()> {
+        SecretStore::delete(file_store()?, host, username)
+    }
+}
+
 /// Stores `secret` for `host`/`username` and remembers the username.
 pub fn store(secrets: &dyn SecretStore, host: &str, username: &str, secret: &str) -> AppResult<()> {
     secrets.set(host, username, secret)?;
@@ -71,4 +104,20 @@ pub fn clear(secrets: &dyn SecretStore, host: &str) -> AppResult<()> {
         secrets.delete(host, &user)?;
     }
     secrets.delete(host, "")
+}
+
+#[cfg(all(test, embedded_git))]
+mod embedded_tests {
+    use super::*;
+
+    #[test]
+    fn keychain_persists_through_file_store() {
+        crate::secrets::test_init();
+        assert!(Keychain::available());
+        store(&Keychain, "kc-test.example", "me", "pw").unwrap();
+        assert_eq!(Keychain.get("kc-test.example", "me").as_deref(), Some("pw"));
+        assert_eq!(Keychain.get("kc-test.example", "").as_deref(), Some("me"));
+        clear(&Keychain, "kc-test.example").unwrap();
+        assert_eq!(Keychain.get("kc-test.example", "me"), None);
+    }
 }

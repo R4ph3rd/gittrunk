@@ -45,6 +45,7 @@ fn round_trip_and_partial_and_corrupt_files() {
 }
 
 #[test]
+#[cfg(not(embedded_git))]
 fn validation() {
     let d = tempfile::tempdir().unwrap();
     let mut s = defaults();
@@ -76,6 +77,7 @@ fn validation() {
 }
 
 #[test]
+#[cfg(not(embedded_git))]
 fn real_git_path_is_accepted() {
     // Search PATH natively: `which` on Windows runners is MSYS and returns
     // MSYS-style paths such as `/cmd/git` that native code cannot open.
@@ -175,4 +177,19 @@ fn keybinding_validation_and_persistence() {
     }
     assert_eq!(load_keybindings(d.path()), good);
     assert!(save_keybindings(d.path(), &[]).unwrap().is_empty());
+}
+
+#[test]
+#[cfg(embedded_git)]
+fn cli_path_is_inert_when_embedded() {
+    let d = tempfile::tempdir().unwrap();
+    let mut s = defaults();
+    s.git_path = Some("/definitely/not/a/cli".into());
+    let saved = save(d.path(), &s).unwrap();
+    assert_eq!(saved.git_path.as_deref(), Some("/definitely/not/a/cli"));
+    assert_eq!(
+        load(d.path()).git_path.as_deref(),
+        Some("/definitely/not/a/cli")
+    );
+    assert_eq!(usable_git_path(&saved), None);
 }

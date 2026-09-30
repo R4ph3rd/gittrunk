@@ -38,6 +38,13 @@ pub fn defaults() -> AppSettings {
 
 /// Writes `data` next to `path` and renames it into place.
 pub fn atomic_write(path: &Path, data: &[u8]) -> AppResult<()> {
+    atomic_write_mode(path, data, None)
+}
+
+/// Like [`atomic_write`]; `mode` (unix permission bits) is applied to the
+/// temp file at creation, so the final file is never readable more widely.
+/// Ignored on non-unix targets.
+pub fn atomic_write_mode(path: &Path, data: &[u8], mode: Option<u32>) -> AppResult<()> {
     let dir = path
         .parent()
         .ok_or_else(|| AppError::new(ErrorKind::Io, "settings path has no parent"))?;
@@ -49,7 +56,21 @@ pub fn atomic_write(path: &Path, data: &[u8]) -> AppResult<()> {
         std::process::id()
     ));
     let write = || -> std::io::Result<()> {
-        let mut f = fs::File::create(&tmp)?;
+        let mut opts = fs::OpenOptions::new();
+        opts.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        if let Some(m) = mode {
+            use std::os::unix::fs::OpenOptionsExt;
+            opts.mode(m);
+        }
+        #[cfg(not(unix))]
+        let _ = mode;
+        let mut f = opts.open(&tmp)?;
+        #[cfg(unix)]
+        if let Some(m) = mode {
+            use std::os::unix::fs::PermissionsExt;
+            f.set_permissions(fs::Permissions::from_mode(m))?;
+        }
         f.write_all(data)?;
         f.sync_all()?;
         fs::rename(&tmp, path)
@@ -92,6 +113,10 @@ pub fn validate(settings: &AppSettings) -> AppResult<AppSettings> {
     if s.diff_context_lines > 20 {
         return Err(invalid("diffContextLines must be between 0 and 20"));
     }
+    // Without a git CLI the path is inert: stored as given, never executed.
+    if crate::platform::EMBEDDED {
+        return Ok(s);
+    }
     s.git_path = match s.git_path.as_deref().map(str::trim) {
         None | Some("") => None,
         Some(p) => {
@@ -125,6 +150,9 @@ pub fn validate_git_path(path: &str) -> AppResult<()> {
 
 /// The git path to apply for `settings`, when it is still usable.
 pub fn usable_git_path(settings: &AppSettings) -> Option<PathBuf> {
+    if crate::platform::EMBEDDED {
+        return None;
+    }
     settings
         .git_path
         .as_deref()

@@ -44,7 +44,10 @@ pub async fn settings_set(
     let st = state.inner().clone();
     crate::git::blocking(move || {
         let saved = settings::save(&dir, &settings)?;
-        st.set_git_path(saved.git_path.as_ref().map(PathBuf::from));
+        // Inert without a git CLI (embedded builds).
+        if !crate::platform::EMBEDDED {
+            st.set_git_path(saved.git_path.as_ref().map(PathBuf::from));
+        }
         Ok(saved)
     })
     .await
