@@ -8,24 +8,14 @@ import {
   ResizablePanelGroup,
   Spinner,
 } from "@/design/components";
-import type { StatusSnapshot } from "@/ipc/bindings";
 import { useStatus } from "@/ipc/queries";
 import { useRepoStore } from "@/stores/repo";
 import { CommitBox } from "./CommitBox";
 import { FileList, type OpenFile } from "./FileList";
+import { effectiveOpen } from "./effectiveOpen";
 
 // The diff library (with syntax highlighting) is large: load it when a diff is first opened.
 const DiffViewer = lazy(() => import("./diff/DiffViewer").then((m) => ({ default: m.DiffViewer })));
-
-/** The file whose diff is shown: follows a file when it moves between staged and unstaged. */
-function effectiveOpen(open: OpenFile | null, status: StatusSnapshot): OpenFile | null {
-  if (!open) return null;
-  const inList = (files: { path: string }[]) => files.some((f) => f.path === open.path);
-  const here = open.staged ? status.staged : [...status.unstaged, ...status.conflicted];
-  if (inList(here)) return open;
-  const other = open.staged ? [...status.unstaged, ...status.conflicted] : status.staged;
-  return inList(other) ? { path: open.path, staged: !open.staged } : null;
-}
 
 /** Right-hand panel while the WIP row is selected: file lists, diff viewer and commit box. */
 export function StagingPanel({ repoId }: { repoId: string }) {

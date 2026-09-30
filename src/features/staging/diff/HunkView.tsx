@@ -1,6 +1,9 @@
 import { memo, useEffect, useMemo, useRef, type MouseEvent } from "react";
 import { DiffModeEnum, DiffView, getLang } from "@git-diff-view/react";
-import { Button } from "@/design/components";
+import { MoreVertical } from "lucide-react";
+import { Button, IconButton } from "@/design/components";
+import { useLongPress } from "@/design/hooks";
+import { cn } from "@/lib/cn";
 import type { FileDiff } from "@/ipc/bindings";
 import type { DiffMode } from "@/stores/repo";
 import { parseKey, resolveRow, type LineRef } from "./selection";
@@ -20,6 +23,9 @@ interface Props {
   onStageHunk: (hunkIndex: number) => void;
   onUnstageHunk: (hunkIndex: number) => void;
   onDiscardHunk: (hunkIndex: number) => void;
+  /** Compact layouts: 44px header buttons, no line selection, long-press opens `onHunkMenu`. */
+  compact?: boolean;
+  onHunkMenu?: (hunkIndex: number) => void;
 }
 
 /** Marks the rows of selected lines with `data-selected` (styled in diff.css). */
@@ -60,8 +66,14 @@ function HunkViewImpl({
   onStageHunk,
   onUnstageHunk,
   onDiscardHunk,
+  compact = false,
+  onHunkMenu,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const longPress = useLongPress(() => onHunkMenu?.(hunkIndex), {
+    disabled: !compact || !onHunkMenu,
+  });
+  const btn = compact ? "min-h-[var(--touch-target)]" : "";
   const hunk = diff.hunks[hunkIndex];
   const lang = getLang(diff.path);
   const data = useMemo(
@@ -85,6 +97,7 @@ function HunkViewImpl({
   }, [diff, hunkIndex, selectedKeys, mode]);
 
   const onClick = (e: MouseEvent<HTMLDivElement>) => {
+    if (compact) return; // line-level selection is desktop only in v1
     const tr = (e.target as HTMLElement).closest<HTMLElement>('tr[data-state="diff"]');
     if (!tr) return;
     const ref = resolveRow(tr, diff, hunkIndex);
@@ -93,7 +106,13 @@ function HunkViewImpl({
 
   return (
     <section data-testid="diff-hunk" data-hunk={hunkIndex} className="border-b border-border">
-      <header className="sticky top-0 z-[var(--z-sticky)] flex h-7 items-center gap-2 border-b border-border bg-bg-subtle px-2">
+      <header
+        {...(compact ? longPress : {})}
+        className={cn(
+          "sticky top-0 z-[var(--z-sticky)] flex items-center gap-2 border-b border-border bg-bg-subtle px-2",
+          compact ? "min-h-[var(--touch-target)] select-none" : "h-7",
+        )}
+      >
         <code className="min-w-0 flex-1 truncate font-mono text-xs text-fg-subtle">
           {hunk?.header}
         </code>
@@ -102,6 +121,7 @@ function HunkViewImpl({
             size="sm"
             variant="ghost"
             disabled={busy}
+            className={btn}
             onClick={() => onUnstageHunk(hunkIndex)}
           >
             Unstage hunk
@@ -112,21 +132,29 @@ function HunkViewImpl({
               size="sm"
               variant="ghost"
               disabled={busy}
+              className={btn}
               onClick={() => onStageHunk(hunkIndex)}
             >
               Stage hunk
             </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={busy}
-              className="text-danger hover:text-danger"
-              onClick={() => onDiscardHunk(hunkIndex)}
-            >
-              Discard hunk
-            </Button>
+            {compact ? null : (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                className={cn("text-danger hover:text-danger", btn)}
+                onClick={() => onDiscardHunk(hunkIndex)}
+              >
+                Discard hunk
+              </Button>
+            )}
           </>
         )}
+        {compact && onHunkMenu ? (
+          <IconButton aria-label="Hunk actions" onClick={() => onHunkMenu(hunkIndex)}>
+            <MoreVertical />
+          </IconButton>
+        ) : null}
       </header>
       <div
         ref={rootRef}

@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
-import { FileX2 } from "lucide-react";
+import { FileX2, Minus, Plus, Undo2 } from "lucide-react";
+import { useLayout } from "@/app/layout/useLayout";
 import {
+  ActionSheet,
   Button,
   EmptyState,
   Spinner,
@@ -32,6 +34,9 @@ import {
 import { countLines, toHunkStrings, visibleHunkCount } from "./toHunkStrings";
 import { useDocTheme } from "./useDocTheme";
 
+/** Compact layouts gate diffs above this many lines behind "Load full diff". */
+const COMPACT_LINE_LIMIT = 2000;
+
 interface Props {
   repoId: string;
   path: string;
@@ -42,7 +47,11 @@ interface Props {
 export function DiffViewer({ repoId, path, staged }: Props) {
   const diffOptions = useStagingDiffOptions();
   const query = useWorktreeDiff(repoId, path, staged);
-  const mode = useRepoStore((s) => s.diffMode);
+  const { isCompact } = useLayout();
+  const storedMode = useRepoStore((s) => s.diffMode);
+  // Compact layouts are unified only (split diff is deferred) and have no line selection.
+  const mode: DiffMode = isCompact ? "unified" : storedMode;
+  const [menuHunk, setMenuHunk] = useState<number | null>(null);
   const setMode = useRepoStore((s) => s.setDiffMode);
   const theme = useDocTheme();
   const stageLines = useStageLines(repoId);
@@ -82,26 +91,33 @@ export function DiffViewer({ repoId, path, staged }: Props) {
     });
   };
   const onLineClick = (ref: LineRef, shift: boolean) =>
+    !isCompact &&
     setSel({ diff, state: shift ? extendRange(diff, state, ref) : toggleLine(state, ref) });
   const lineSelection = buildLineSelection(path, diffOptions, state);
   const hunkSel = (i: number) => buildHunkSelection(path, diffOptions, i);
 
-  const shown = visibleHunkCount(diff, showAll === diff);
+  const shown = visibleHunkCount(
+    diff,
+    showAll === diff,
+    isCompact ? COMPACT_LINE_LIMIT : undefined,
+  );
   const hidden = diff.hunks.slice(shown).reduce((n, h) => n + h.lines.length, 0);
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="staging-diff">
-      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-2">
-        <span className="min-w-0 flex-1 truncate font-mono text-xs" title={path}>
-          {path}
-        </span>
-        <Tabs value={mode} onValueChange={(v) => setMode(v as DiffMode)}>
-          <TabsList aria-label="Diff layout">
-            <TabsTrigger value="unified">Unified</TabsTrigger>
-            <TabsTrigger value="split">Split</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
+      {!isCompact && (
+        <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-2">
+          <span className="min-w-0 flex-1 truncate font-mono text-xs" title={path}>
+            {path}
+          </span>
+          <Tabs value={mode} onValueChange={(v) => setMode(v as DiffMode)}>
+            <TabsList aria-label="Diff layout">
+              <TabsTrigger value="unified">Unified</TabsTrigger>
+              <TabsTrigger value="split">Split</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+      )}
       {selectedCount(state) > 0 && lineSelection && (
         <div
           role="toolbar"
@@ -183,6 +199,8 @@ export function DiffViewer({ repoId, path, staged }: Props) {
                 onDiscardHunk={(h) =>
                   void discard.request({ kind: "lines", selection: hunkSel(h) })
                 }
+                compact={isCompact}
+                onHunkMenu={isCompact ? setMenuHunk : undefined}
               />
             ))}
             {hidden > 0 && (
@@ -191,13 +209,47 @@ export function DiffViewer({ repoId, path, staged }: Props) {
                   Large diff: {hidden} of {countLines(diff)} lines not shown.
                 </span>
                 <Button size="sm" onClick={() => setShowAll(diff)}>
-                  Show full diff
+                  {isCompact ? "Load full diff" : "Show full diff"}
                 </Button>
               </div>
             )}
           </>
         )}
       </div>
+      {isCompact && menuHunk !== null && (
+        <ActionSheet
+          open
+          onOpenChange={(o) => !o && setMenuHunk(null)}
+          title={diff.hunks[menuHunk]?.header ?? "Hunk"}
+          items={
+            staged
+              ? [
+                  {
+                    id: "unstage",
+                    label: "Unstage hunk",
+                    icon: <Minus />,
+                    onSelect: () => run("unstage", hunkSel(menuHunk)),
+                  },
+                ]
+              : [
+                  {
+                    id: "stage",
+                    label: "Stage hunk",
+                    icon: <Plus />,
+                    onSelect: () => run("stage", hunkSel(menuHunk)),
+                  },
+                  {
+                    id: "discard",
+                    label: "Discard hunk",
+                    icon: <Undo2 />,
+                    destructive: true,
+                    onSelect: () =>
+                      void discard.request({ kind: "lines", selection: hunkSel(menuHunk) }),
+                  },
+                ]
+          }
+        />
+      )}
       {discard.dialog}
     </div>
   );
