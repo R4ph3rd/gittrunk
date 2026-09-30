@@ -1,14 +1,24 @@
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
-import type { ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Kbd } from "./Kbd";
 import { floating, popIn } from "./shared";
 
+const ProviderPresent = createContext(false);
+
+/**
+ * Optional: shares delay settings across tooltips. `Tooltip` also works without
+ * it (it mounts its own provider when none is above it).
+ */
 export function TooltipProvider({
   delayDuration = 400,
   ...props
 }: TooltipPrimitive.TooltipProviderProps) {
-  return <TooltipPrimitive.Provider delayDuration={delayDuration} {...props} />;
+  return (
+    <ProviderPresent.Provider value={true}>
+      <TooltipPrimitive.Provider delayDuration={delayDuration} {...props} />
+    </ProviderPresent.Provider>
+  );
 }
 
 export interface TooltipProps {
@@ -21,7 +31,8 @@ export interface TooltipProps {
 }
 
 export function Tooltip({ content, shortcut, side = "top", children, className }: TooltipProps) {
-  return (
+  const hasProvider = useContext(ProviderPresent);
+  const tooltip = (
     <TooltipPrimitive.Root>
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
@@ -41,4 +52,5 @@ export function Tooltip({ content, shortcut, side = "top", children, className }
       </TooltipPrimitive.Portal>
     </TooltipPrimitive.Root>
   );
+  return hasProvider ? tooltip : <TooltipProvider>{tooltip}</TooltipProvider>;
 }

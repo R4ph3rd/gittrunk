@@ -22,9 +22,12 @@ export const buttonVariants = cva(
         outline: "border-border-strong text-fg hover:bg-surface-hover",
       },
       size: {
+        xs: "h-5 px-1.5 text-sm [&_svg]:size-3",
         sm: "h-[var(--control-sm)] px-2 text-sm",
         md: "h-[var(--control-md)] px-3 text-base",
         icon: "size-[var(--control-md)] p-0",
+        "icon-xs": "size-5 p-0 [&_svg]:size-3",
+        "icon-sm": "size-[var(--control-sm)] p-0",
       },
     },
     defaultVariants: { variant: "secondary", size: "md" },
