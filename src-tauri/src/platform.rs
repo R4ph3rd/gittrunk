@@ -9,3 +9,7 @@ pub const SUPPORTS_REBASE: bool = true;
 pub const SUPPORTS_WORKTREES: bool = true;
 /// `log --follow`.
 pub const SUPPORTS_FILE_HISTORY: bool = true;
+/// Git write actions are hidden in the UI (Android: browse, follow, comment).
+pub const READ_ONLY: bool = MOBILE;
+/// A PTY-backed terminal exists (portable-pty is not built for Android).
+pub const SUPPORTS_TERMINAL: bool = cfg!(not(target_os = "android"));

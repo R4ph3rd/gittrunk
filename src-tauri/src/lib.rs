@@ -2,14 +2,18 @@
 
 pub mod ai;
 pub mod askpass;
+pub mod avatars;
 pub mod commands;
+pub mod forge;
 pub mod git;
+pub mod http;
 pub mod ipc;
 #[cfg(embedded_git)]
 pub mod mobile;
 pub mod platform;
 pub mod secrets;
 pub mod settings;
+pub mod terminal;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -28,6 +32,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(git::GitState::default())
+        .manage(terminal::Terminals::default())
+        .manage(avatars::AvatarCache::default())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             #[cfg(embedded_git)]

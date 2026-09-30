@@ -7,7 +7,7 @@ use git2::{Commit, ObjectType, Oid, Repository, Sort};
 use super::{layout, CachedRow, GraphCache};
 use crate::git::libgit::refs::ref_labels;
 use crate::ipc::error::{AppError, AppResult, ErrorKind};
-use crate::ipc::types::{CommitOrder, GraphFilter};
+use crate::ipc::types::{CommitOrder, GraphFilter, RefColor, RefKind};
 
 pub fn build(repo: &Repository, filter: &GraphFilter) -> AppResult<GraphCache> {
     let mut walk = repo.revwalk()?;
@@ -94,11 +94,28 @@ pub fn build(repo: &Repository, filter: &GraphFilter) -> AppResult<GraphCache> {
         .and_then(|h| h.target())
         .and_then(|oid| index.get(&oid).copied());
 
+    let labels = ref_labels(repo)?;
+    let mut ref_colors: Vec<RefColor> = labels
+        .iter()
+        .filter_map(|(oid, ls)| index.get(oid).map(|i| (*i as usize, ls)))
+        .flat_map(|(i, ls)| {
+            let color = rows[i].color;
+            ls.iter()
+                .filter(|l| l.kind != RefKind::Stash)
+                .map(move |l| RefColor {
+                    full_name: l.full_name.clone(),
+                    color,
+                })
+        })
+        .collect();
+    ref_colors.sort_by(|a, b| a.full_name.cmp(&b.full_name));
+
     let cache = GraphCache {
         rows,
         lane_count: laid_out.lane_count,
         head_row,
-        labels: ref_labels(repo)?,
+        labels,
+        ref_colors,
     };
     Ok(cache)
 }

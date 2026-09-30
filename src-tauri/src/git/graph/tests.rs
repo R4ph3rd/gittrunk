@@ -60,7 +60,8 @@ fn empty_repo_has_no_rows() {
         GraphMeta {
             row_count: 0,
             lane_count: 0,
-            head_row: None
+            head_row: None,
+            ref_colors: vec![]
         }
     );
     assert!(cache.rows(0, 10).is_empty());
@@ -366,4 +367,33 @@ fn perf_graph_100k() {
         assert!(load.as_secs_f64() < 1.5, "graph_load took {load:?}");
         assert!(rows.as_secs_f64() < 0.005, "graph_rows took {rows:?}");
     }
+}
+
+#[test]
+fn ref_colors_follow_tip_rows() {
+    let f = fixtures::branch_merge();
+    let rows = all_rows(&f.repo.repo, &default_filter());
+    let colors = build(&f.repo.repo, &default_filter()).meta().ref_colors;
+    let names: Vec<_> = colors.iter().map(|c| c.full_name.as_str()).collect();
+    assert_eq!(names, vec!["refs/heads/feature", "refs/heads/main"]);
+    let color_of = |n: &str| colors.iter().find(|c| c.full_name == n).unwrap().color;
+    assert_eq!(color_of("refs/heads/feature"), row_of(&rows, f.c).color);
+    assert_eq!(color_of("refs/heads/main"), row_of(&rows, f.m).color);
+    assert_ne!(row_of(&rows, f.c).lane, row_of(&rows, f.m).lane);
+}
+
+#[test]
+fn ref_colors_skip_stash_and_filtered_refs() {
+    let t = fixtures::stash();
+    let colors = build(&t.repo, &default_filter()).meta().ref_colors;
+    assert!(colors.iter().all(|c| c.full_name != "refs/stash"));
+    assert_eq!(colors.len(), 1);
+
+    let f = fixtures::branch_merge();
+    let mut filter = default_filter();
+    filter.first_parent = true;
+    filter.refs = Some(vec!["main".into()]);
+    let colors = build(&f.repo.repo, &filter).meta().ref_colors;
+    let names: Vec<_> = colors.iter().map(|c| c.full_name.as_str()).collect();
+    assert_eq!(names, vec!["refs/heads/main"]);
 }

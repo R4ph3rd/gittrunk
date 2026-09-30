@@ -11,7 +11,9 @@ use specta_typescript::Typescript;
 use tauri_specta::{collect_commands, collect_events, Builder};
 
 use crate::commands;
-use types::{CredentialRequested, OpFinished, OpProgress, RepoChanged};
+use types::{
+    CredentialRequested, OpFinished, OpProgress, RepoChanged, TerminalExit, TerminalOutput,
+};
 
 /// Absolute path of the generated bindings in the source tree.
 pub const BINDINGS_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../src/ipc/bindings.ts");
@@ -93,6 +95,22 @@ pub fn builder() -> Builder<tauri::Wry> {
             commands::oplog::undo,
             commands::oplog::redo,
             commands::oplog::op_cancel,
+            commands::oplog::oplog_state,
+            commands::avatars::avatars_get,
+            commands::forge::forge_status,
+            commands::forge::forge_token_source,
+            commands::forge::forge_token_set,
+            commands::forge::forge_token_clear,
+            commands::forge::forge_issues,
+            commands::forge::forge_issue,
+            commands::forge::forge_issue_create,
+            commands::forge::forge_issue_comment,
+            commands::forge::forge_commit_comments,
+            commands::forge::forge_commit_comment,
+            commands::terminal::terminal_open,
+            commands::terminal::terminal_write,
+            commands::terminal::terminal_resize,
+            commands::terminal::terminal_close,
             commands::ai::ai_settings_get,
             commands::ai::ai_settings_set,
             commands::ai::ai_key_set,
@@ -109,7 +127,9 @@ pub fn builder() -> Builder<tauri::Wry> {
             RepoChanged,
             OpProgress,
             OpFinished,
-            CredentialRequested
+            CredentialRequested,
+            TerminalOutput,
+            TerminalExit
         ])
 }
 

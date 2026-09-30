@@ -85,6 +85,22 @@ export const commands = {
 	undo: (repo: string, dryRun: boolean) => typedError<OpOutcome, AppError>(__TAURI_INVOKE("undo", { repo, dryRun })),
 	redo: (repo: string, dryRun: boolean) => typedError<OpOutcome, AppError>(__TAURI_INVOKE("redo", { repo, dryRun })),
 	opCancel: (opId: string) => typedError<null, AppError>(__TAURI_INVOKE("op_cancel", { opId })),
+	oplogState: (repo: string) => typedError<OplogState, AppError>(__TAURI_INVOKE("oplog_state", { repo })),
+	avatarsGet: (subjects: AvatarSubject[], size: number) => typedError<(string | null)[], AppError>(__TAURI_INVOKE("avatars_get", { subjects, size })),
+	forgeStatus: (repo: string) => typedError<ForgeStatus, AppError>(__TAURI_INVOKE("forge_status", { repo })),
+	forgeTokenSource: (host: string) => typedError<ForgeTokenSource, AppError>(__TAURI_INVOKE("forge_token_source", { host })),
+	forgeTokenSet: (host: string, token: string) => typedError<ForgeUser, AppError>(__TAURI_INVOKE("forge_token_set", { host, token })),
+	forgeTokenClear: (host: string) => typedError<null, AppError>(__TAURI_INVOKE("forge_token_clear", { host })),
+	forgeIssues: (repo: string, query: IssueQuery) => typedError<IssuePage, AppError>(__TAURI_INVOKE("forge_issues", { repo, query })),
+	forgeIssue: (repo: string, number: number) => typedError<IssueDetail, AppError>(__TAURI_INVOKE("forge_issue", { repo, number })),
+	forgeIssueCreate: (repo: string, request: IssueCreateRequest) => typedError<Issue, AppError>(__TAURI_INVOKE("forge_issue_create", { repo, request })),
+	forgeIssueComment: (repo: string, number: number, body: string) => typedError<ForgeComment, AppError>(__TAURI_INVOKE("forge_issue_comment", { repo, number, body })),
+	forgeCommitComments: (repo: string, oid: string) => typedError<ForgeComment[], AppError>(__TAURI_INVOKE("forge_commit_comments", { repo, oid })),
+	forgeCommitComment: (repo: string, oid: string, body: string) => typedError<ForgeComment, AppError>(__TAURI_INVOKE("forge_commit_comment", { repo, oid, body })),
+	terminalOpen: (request: TerminalOpenRequest) => typedError<string, AppError>(__TAURI_INVOKE("terminal_open", { request })),
+	terminalWrite: (id: string, data: string) => typedError<null, AppError>(__TAURI_INVOKE("terminal_write", { id, data })),
+	terminalResize: (id: string, cols: number, rows: number) => typedError<null, AppError>(__TAURI_INVOKE("terminal_resize", { id, cols, rows })),
+	terminalClose: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("terminal_close", { id })),
 	aiSettingsGet: () => typedError<AiSettings, AppError>(__TAURI_INVOKE("ai_settings_get")),
 	aiSettingsSet: (settings: AiSettings) => typedError<AiSettings, AppError>(__TAURI_INVOKE("ai_settings_set", { settings })),
 	aiKeySet: (provider: AiProviderKind, key: string) => typedError<null, AppError>(__TAURI_INVOKE("ai_key_set", { provider, key })),
@@ -104,6 +120,8 @@ export const events = {
 	opFinished: makeEvent<OpFinished>("op-finished"),
 	opProgress: makeEvent<OpProgress>("op-progress"),
 	repoChanged: makeEvent<RepoChanged>("repo-changed"),
+	terminalExit: makeEvent<TerminalExit>("terminal-exit"),
+	terminalOutput: makeEvent<TerminalOutput>("terminal-output"),
 };
 
 /* Types */
@@ -162,7 +180,13 @@ export type AppSettings = {
 	confirmDestructive: boolean,
 	graphOrder: CommitOrder,
 	diffContextLines: number,
+	/**  Where avatars may be fetched from (by the backend; the webview never contacts avatar hosts). */
+	avatars: AvatarMode,
 };
+
+export type AvatarMode = "off" | "github" | "githubAndGravatar";
+
+export type AvatarSubject = { kind: "email"; email: string } | { kind: "githubLogin"; login: string };
 
 export type BlameHunk = {
 	oid: string,
@@ -344,6 +368,44 @@ export type FileHistoryEntry = {
 	status: ChangeStatus,
 };
 
+export type ForgeComment = {
+	/**  Forge id as a string (GitHub ids exceed u32). */
+	id: string,
+	author: ForgeUser,
+	/**  Plain text as written (Markdown source); never rendered as HTML. */
+	body: string,
+	createdAt: number | null,
+	url: string,
+};
+
+export type ForgeKind = "github" | "gitlab";
+
+export type ForgeRepo = {
+	kind: ForgeKind,
+	/**  e.g. "github.com" */
+	host: string,
+	owner: string,
+	name: string,
+	/**  https://github.com/<owner>/<name> */
+	webUrl: string,
+	/**  Remote the repo was derived from, e.g. "origin". */
+	remote: string,
+};
+
+export type ForgeStatus = {
+	/**  None when no remote points at a known forge. */
+	repo: ForgeRepo | null,
+	/**  This build can talk to `repo.kind` (GitHub only for now). */
+	supported: boolean,
+	tokenSource: ForgeTokenSource,
+};
+
+export type ForgeTokenSource = "forge" | "gitCredential" | "none";
+
+export type ForgeUser = {
+	login: string,
+};
+
 export type GitIdentity = {
 	name: string | null,
 	email: string | null,
@@ -372,6 +434,8 @@ export type GraphMeta = {
 	rowCount: number,
 	laneCount: number,
 	headRow: number | null,
+	/**  Lane color of every non-stash ref whose commit is in this graph, sorted by full name. */
+	refColors: RefColor[],
 };
 
 export type GraphRow = {
@@ -426,6 +490,45 @@ export type InteractiveRebaseRequest = {
 	base: string,
 	todo: RebaseTodoItem[],
 };
+
+export type Issue = {
+	number: number,
+	title: string,
+	state: IssueState,
+	author: ForgeUser,
+	labels: string[],
+	comments: number,
+	createdAt: number | null,
+	updatedAt: number | null,
+	/**  Web URL of the issue. */
+	url: string,
+};
+
+export type IssueCreateRequest = {
+	title: string,
+	body: string,
+};
+
+export type IssueDetail = {
+	issue: Issue,
+	body: string,
+	comments: ForgeComment[],
+};
+
+export type IssuePage = {
+	items: Issue[],
+	nextPage: number | null,
+};
+
+export type IssueQuery = {
+	state: IssueStateFilter,
+	page: number,
+	perPage: number,
+};
+
+export type IssueState = "open" | "closed";
+
+export type IssueStateFilter = "open" | "closed" | "all";
 
 export type Keybinding = {
 	action: string,
@@ -497,6 +600,14 @@ export type OplogEntry = {
 	undone: boolean,
 };
 
+export type OplogState = {
+	canUndo: boolean,
+	canRedo: boolean,
+	/**  Description of the entry `undo` would revert. */
+	undoDescription: string | null,
+	redoDescription: string | null,
+};
+
 /**  The only operations an AI plan may contain. */
 export type PlannedCommand = { kind: "checkout"; target: CheckoutTarget } | { kind: "branchCreate"; request: BranchCreateRequest } | { kind: "merge"; request: MergeRequest } | { kind: "rebase"; request: RebaseRequest } | { kind: "cherryPick"; request: CherryPickRequest } | { kind: "revert"; request: RevertRequest } | { kind: "reset"; request: ResetRequest } | { kind: "tagCreate"; request: TagCreateRequest } | { kind: "stashSave"; request: StashSaveRequest } | { kind: "fetch"; request: FetchRequest } | { kind: "pull"; request: PullRequest } | { kind: "push"; request: PushRequest };
 
@@ -520,6 +631,8 @@ export type PlatformInfo = {
 	supportsSubmodules: boolean,
 	supportsFileHistory: boolean,
 	supportsHooks: boolean,
+	readOnly: boolean,
+	supportsTerminal: boolean,
 	/**  "file" or "keychain". */
 	secretStore: string,
 	/**  Where clones land by default on mobile/embedded builds. */
@@ -562,6 +675,11 @@ export type RecentRepo = {
 	path: string,
 	name: string,
 	lastOpened: number | null,
+};
+
+export type RefColor = {
+	fullName: string,
+	color: number,
 };
 
 export type RefKind = "localBranch" | "remoteBranch" | "tag" | "stash";
@@ -707,6 +825,22 @@ export type TagInfo = {
 	oid: string,
 	annotated: boolean,
 	message: string | null,
+};
+
+export type TerminalExit = {
+	id: string,
+	code: number | null,
+};
+
+export type TerminalOpenRequest = {
+	cwd: string,
+	cols: number,
+	rows: number,
+};
+
+export type TerminalOutput = {
+	id: string,
+	data: string,
 };
 
 export type ThemePreference = "dark" | "light" | "system";

@@ -3,7 +3,9 @@
 pub mod advanced;
 pub mod ai;
 pub mod app;
+pub mod avatars;
 pub mod conflicts;
+pub mod forge;
 pub mod graph;
 pub mod history;
 pub mod identity;
@@ -13,4 +15,5 @@ pub mod remotes;
 pub mod repo;
 pub mod settings;
 pub mod stash;
+pub mod terminal;
 pub mod worktree;

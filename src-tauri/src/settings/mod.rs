@@ -31,6 +31,7 @@ pub fn defaults() -> AppSettings {
         confirm_destructive: true,
         graph_order: CommitOrder::Topo,
         diff_context_lines: 3,
+        avatars: AvatarMode::Github,
     }
 }
 

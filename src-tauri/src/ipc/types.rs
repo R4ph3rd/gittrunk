@@ -78,6 +78,8 @@ wire! {
         pub supports_submodules: bool,
         pub supports_file_history: bool,
         pub supports_hooks: bool,
+        pub read_only: bool,
+        pub supports_terminal: bool,
         /// "file" or "keychain".
         pub secret_store: String,
         /// Where clones land by default on mobile/embedded builds.
@@ -197,6 +199,13 @@ wire! {
         pub row_count: u32,
         pub lane_count: u32,
         pub head_row: Option<u32>,
+        /// Lane color of every non-stash ref whose commit is in this graph, sorted by full name.
+        pub ref_colors: Vec<RefColor>,
+    }
+
+    pub struct RefColor {
+        pub full_name: String,
+        pub color: u32,
     }
 
     pub struct RefLabel {
@@ -720,6 +729,14 @@ wire! {
         pub head_after: Option<Oid>,
         pub undone: bool,
     }
+
+    pub struct OplogState {
+        pub can_undo: bool,
+        pub can_redo: bool,
+        /// Description of the entry `undo` would revert.
+        pub undo_description: Option<String>,
+        pub redo_description: Option<String>,
+    }
 }
 
 // ---------------------------------------------------------------- AI
@@ -811,6 +828,14 @@ wire_enum! {
     }
 }
 
+wire_enum! {
+    pub enum AvatarMode {
+        Off,
+        Github,
+        GithubAndGravatar,
+    }
+}
+
 wire! {
     pub struct AppSettings {
         pub theme: ThemePreference,
@@ -820,11 +845,129 @@ wire! {
         pub confirm_destructive: bool,
         pub graph_order: CommitOrder,
         pub diff_context_lines: u32,
+        /// Where avatars may be fetched from (by the backend; the webview never contacts avatar hosts).
+        pub avatars: AvatarMode,
     }
 
     pub struct Keybinding {
         pub action: String,
         pub keys: String,
+    }
+}
+
+// ---------------------------------------------------------------- avatars
+
+wire_tagged! {
+    pub enum AvatarSubject {
+        Email { email: String },
+        GithubLogin { login: String },
+    }
+}
+
+// ---------------------------------------------------------------- forge
+
+wire_enum! {
+    pub enum ForgeKind {
+        Github,
+        Gitlab,
+    }
+
+    pub enum ForgeTokenSource {
+        Forge,
+        GitCredential,
+        None,
+    }
+
+    pub enum IssueState {
+        Open,
+        Closed,
+    }
+
+    pub enum IssueStateFilter {
+        Open,
+        Closed,
+        All,
+    }
+}
+
+wire! {
+    pub struct ForgeRepo {
+        pub kind: ForgeKind,
+        /// e.g. "github.com"
+        pub host: String,
+        pub owner: String,
+        pub name: String,
+        /// https://github.com/<owner>/<name>
+        pub web_url: String,
+        /// Remote the repo was derived from, e.g. "origin".
+        pub remote: String,
+    }
+
+    pub struct ForgeStatus {
+        /// None when no remote points at a known forge.
+        pub repo: Option<ForgeRepo>,
+        /// This build can talk to `repo.kind` (GitHub only for now).
+        pub supported: bool,
+        pub token_source: ForgeTokenSource,
+    }
+
+    pub struct ForgeUser {
+        pub login: String,
+    }
+
+    pub struct Issue {
+        pub number: u32,
+        pub title: String,
+        pub state: IssueState,
+        pub author: ForgeUser,
+        pub labels: Vec<String>,
+        pub comments: u32,
+        pub created_at: f64,
+        pub updated_at: f64,
+        /// Web URL of the issue.
+        pub url: String,
+    }
+
+    pub struct IssueQuery {
+        pub state: IssueStateFilter,
+        pub page: u32,
+        pub per_page: u32,
+    }
+
+    pub struct IssuePage {
+        pub items: Vec<Issue>,
+        pub next_page: Option<u32>,
+    }
+
+    pub struct ForgeComment {
+        /// Forge id as a string (GitHub ids exceed u32).
+        pub id: String,
+        pub author: ForgeUser,
+        /// Plain text as written (Markdown source); never rendered as HTML.
+        pub body: String,
+        pub created_at: f64,
+        pub url: String,
+    }
+
+    pub struct IssueDetail {
+        pub issue: Issue,
+        pub body: String,
+        pub comments: Vec<ForgeComment>,
+    }
+
+    pub struct IssueCreateRequest {
+        pub title: String,
+        pub body: String,
+    }
+}
+
+// ---------------------------------------------------------------- terminal
+
+wire! {
+    pub struct TerminalOpenRequest {
+        pub cwd: String,
+        pub cols: u32,
+        pub rows: u32,
     }
 }
 
@@ -866,4 +1009,18 @@ pub struct CredentialRequested {
     pub url: String,
     pub username: Option<String>,
     pub kind: CredentialKind,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalOutput {
+    pub id: String,
+    pub data: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalExit {
+    pub id: String,
+    pub code: Option<i32>,
 }

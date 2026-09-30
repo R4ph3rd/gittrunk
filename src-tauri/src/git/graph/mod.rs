@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use git2::Oid;
 
-use crate::ipc::types::{GraphEdge, GraphMeta, GraphRow, GraphSearch, RefLabel};
+use crate::ipc::types::{GraphEdge, GraphMeta, GraphRow, GraphSearch, RefColor, RefLabel};
 
 pub(crate) struct CachedRow {
     pub oid: Oid,
@@ -31,6 +31,7 @@ pub struct GraphCache {
     pub(crate) lane_count: u32,
     pub(crate) head_row: Option<u32>,
     pub(crate) labels: HashMap<Oid, Vec<RefLabel>>,
+    pub(crate) ref_colors: Vec<RefColor>,
 }
 
 impl GraphCache {
@@ -39,6 +40,7 @@ impl GraphCache {
             row_count: self.rows.len() as u32,
             lane_count: self.lane_count,
             head_row: self.head_row,
+            ref_colors: self.ref_colors.clone(),
         }
     }
 

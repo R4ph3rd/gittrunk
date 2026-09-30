@@ -57,6 +57,8 @@ pub fn platform_info_for(data_dir: Option<&Path>) -> PlatformInfo {
         supports_submodules: !platform::EMBEDDED,
         supports_file_history: platform::SUPPORTS_FILE_HISTORY,
         supports_hooks: !platform::EMBEDDED,
+        read_only: platform::READ_ONLY,
+        supports_terminal: platform::SUPPORTS_TERMINAL,
         secret_store: if platform::EMBEDDED {
             "file"
         } else {
@@ -101,6 +103,7 @@ mod tests {
         let info = platform_info_for(Some(dir.path()));
         assert!(info.has_git_cli && info.supports_ssh && info.can_pick_folder);
         assert!(info.supports_rebase && info.supports_worktrees && info.supports_hooks);
+        assert!(!info.read_only && info.supports_terminal);
         assert_eq!(info.secret_store, "keychain");
         assert_eq!(info.default_repos_dir, None);
         assert!(!dir.path().join("repos").exists());
@@ -113,6 +116,8 @@ mod tests {
         let info = platform_info_for(Some(dir.path()));
         assert!(!info.has_git_cli && !info.supports_ssh && !info.supports_hooks);
         assert!(!info.supports_interactive_rebase && !info.supports_submodules);
+        assert_eq!(info.read_only, platform::MOBILE);
+        assert_eq!(info.supports_terminal, cfg!(not(target_os = "android")));
         assert_eq!(info.secret_store, "file");
         let repos = info.default_repos_dir.expect("repos dir");
         assert!(Path::new(&repos).is_dir());
