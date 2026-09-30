@@ -27,6 +27,7 @@ import { HistoryViewsHost } from "@/features/history-views/HistoryViewsHost";
 import { SubmodulesSection, WorktreesSection } from "@/features/history-views/SidebarSections";
 import { openReflog } from "@/features/history-views/store";
 import { baseFor, useBranchSummary } from "@/features/history-views/useBranchSummary";
+import { usePlatform } from "@/app/platform";
 import { useRefs } from "@/ipc/queries";
 import { useRepoStore } from "@/stores/repo";
 import { TargetEntries } from "@/features/operations/actions/ActionMenu";
@@ -35,6 +36,7 @@ import { Item, Section } from "./SidebarParts";
 
 export function RefsSidebar({ repoId }: { repoId: string }) {
   const refs = useRefs(repoId);
+  const platform = usePlatform();
   const select = useRepoStore((s) => s.selectCommit);
   const stash = useStashActions(repoId);
   const client = useQueryClient();
@@ -146,8 +148,8 @@ export function RefsSidebar({ repoId }: { repoId: string }) {
           </Section>
         </>
       )}
-      <SubmodulesSection repoId={repoId} />
-      <WorktreesSection repoId={repoId} />
+      {platform.supportsSubmodules && <SubmodulesSection repoId={repoId} />}
+      {platform.supportsWorktrees && <WorktreesSection repoId={repoId} />}
       {stash.dialog}
       {branchSummary.dialog}
       <HistoryViewsHost repoId={repoId} />

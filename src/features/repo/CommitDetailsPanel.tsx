@@ -12,6 +12,7 @@ import { AiSummaryButton } from "@/features/ai";
 import { openBlame, openFileHistory } from "@/features/history-views/store";
 import { RefBadge } from "@/features/graph/GraphRowView";
 import { absoluteDate } from "@/features/graph/format";
+import { usePlatform } from "@/app/platform";
 import type { Signature } from "@/ipc/bindings";
 import { useCommitDetails } from "@/ipc/queries";
 import { cn } from "@/lib/cn";
@@ -32,6 +33,7 @@ function Person({ label, sig }: { label: string; sig: Signature }) {
 }
 
 export function CommitDetailsPanel({ repoId }: { repoId: string }) {
+  const { supportsFileHistory } = usePlatform();
   const oid = useRepoStore((s) => selectedOidOf(s.selection[repoId]));
   const select = useRepoStore((s) => s.selectCommit);
   const details = useCommitDetails(repoId, oid);
@@ -135,12 +137,14 @@ export function CommitDetailsPanel({ repoId }: { repoId: string }) {
                       >
                         Blame
                       </ContextMenuItem>
-                      <ContextMenuItem
-                        icon={<FileClock />}
-                        onSelect={() => openFileHistory(repoId, f.path)}
-                      >
-                        File history
-                      </ContextMenuItem>
+                      {supportsFileHistory && (
+                        <ContextMenuItem
+                          icon={<FileClock />}
+                          onSelect={() => openFileHistory(repoId, f.path)}
+                        >
+                          File history
+                        </ContextMenuItem>
+                      )}
                     </ContextMenuContent>
                   </ContextMenu>
                   <span className="absolute right-1 top-0.5 hidden gap-0.5 group-focus-within:flex group-hover:flex">
@@ -153,15 +157,17 @@ export function CommitDetailsPanel({ repoId }: { repoId: string }) {
                         <ScrollText />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip content="File history">
-                      <IconButton
-                        size="xs"
-                        aria-label={`File history of ${f.path}`}
-                        onClick={() => openFileHistory(repoId, f.path)}
-                      >
-                        <FileClock />
-                      </IconButton>
-                    </Tooltip>
+                    {supportsFileHistory && (
+                      <Tooltip content="File history">
+                        <IconButton
+                          size="xs"
+                          aria-label={`File history of ${f.path}`}
+                          onClick={() => openFileHistory(repoId, f.path)}
+                        >
+                          <FileClock />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </span>
                 </li>
               ))}

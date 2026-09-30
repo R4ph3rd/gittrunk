@@ -1,7 +1,18 @@
 import { FileClock, FolderGit2, History, RefreshCw, ScrollText } from "lucide-react";
+import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRegisterCommands } from "@/app/commands";
-import { Button, Dialog, DialogContent, DialogDescription, DialogTitle } from "@/design/components";
+import { useRegisterCommands, type Command } from "@/app/commands";
+import { useLayout } from "@/app/layout/useLayout";
+import { usePlatform } from "@/app/platform";
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  toast,
+} from "@/design/components";
+import { useNavStore } from "@/stores/nav";
 import { BlameView } from "./BlameView";
 import { AddWorktreeDialog } from "./AddWorktreeDialog";
 import { FileHistoryView } from "./FileHistoryView";
@@ -18,67 +29,102 @@ import { openBlame, openFileHistory, openReflog, useHistoryViews } from "./store
  */
 export function HistoryViewsHost({ repoId }: { repoId: string }) {
   const client = useQueryClient();
+  const { isCompact } = useLayout();
+  const platform = usePlatform();
   const view = useHistoryViews((s) => s.view);
   const close = useHistoryViews((s) => s.close);
   const addWorktreeFor = useHistoryViews((s) => s.addWorktreeFor);
   const closeAdd = useHistoryViews((s) => s.closeAddWorktree);
 
-  useRegisterCommands(
-    [
-      {
-        id: "history.blame",
-        title: "Blame file…",
-        group: "History",
-        icon: ScrollText,
-        keywords: ["annotate", "who changed"],
-        when: (ctx) => ctx.repoId === repoId,
-        run: () => useHistoryViews.getState().openPrompt(repoId, "blame"),
-      },
-      {
-        id: "history.fileHistory",
-        title: "File history…",
-        group: "History",
-        icon: FileClock,
-        keywords: ["log", "follow", "renames"],
-        when: (ctx) => ctx.repoId === repoId,
-        run: () => useHistoryViews.getState().openPrompt(repoId, "history"),
-      },
-      {
-        id: "history.reflog",
-        title: "Show reflog",
-        group: "History",
-        icon: History,
-        keywords: ["head", "recover", "undo"],
-        when: (ctx) => ctx.repoId === repoId,
-        run: () => openReflog(repoId, "HEAD"),
-      },
-      {
-        id: "worktree.add",
-        title: "Add worktree…",
-        group: "Repository",
-        icon: FolderGit2,
-        when: (ctx) => ctx.repoId === repoId,
-        run: () => useHistoryViews.getState().openAddWorktree(repoId),
-      },
-      {
-        id: "submodule.update",
-        title: "Update all submodules",
-        group: "Repository",
-        icon: RefreshCw,
-        when: (ctx) => ctx.repoId === repoId,
-        run: () =>
-          void updateSubmodules(
-            client,
-            repoId,
-            { paths: [], init: true, recursive: true },
-            "submodules",
-          ),
-      },
-    ],
-    [repoId, client],
-  );
+  const forRepo = (ctx: { repoId: string | null }) => ctx.repoId === repoId;
+  const list: Command[] = [
+    // Blame is not offered on compact layouts (v2).
+    ...(isCompact
+      ? []
+      : [
+          {
+            id: "history.blame",
+            title: "Blame file…",
+            group: "History",
+            icon: ScrollText,
+            keywords: ["annotate", "who changed"],
+            when: forRepo,
+            run: () => useHistoryViews.getState().openPrompt(repoId, "blame"),
+          },
+        ]),
+    ...(platform.supportsFileHistory
+      ? [
+          {
+            id: "history.fileHistory",
+            title: "File history…",
+            group: "History",
+            icon: FileClock,
+            keywords: ["log", "follow", "renames"],
+            when: forRepo,
+            run: () => useHistoryViews.getState().openPrompt(repoId, "history"),
+          },
+        ]
+      : []),
+    {
+      id: "history.reflog",
+      title: "Show reflog",
+      group: "History",
+      icon: History,
+      keywords: ["head", "recover", "undo"],
+      when: forRepo,
+      run: () => openReflog(repoId, "HEAD"),
+    },
+    ...(platform.supportsWorktrees
+      ? [
+          {
+            id: "worktree.add",
+            title: "Add worktree…",
+            group: "Repository",
+            icon: FolderGit2,
+            when: forRepo,
+            run: () => useHistoryViews.getState().openAddWorktree(repoId),
+          },
+        ]
+      : []),
+    ...(platform.supportsSubmodules
+      ? [
+          {
+            id: "submodule.update",
+            title: "Update all submodules",
+            group: "Repository",
+            icon: RefreshCw,
+            when: forRepo,
+            run: () =>
+              void updateSubmodules(
+                client,
+                repoId,
+                { paths: [], init: true, recursive: true },
+                "submodules",
+              ),
+          },
+        ]
+      : []),
+  ];
+  useRegisterCommands(list, [
+    repoId,
+    client,
+    isCompact,
+    platform.supportsFileHistory,
+    platform.supportsWorktrees,
+    platform.supportsSubmodules,
+  ]);
 
-  const current = view && view.repoId === repoId ? view : null;
+  // Compact layouts show reflog and file history as route pages instead of the dialog.
+  useEffect(() => {
+    if (!isCompact || !view || view.repoId !== repoId) return;
+    const nav = useNavStore.getState();
+    if (view.kind === "reflog") nav.push(repoId, { name: "reflog", ref: view.refName });
+    else if (view.kind === "history") nav.push(repoId, { name: "fileHistory", path: view.path });
+    else toast.info("Blame is not available on this device yet");
+    useHistoryViews.getState().close();
+  }, [isCompact, view, repoId]);
+
+  const current = !isCompact && view && view.repoId === repoId ? view : null;
   const reveal = async (oid: string) => {
     if (await revealCommit(repoId, oid)) close();
   };
