@@ -24,21 +24,69 @@
 
 ## Modules
 
-| Path                          | Responsibility                                                                     |
-| ----------------------------- | ---------------------------------------------------------------------------------- |
-| `src-tauri/src/ipc/types.rs`  | Every type crossing IPC (serde + specta). Contract.                                |
-| `src-tauri/src/ipc/error.rs`  | `AppError { kind, message, detail }` and conversions.                              |
-| `src-tauri/src/ipc/mod.rs`    | Command and event registry, TypeScript export.                                     |
-| `src-tauri/src/commands/*.rs` | One file per area; thin handlers calling services.                                 |
-| `src-tauri/src/git/`          | `GitService` trait, libgit2 and CLI implementations, lane layout, oplog, fixtures. |
-| `src-tauri/src/remote/`       | Credential prompts (askpass bridge), keychain storage.                             |
-| `src-tauri/src/ai/`           | AI providers, prompts, plan validation.                                            |
-| `src/ipc/bindings.ts`         | Generated. Never edited by hand.                                                   |
-| `src/ipc/client.ts`           | `unwrap()` and `IpcError`.                                                         |
-| `src/ipc/queries.ts`          | TanStack Query hooks and query keys.                                               |
-| `src/design/`                 | Tokens, themes, wrapped components, `/design` route.                               |
-| `src/features/*`              | Feature UIs (graph, repo, staging, remotes, operations, ai, settings).             |
-| `src/app/`                    | Shell, routing, command palette, keyboard shortcuts.                               |
+### Backend (`src-tauri/src/`)
+
+| Path                 | Responsibility                                                                                                   |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `ipc/types.rs`       | Every type crossing IPC (serde + specta). The contract.                                                          |
+| `ipc/error.rs`       | `AppError { kind, message, detail }`, the closed `ErrorKind` set, conversions.                                   |
+| `ipc/mod.rs`         | Command and event registry, TypeScript export.                                                                   |
+| `commands/*.rs`      | One file per area; thin handlers that run blocking work on `spawn_blocking` and call services.                   |
+| `git/mod.rs`         | `GitState`: open-repository registry, cached graphs, running operations, pending credential prompts.             |
+| `git/service.rs`     | `GitService` read trait (open, refs, status, diffs, commit details).                                             |
+| `git/libgit/`        | libgit2 implementation of the read path and diff mapping.                                                        |
+| `git/graph/`         | Commit walk with filters and the lane layout served as row windows.                                              |
+| `git/watcher.rs`     | File watcher emitting `repo-changed` with scopes.                                                                |
+| `git/cli/`           | `git` CLI runner (no shell, `GIT_TERMINAL_PROMPT=0`, `CREATE_NO_WINDOW` on Windows), streaming and cancellation. |
+| `git/oplog/`         | Operation journal: snapshots before/after every mutation, undo and redo.                                         |
+| `git/preview.rs`     | Dry-run previews: ref updates, dropped commits, predicted conflicts.                                             |
+| `git/refs_write.rs`  | Branches, tags, checkout, ref moves, reset.                                                                      |
+| `git/staging/`       | Path, hunk and line staging (patch building), discard, commit.                                                   |
+| `git/stash_write.rs` | Stash save, apply, pop, drop.                                                                                    |
+| `git/history/`       | Merge, rebase, interactive rebase, cherry-pick, revert, sequencer control, in-memory simulation for previews.    |
+| `git/conflicts.rs`   | Conflict listing, 3-way file contents, resolution.                                                               |
+| `git/remote/`        | Remotes, fetch/pull/push/clone as long-running ops, provider detection, credential bridge, keychain.             |
+| `git/advanced/`      | Submodules, worktrees, blame, file history, reflog.                                                              |
+| `askpass.rs`         | The executable doubles as `GIT_ASKPASS`/`SSH_ASKPASS` helper that relays prompts to the running app.             |
+| `ai/`                | AI providers (Anthropic, OpenAI-compatible), payload building, prompts, plan parsing and execution.              |
+| `settings/`          | Persisted app settings and keybindings (JSON in the app config dir, atomic saves).                               |
+
+### Frontend (`src/`)
+
+| Path                        | Responsibility                                                                                        |
+| --------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `ipc/bindings.ts`           | Generated by tauri-specta. Never edited by hand.                                                      |
+| `ipc/client.ts`             | `unwrap()` and `IpcError`.                                                                            |
+| `ipc/queries.ts`            | TanStack Query hooks and repo-scoped query keys.                                                      |
+| `design/`                   | Tokens, themes, wrapped components, dev-only `/design` route.                                         |
+| `app/`                      | Shell, command registry and palette, shortcut engine, test helpers.                                   |
+| `features/repo/`            | Tabs, welcome screen, refs sidebar, commit details, status bar.                                       |
+| `features/graph/`           | Virtualized canvas commit graph, search, filters, WIP row.                                            |
+| `features/staging/`         | Working copy: file lists, diff viewer with line selection, commit box.                                |
+| `features/stash/`           | Stash dialog and actions.                                                                             |
+| `features/remotes/`, `ops/` | Fetch/pull/push toolbar, remotes management, clone, credential prompt, operation tracker.             |
+| `features/operations/`      | Drag and drop, context-menu actions, preview-and-confirm, conflicts, rebase editor, operation banner. |
+| `features/history-views/`   | Blame, file history, reflog, submodule and worktree sections.                                         |
+| `features/ai/`              | AI settings, commit message button, summaries, PR drafts, "Ask AI" plans.                             |
+| `features/settings/`        | Settings screen and keybinding editor.                                                                |
+| `e2e/`                      | WebDriver suite driving the real app through tauri-driver.                                            |
+
+## Git layer
+
+- **libgit2 vs CLI.** Reads, the graph, diffs, index and ref updates use libgit2. Network operations, merge/rebase/cherry-pick/revert, commit, stash, submodules and worktrees use the `git` CLI so that hooks, credential helpers (including Git Credential Manager), rerere and user config behave exactly like git.
+- **Line endings.** Working-tree comparisons and restores go through git's checkout filters so `core.autocrlf` and `.gitattributes` behave as in git (Git for Windows enables `autocrlf` by default).
+- **Argument safety.** User-supplied refs, remote names, URLs and paths are validated and passed after `--` where git allows it, so a value such as `--upload-pack=...` can never become an option. The CLI is never invoked through a shell.
+- **Undo.** Every mutation records before/after snapshots (HEAD, branches, tags, branch config, index tree, and the working tree for destructive operations), pinned under `refs/gittrunk/oplog/` so garbage collection keeps them. Undo restores one whole user action, even when it wrote many reflog entries.
+
+## AI and privacy
+
+AI is off by default. While it is off, no provider client is constructed. Every AI action first shows the exact payload that would be sent. API keys live only in the OS keychain (service `gittrunk-ai`) and never reach the webview or logs. Plans returned by the model are parsed strictly into the whitelisted `PlannedCommand` set, previewed with dry runs, and executed only after confirmation through the same services the UI uses.
+
+## Testing
+
+- **Rust:** unit and integration tests on fixture repositories created in temp dirs (`src-tauri/src/git/fixtures/`), including a 100k-commit performance test (`cargo test --release -- --ignored perf_graph_100k`).
+- **Frontend:** Vitest + Testing Library with mocked bindings (`src/app/mockBindings.ts`).
+- **End to end:** `pnpm e2e` drives the real app with WebDriver (graph rendering; stage, commit, push and undo; drag-and-drop merge), verifying results with `git` on disk. CI runs it on Linux under Xvfb.
 
 ## IPC contract
 
