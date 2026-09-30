@@ -45,6 +45,15 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Windows and macOS file systems are case-insensitive: two modules whose
+      # names differ only in case (e.g. miniGraph.ts / MiniGraph.tsx) resolve to
+      # the same file there and break the build.
+      - name: No case-colliding module paths
+        if: runner.os == 'Linux'
+        run: |
+          dupes=$(git ls-files | tr 'A-Z' 'a-z' | sed -E 's/\.(tsx?|jsx?|mjs|cjs)$//' | sort | uniq -d)
+          if [ -n "$dupes" ]; then echo "::error::Paths differ only in case: $dupes"; exit 1; fi
+
       - name: Frontend lint
         run: pnpm lint
       - name: Frontend format
