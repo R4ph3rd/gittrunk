@@ -76,7 +76,7 @@ export function SegmentedControl<T extends string = string>({
             onClick={() => onValueChange(o.value)}
             onKeyDown={(e) => onKeyDown(e, i)}
             className={cn(
-              "inline-flex items-center justify-center gap-1.5 rounded-sm font-medium disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-3.5 [&_svg]:shrink-0",
+              "inline-flex items-center justify-center gap-1.5 rounded-sm font-medium disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-3.5 [&_svg]:shrink-0 coarse:min-h-[var(--touch-target)]",
               size === "sm" ? "h-5 px-1.5 text-sm" : "h-6 px-2 text-base",
               active
                 ? "bg-surface-raised text-fg shadow-sm"

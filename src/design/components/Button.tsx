@@ -8,7 +8,7 @@ import { Spinner } from "./Spinner";
 
 export const buttonVariants = cva(
   cn(
-    "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent font-medium disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-3.5 [&_svg]:shrink-0",
+    "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent font-medium disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-3.5 [&_svg]:shrink-0 coarse:min-h-[var(--touch-target)]",
     focusRing,
     transition,
   ),

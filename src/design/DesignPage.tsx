@@ -51,6 +51,7 @@ import {
   Tooltip,
   TooltipProvider,
 } from "./components";
+import { MobileSection } from "./MobileSection";
 import { ThemeProvider, useTheme, type Theme } from "./theme";
 
 const colorGroups: Record<string, string[]> = {
@@ -542,6 +543,8 @@ function Page() {
         </Section>
 
         <Components />
+
+        <MobileSection />
       </main>
       <Toaster />
     </div>

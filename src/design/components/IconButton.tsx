@@ -1,4 +1,5 @@
 import { forwardRef } from "react";
+import { cn } from "@/lib/cn";
 import { Button, type ButtonProps } from "./Button";
 
 const sizeMap = { xs: "icon-xs", sm: "icon-sm", md: "icon" } as const;
@@ -11,8 +12,14 @@ export interface IconButtonProps extends Omit<ButtonProps, "size" | "aria-label"
 }
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
-  ({ variant = "ghost", size = "md", ...props }, ref) => (
-    <Button ref={ref} variant={variant} size={sizeMap[size]} {...props} />
+  ({ variant = "ghost", size = "md", className, ...props }, ref) => (
+    <Button
+      ref={ref}
+      variant={variant}
+      size={sizeMap[size]}
+      className={cn("coarse:min-w-[var(--touch-target)]", className)}
+      {...props}
+    />
   ),
 );
 IconButton.displayName = "IconButton";

@@ -1,6 +1,7 @@
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import { createContext, useContext, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { useLayout } from "@/app/layout/useLayout";
 import { Kbd } from "./Kbd";
 import { floating, popIn } from "./shared";
 
@@ -32,6 +33,9 @@ export interface TooltipProps {
 
 export function Tooltip({ content, shortcut, side = "top", children, className }: TooltipProps) {
   const hasProvider = useContext(ProviderPresent);
+  const { isCoarse } = useLayout();
+  // Touch has no hover: render only the trigger (its aria-label stays).
+  if (isCoarse) return <>{children}</>;
   const tooltip = (
     <TooltipPrimitive.Root>
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>

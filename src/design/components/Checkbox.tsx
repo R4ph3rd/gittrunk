@@ -24,7 +24,16 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
     }, [indeterminate]);
 
     const box = (
-      <span className={cn("relative inline-flex size-3.5 shrink-0", !label && className)}>
+      <span
+        // Enlarged hit area on coarse pointers; clicks outside the 14px box forward to it.
+        onClick={(e) => {
+          if (e.target === e.currentTarget && !disabled) inner.current?.click();
+        }}
+        className={cn(
+          "relative inline-flex size-3.5 shrink-0 coarse:min-h-[var(--touch-target)] coarse:min-w-[var(--touch-target)] coarse:items-center coarse:justify-center",
+          !label && className,
+        )}
+      >
         <input
           ref={(el) => {
             inner.current = el;
@@ -61,7 +70,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
     return (
       <label
         className={cn(
-          "inline-flex items-center gap-2 text-base text-fg",
+          "inline-flex items-center gap-2 text-base text-fg coarse:min-h-[var(--touch-target)]",
           disabled && "cursor-not-allowed opacity-50",
           className,
         )}

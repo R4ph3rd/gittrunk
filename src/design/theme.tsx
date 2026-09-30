@@ -34,6 +34,19 @@ function systemTheme(): ResolvedTheme {
   }
 }
 
+/** Keeps `<meta name="theme-color">` equal to the computed `--bg` (Android system bars). */
+function syncThemeColor() {
+  const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+  if (!bg) return;
+  let meta = document.head.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  if (!meta) {
+    meta = document.createElement("meta");
+    meta.name = "theme-color";
+    document.head.appendChild(meta);
+  }
+  meta.content = bg;
+}
+
 export function ThemeProvider({
   children,
   defaultTheme = "dark",
@@ -60,6 +73,7 @@ export function ThemeProvider({
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", resolvedTheme);
+    syncThemeColor();
   }, [resolvedTheme]);
 
   const setTheme = useCallback((next: Theme) => {

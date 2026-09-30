@@ -3,7 +3,7 @@ import { cn } from "@/lib/cn";
 import { focusRing, transition } from "./shared";
 
 const field = cn(
-  "w-full rounded-md border border-border bg-bg-subtle px-2 text-base text-fg placeholder:text-fg-subtle hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-danger",
+  "w-full rounded-md border border-border bg-bg-subtle px-2 text-base text-fg placeholder:text-fg-subtle hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-danger coarse:text-[16px]",
   focusRing,
   transition,
 );
@@ -13,7 +13,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
     <input
       ref={ref}
       type={type}
-      className={cn(field, "h-[var(--control-md)]", className)}
+      className={cn(field, "h-[var(--control-md)] coarse:min-h-[var(--touch-target)]", className)}
       {...props}
     />
   ),
