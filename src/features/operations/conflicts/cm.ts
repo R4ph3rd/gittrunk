@@ -1,11 +1,40 @@
 import type { Extension } from "@codemirror/state";
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { tags as t } from "@lezer/highlight";
 import { EditorView } from "codemirror";
+
+/** Syntax colors from the design tokens (lane palette plus fg/accent), legible in both themes. */
+export const gittrunkHighlight = HighlightStyle.define([
+  {
+    tag: [t.keyword, t.controlKeyword, t.moduleKeyword, t.operatorKeyword],
+    color: "var(--lane-7)",
+  },
+  { tag: [t.string, t.special(t.string), t.regexp], color: "var(--lane-5)" },
+  { tag: [t.number, t.bool, t.null, t.atom], color: "var(--lane-6)" },
+  {
+    tag: [t.comment, t.lineComment, t.blockComment],
+    color: "var(--fg-subtle)",
+    fontStyle: "italic",
+  },
+  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: "var(--lane-4)" },
+  { tag: [t.definition(t.variableName), t.definition(t.propertyName)], color: "var(--lane-4)" },
+  { tag: [t.typeName, t.className, t.namespace], color: "var(--lane-2)" },
+  { tag: [t.tagName, t.angleBracket], color: "var(--lane-3)" },
+  { tag: [t.attributeName, t.propertyName], color: "var(--lane-2)" },
+  { tag: [t.operator, t.punctuation, t.separator], color: "var(--fg-muted)" },
+  { tag: [t.meta, t.processingInstruction, t.annotation], color: "var(--fg-muted)" },
+  { tag: [t.link, t.url], color: "var(--accent)", textDecoration: "underline" },
+  { tag: t.heading, color: "var(--accent)", fontWeight: "bold" },
+  { tag: t.strong, fontWeight: "bold" },
+  { tag: t.emphasis, fontStyle: "italic" },
+  { tag: t.invalid, color: "var(--danger)" },
+]);
 
 /**
  * CodeMirror theme built only from design tokens (CSS variables), so it follows the app theme
- * and `--accent`. Syntax colors come from CodeMirror's fallback highlight style (see gaps).
+ * and `--accent`. Syntax colors come from `gittrunkHighlight`.
  */
-export const gittrunkTheme: Extension = EditorView.theme({
+const baseTheme: Extension = EditorView.theme({
   "&": {
     color: "var(--fg)",
     backgroundColor: "var(--bg-subtle)",
@@ -61,6 +90,8 @@ export const gittrunkTheme: Extension = EditorView.theme({
     marginRight: "auto",
   },
 });
+
+export const gittrunkTheme: Extension = [baseTheme, syntaxHighlighting(gittrunkHighlight)];
 
 /** Loads the language support for a file name from `@codemirror/language-data`, or null. */
 export async function loadLanguage(path: string): Promise<Extension | null> {
