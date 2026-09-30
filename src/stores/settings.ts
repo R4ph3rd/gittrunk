@@ -57,7 +57,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       unwrap(commands.keybindingsGet()),
     ]);
     if (s.status === "fulfilled") set({ settings: s.value });
-    else toast.error(`Could not load settings: ${message(s.reason)}`);
+    // Defaults stay in effect; a failed startup load is not worth interrupting the user.
+    else console.warn(`Could not load settings, using defaults: ${message(s.reason)}`);
     if (k.status === "fulfilled") {
       const overrides = toOverrides(k.value);
       set({ overrides });

@@ -10,6 +10,8 @@ export function Toaster(props: ToasterProps) {
   return (
     <Sonner
       theme={resolvedTheme}
+      // Bottom-center keeps toasts clear of the commit box and panel actions on the right.
+      position="bottom-center"
       style={{ zIndex: "var(--z-toast)" } as CSSProperties}
       toastOptions={{
         classNames: {
