@@ -261,6 +261,32 @@ describe("conflict resolver", () => {
     expect(await screen.findByTestId("result-editor")).toBeInTheDocument();
   });
 
+  it("offers Suggest resolution through the app once AI is enabled", async () => {
+    const c = backend.commands as Record<string, ReturnType<typeof vi.fn>>;
+    c.aiSettingsGet!.mockImplementation(() =>
+      Promise.resolve({
+        status: "ok",
+        data: {
+          enabled: true,
+          provider: "anthropic",
+          model: "m",
+          baseUrl: null,
+          maxDiffBytes: 1000,
+          hasKey: true,
+        },
+      }),
+    );
+    backend.commands.conflictFile!.mockImplementation(() =>
+      Promise.resolve({ status: "ok", data: conflictFile() }),
+    );
+    backend.setOperation("merge", ["src/a.ts"]);
+    const user = await openRepo();
+    await banner();
+    act(() => useRepoStore.getState().selectWip("r1"));
+    await user.click(await screen.findByRole("option", { name: /src\/a\.ts/ }));
+    expect(await screen.findByRole("button", { name: /suggest resolution/i })).toBeInTheDocument();
+  });
+
   it("shows Suggest resolution only when a suggest function is provided", async () => {
     backend.commands.conflictFile!.mockImplementation(() =>
       Promise.resolve({ status: "ok", data: conflictFile() }),
