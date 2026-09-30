@@ -76,9 +76,9 @@ fn unknown_and_network_commands_are_unsupported() {
         &["clone", "x", "y"],
         &["ls-remote", "origin"],
         &["submodule", "update"],
-        &["rebase", "main"],
-        &["worktree", "list", "--porcelain"],
-        &["log", "--follow", "--", "a.txt"],
+        &["rebase", "-i", "main"],
+        &["worktree", "prune"],
+        &["log", "--graph"],
         &["frobnicate"],
     ] {
         let out = sh(&t, args);

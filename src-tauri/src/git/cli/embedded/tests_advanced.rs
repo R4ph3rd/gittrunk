@@ -1,0 +1,260 @@
+//! Tests of the R1b-2 handlers: rebase, worktrees and `log --follow`.
+
+use git2::{Oid, RepositoryState};
+
+use super::super::tests::{conflicting, diverged, idx, read, sh, sh_ok};
+use crate::git::fixtures::TestRepo;
+use crate::ipc::error::ErrorKind;
+
+fn state(t: &TestRepo) -> RepositoryState {
+    git2::Repository::open(t.root()).unwrap().state()
+}
+
+fn subjects(t: &TestRepo, tip: &str) -> Vec<String> {
+    let repo = git2::Repository::open(t.root()).unwrap();
+    let mut walk = repo.revwalk().unwrap();
+    walk.push(repo.revparse_single(tip).unwrap().id()).unwrap();
+    walk.map(|o| {
+        repo.find_commit(o.unwrap())
+            .unwrap()
+            .summary()
+            .unwrap()
+            .unwrap_or("")
+            .to_string()
+    })
+    .collect()
+}
+
+// ------------------------------------------------------------------ rebase
+
+#[test]
+fn rebase_replays_and_keeps_author_and_committer_from_config() {
+    let (t, topic) = diverged();
+    let old = t.repo.find_commit(topic).unwrap();
+    // Give the topic commit a distinct author.
+    let main_tip = t.branch_tip("main");
+    t.repo.set_head("refs/heads/topic").unwrap();
+    t.repo
+        .checkout_head(Some(git2::build::CheckoutBuilder::new().force()))
+        .unwrap();
+    assert_eq!(old.author().name().unwrap(), "Test User");
+    let out = sh(&t, &["rebase", &main_tip.to_string()]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stderr.contains("Successfully rebased and updated"));
+    assert_eq!(state(&t), RepositoryState::Clean);
+    assert_eq!(
+        subjects(&t, "topic"),
+        ["topic change", "main change", "base"]
+    );
+    let new = t.repo.find_commit(t.branch_tip("topic")).unwrap();
+    assert_ne!(new.id(), topic);
+    assert_eq!(new.author().name().unwrap(), "Test User");
+    assert_eq!(new.author().when().seconds(), old.author().when().seconds());
+    assert_eq!(new.committer().name().unwrap(), "Fixture");
+    assert!(t.root().join("main.txt").exists() && t.root().join("topic.txt").exists());
+    assert!(!idx(&t).has_conflicts());
+    // HEAD is the branch again, not detached.
+    assert_eq!(
+        t.repo
+            .find_reference("HEAD")
+            .unwrap()
+            .symbolic_target()
+            .unwrap(),
+        Some("refs/heads/topic")
+    );
+}
+
+#[test]
+fn rebase_onto_a_branch_argument_checks_it_out() {
+    let (t, _) = diverged();
+    assert_eq!(state(&t), RepositoryState::Clean);
+    let out = sh(&t, &["rebase", "main", "topic"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(
+        t.repo
+            .find_reference("HEAD")
+            .unwrap()
+            .symbolic_target()
+            .unwrap(),
+        Some("refs/heads/topic")
+    );
+    assert_eq!(
+        subjects(&t, "topic"),
+        ["topic change", "main change", "base"]
+    );
+}
+
+#[test]
+fn rebase_up_to_date_and_fast_forward() {
+    let (t, _) = diverged();
+    // main is ahead of topic's base only through a divergence: first move
+    // topic under main to get both cases.
+    sh_ok(&t, &["rebase", "main", "topic"]);
+    // HEAD (topic) already contains main.
+    let out = sh_ok(&t, &["rebase", "main"]);
+    assert_eq!(out.stdout_str(), "Current branch topic is up to date.\n");
+    // main is behind topic: rebasing main onto topic fast-forwards it.
+    let topic = t.branch_tip("topic");
+    let out = sh(&t, &["rebase", &topic.to_string(), "main"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(t.branch_tip("main"), topic);
+    assert_eq!(state(&t), RepositoryState::Clean);
+    assert!(t.root().join("topic.txt").exists());
+}
+
+#[test]
+fn rebase_onto_replays_only_the_range() {
+    let mut t = TestRepo::new();
+    t.write("a.txt", "a\n");
+    let a = t.commit_all("a");
+    t.checkout_branch("feat", a);
+    let b = t.commit_on("feat", "b.txt", "b\n", "b");
+    t.commit_on("feat", "c.txt", "c\n", "c");
+    t.checkout_branch("other", a);
+    t.commit_on("other", "o.txt", "o\n", "o");
+    t.repo.set_head("refs/heads/feat").unwrap();
+    t.repo
+        .checkout_head(Some(git2::build::CheckoutBuilder::new().force()))
+        .unwrap();
+    let out = sh(&t, &["rebase", "--onto", "other", &b.to_string()]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(subjects(&t, "feat"), ["c", "o", "a"]);
+    assert!(!t.root().join("b.txt").exists());
+}
+
+#[test]
+fn rebase_conflict_reports_lines_then_abort_restores() {
+    let (t, _) = conflicting();
+    t.repo.set_head("refs/heads/other").unwrap();
+    t.repo
+        .checkout_head(Some(git2::build::CheckoutBuilder::new().force()))
+        .unwrap();
+    let before = t.head();
+    let out = sh(&t, &["rebase", "main"]);
+    assert_eq!(out.code, 1, "{}", out.stderr);
+    assert!(out
+        .stdout_str()
+        .contains("CONFLICT (content): Merge conflict in conflict.txt"));
+    assert!(out.stderr.contains("could not apply"));
+    assert_eq!(state(&t), RepositoryState::RebaseMerge);
+    assert!(t.root().join(".git/REBASE_HEAD").exists());
+    assert!(idx(&t).has_conflicts());
+
+    // A second rebase while one is running is refused.
+    assert_eq!(sh(&t, &["rebase", "main"]).code, 128);
+    // Unresolved: --continue refuses.
+    assert_eq!(sh(&t, &["rebase", "--continue"]).code, 1);
+
+    sh_ok(&t, &["rebase", "--abort"]);
+    assert_eq!(state(&t), RepositoryState::Clean);
+    assert_eq!(t.branch_tip("other"), before);
+    assert_eq!(read(&t, "conflict.txt"), "other side\n");
+    assert!(!idx(&t).has_conflicts());
+    assert!(!t.root().join(".git/REBASE_HEAD").exists());
+    assert_eq!(sh(&t, &["rebase", "--abort"]).code, 128);
+}
+
+/// `main` and `other` both edit `f.txt`; `other` has a second, clean commit
+/// after the conflicting one.
+fn two_step() -> (TestRepo, Oid) {
+    let mut t = TestRepo::new();
+    t.write("f.txt", "base\n");
+    let base = t.commit_all("base");
+    t.checkout_branch("other", base);
+    t.commit_on("other", "f.txt", "other side\n", "edit f on other");
+    let second = t.commit_on("other", "g.txt", "g\n", "add g on other");
+    t.commit_on("main", "f.txt", "main side\n", "edit f on main");
+    t.repo.set_head("refs/heads/other").unwrap();
+    t.repo
+        .checkout_head(Some(git2::build::CheckoutBuilder::new().force()))
+        .unwrap();
+    (t, second)
+}
+
+#[test]
+fn rebase_conflict_resolve_continue_runs_the_remaining_steps() {
+    let (t, _) = two_step();
+    let out = sh(&t, &["rebase", "main"]);
+    assert_eq!(out.code, 1, "{}", out.stderr);
+    t.write("f.txt", "resolved\n");
+    sh_ok(&t, &["add", "--", "f.txt"]);
+    let out = sh(&t, &["rebase", "--continue"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(state(&t), RepositoryState::Clean);
+    assert_eq!(
+        subjects(&t, "other"),
+        [
+            "add g on other",
+            "edit f on other",
+            "edit f on main",
+            "base"
+        ]
+    );
+    assert_eq!(read(&t, "f.txt"), "resolved\n");
+    assert_eq!(read(&t, "g.txt"), "g\n");
+    let c = t.repo.find_commit(t.branch_tip("other")).unwrap();
+    assert_eq!(c.author().name().unwrap(), "Test User");
+    assert_eq!(c.committer().name().unwrap(), "Fixture");
+}
+
+#[test]
+fn rebase_skip_drops_the_conflicting_commit_and_continues() {
+    let (t, _) = two_step();
+    assert_eq!(sh(&t, &["rebase", "main"]).code, 1);
+    let out = sh(&t, &["rebase", "--skip"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(state(&t), RepositoryState::Clean);
+    assert_eq!(
+        subjects(&t, "other"),
+        ["add g on other", "edit f on main", "base"]
+    );
+    assert_eq!(read(&t, "f.txt"), "main side\n");
+    assert!(!idx(&t).has_conflicts());
+}
+
+#[test]
+fn rebase_drops_commits_already_upstream() {
+    let mut t = TestRepo::new();
+    t.write("a.txt", "a\n");
+    let a = t.commit_all("a");
+    t.checkout_branch("feat", a);
+    t.commit_on("feat", "x.txt", "x\n", "add x");
+    t.checkout_branch("main2", a);
+    t.commit_on("main2", "x.txt", "x\n", "add x again");
+    t.repo.set_head("refs/heads/feat").unwrap();
+    t.repo
+        .checkout_head(Some(git2::build::CheckoutBuilder::new().force()))
+        .unwrap();
+    let out = sh(&t, &["rebase", "main2"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(subjects(&t, "feat"), ["add x again", "a"]);
+}
+
+#[test]
+fn rebase_refuses_a_dirty_tree_and_bad_input() {
+    let (t, _) = diverged();
+    t.repo.set_head("refs/heads/topic").unwrap();
+    t.repo
+        .checkout_head(Some(git2::build::CheckoutBuilder::new().force()))
+        .unwrap();
+    t.write("topic.txt", "dirty\n");
+    let out = sh(&t, &["rebase", "main"]);
+    assert_eq!(out.code, 1);
+    assert!(out.stderr.contains("cannot rebase"));
+    assert_eq!(read(&t, "topic.txt"), "dirty\n");
+    assert_eq!(sh(&t, &["rebase", "nope"]).code, 128);
+    assert_eq!(sh(&t, &["rebase", "--continue"]).code, 128);
+    for args in [
+        &["rebase", "-i", "main"][..],
+        &["rebase", "--interactive", "main"],
+        &["rebase", "--exec", "true", "main"],
+        &["rebase", "--autosquash", "main"],
+    ] {
+        let out = sh(&t, args);
+        assert_eq!(
+            out.into_result().unwrap_err().kind,
+            ErrorKind::Unsupported,
+            "{args:?}"
+        );
+    }
+}
