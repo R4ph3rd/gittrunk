@@ -36,6 +36,8 @@
     "category": "DeveloperTool",
     "shortDescription": "A fast, native Git client",
     "windows": {
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "http://timestamp.digicert.com",
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
       },
