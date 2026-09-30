@@ -1,6 +1,7 @@
 export * from "./AlertDialog";
 export * from "./Badge";
 export * from "./Button";
+export * from "./Checkbox";
 export * from "./CommandPalette";
 export * from "./Dialog";
 export * from "./EmptyState";
@@ -11,6 +12,7 @@ export * from "./Label";
 export * from "./Popover";
 export * from "./ResizablePanels";
 export * from "./ScrollArea";
+export * from "./SegmentedControl";
 export * from "./Separator";
 export * from "./Spinner";
 export * from "./Switch";
