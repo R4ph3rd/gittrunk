@@ -11,9 +11,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SIGNING_MARKER = "// gittrunk:signing";
+// In a Gradle Kotlin script `java` resolves to the `java` project extension,
+// so a fully-qualified `java.util.Properties` does not compile: the block uses
+// the simple name and patchGradle guarantees the import at the top.
+const PROPERTIES_IMPORT = "import java.util.Properties";
 const SIGNING_BLOCK = `${SIGNING_MARKER}
 val keystorePropsFile = rootProject.file("keystore.properties")
-val keystoreProps = java.util.Properties().apply {
+val keystoreProps = Properties().apply {
     if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
 }
 android {
@@ -56,12 +60,23 @@ function countOf(text, needle) {
 
 export function patchGradle(src) {
   let out = src;
-  if (!out.includes(SIGNING_MARKER)) {
-    if (countOf(out, "\nrust {") !== 1)
-      fail("expected exactly one `rust {` block in app/build.gradle.kts");
+  if (countOf(out, "\nrust {") !== 1)
+    fail("expected exactly one `rust {` block in app/build.gradle.kts");
+  const markers = countOf(out, SIGNING_MARKER);
+  if (markers > 1) fail("signing block must exist exactly once");
+  if (markers === 0) {
     out = out.replace("\nrust {", () => `\n${SIGNING_BLOCK}rust {`);
+  } else {
+    // Rewrite an existing (possibly outdated) block: it spans from the marker
+    // to the `rust {` block it was inserted in front of.
+    const start = out.indexOf(SIGNING_MARKER);
+    const end = out.indexOf("\nrust {");
+    if (end < start) fail("signing block must sit right before the `rust {` block");
+    out = `${out.slice(0, start)}${SIGNING_BLOCK}${out.slice(end + 1)}`;
   }
-  if (countOf(out, SIGNING_MARKER) !== 1) fail("signing block must exist exactly once");
+  if (!new RegExp(`^${PROPERTIES_IMPORT}$`, "m").test(out)) out = `${PROPERTIES_IMPORT}\n${out}`;
+  if (/\bjava\.util\.Properties\(/.test(out))
+    fail("use `Properties()` with an import: `java.` is the Gradle `java` extension in .kts");
   // Release must resolve usesCleartextTraffic to false; only debug may enable it.
   if (
     !/defaultConfig\s*\{[^}]*manifestPlaceholders\["usesCleartextTraffic"\]\s*=\s*"false"/.test(out)

@@ -71,3 +71,33 @@ test("fails when INTERNET is missing", () => {
   assert.equal(r.status, 1);
   assert.match(r.stderr, /INTERNET/);
 });
+
+test("signing block compiles in .kts: imports Properties, no java.util prefix", () => {
+  const { root, a } = setup();
+  const file = path.join(a, "app/build.gradle.kts");
+  // A template without the import still gets one, at the top of the script.
+  fs.writeFileSync(file, fx("app.build.gradle.kts").replace("import java.util.Properties\n", ""));
+  assert.equal(run(root).status, 0);
+  const gradle = fs.readFileSync(file, "utf8");
+  assert.ok(gradle.startsWith("import java.util.Properties\n"));
+  assert.equal(gradle.split("import java.util.Properties\n").length - 1, 1);
+  assert.doesNotMatch(gradle, /java\.util\.Properties\(/);
+  assert.match(gradle, /val keystoreProps = Properties\(\)\.apply \{/);
+  assert.equal(run(root, "--check").status, 0);
+});
+
+test("rewrites an outdated signing block in place", () => {
+  const { root, a } = setup();
+  const file = path.join(a, "app/build.gradle.kts");
+  assert.equal(run(root).status, 0);
+  const good = fs.readFileSync(file, "utf8");
+  const stale = good.replace(
+    "keystoreProps = Properties().apply",
+    "keystoreProps = java.util.Properties().apply",
+  );
+  assert.notEqual(stale, good);
+  fs.writeFileSync(file, stale);
+  assert.equal(run(root, "--check").status, 1);
+  assert.equal(run(root).status, 0);
+  assert.equal(fs.readFileSync(file, "utf8"), good);
+});
