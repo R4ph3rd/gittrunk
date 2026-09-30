@@ -376,7 +376,6 @@ fn sequencer_without_an_operation_is_an_error() {
 
 // ------------------------------------------------------------------- rebase
 
-#[cfg(not(embedded_git))]
 #[test]
 fn rebase_replays_commits_and_undoes() {
     let t = diverged();
@@ -401,7 +400,6 @@ fn rebase_replays_commits_and_undoes() {
     assert!(is_clean(&t));
 }
 
-#[cfg(not(embedded_git))]
 #[test]
 fn rebase_of_another_branch_checks_it_out() {
     let t = diverged();
@@ -427,7 +425,6 @@ fn rebase_up_to_date_is_a_noop_preview() {
     assert!(p.summary.contains("up to date"));
 }
 
-#[cfg(not(embedded_git))]
 #[test]
 fn rebase_conflict_then_abort() {
     let t = conflicting();
@@ -453,7 +450,6 @@ fn rebase_conflict_then_abort() {
     assert!(is_clean(&t));
 }
 
-#[cfg(not(embedded_git))]
 #[test]
 fn rebase_conflict_resolve_and_continue() {
     let t = conflicting();

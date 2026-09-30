@@ -1,4 +1,3 @@
-#[cfg(not(embedded_git))]
 use std::path::Path;
 use std::time::Instant;
 
@@ -16,7 +15,6 @@ fn cli() -> GitCli {
     GitCli::new()
 }
 
-#[cfg(not(embedded_git))]
 fn run(dir: &Path, args: &[&str]) -> String {
     cli().run(dir, args).unwrap().stdout_str()
 }
@@ -62,7 +60,6 @@ fn injection_attempts_are_neutralised_or_rejected() {
     assert!(blame::blame(&t.repo, "f.txt", Some("--upload-pack=x")).is_err());
 }
 
-#[cfg(not(embedded_git))]
 #[test]
 fn file_history_with_option_like_path_runs_safely() {
     let mut t = TestRepo::new();
@@ -190,7 +187,6 @@ fn porcelain_parsing() {
     assert!(l[2].prunable && !l[2].locked);
 }
 
-#[cfg(not(embedded_git))]
 #[test]
 fn worktree_add_list_remove() {
     let (t, _) = fixtures::linear(2);
@@ -376,7 +372,6 @@ fn blame_large_file_is_fast_enough() {
 
 // ------------------------------------------------------------ history
 
-#[cfg(not(embedded_git))]
 #[test]
 fn file_history_follows_two_renames() {
     let mut t = TestRepo::new();
