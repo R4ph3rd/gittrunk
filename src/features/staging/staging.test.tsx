@@ -298,6 +298,44 @@ describe("diff viewer", () => {
     );
   });
 
+  it("uses the diff context setting for both the fetch and the line selection", async () => {
+    await backend();
+    (
+      (await import("@/ipc/bindings")).commands as unknown as Record<string, Fn>
+    ).settingsGet!.mockImplementation(() =>
+      ok({
+        theme: "dark",
+        gitPath: null,
+        pullStrategy: "merge",
+        confirmDestructive: true,
+        graphOrder: "topo",
+        diffContextLines: 7,
+      }),
+    );
+    const { commands } = await import("@/ipc/bindings");
+    const c = commands as unknown as Record<string, Fn>;
+    const user = await openStaging();
+    await user.click(rowFor("src/a.ts"));
+    await waitFor(() =>
+      expect(c.worktreeFileDiff).toHaveBeenLastCalledWith(
+        "r1",
+        "src/a.ts",
+        false,
+        expect.objectContaining({ contextLines: 7 }),
+      ),
+    );
+    await waitFor(() =>
+      expect(document.querySelectorAll("tr[data-state='diff']").length).toBeGreaterThan(0),
+    );
+    await user.click(screen.getAllByRole("button", { name: "Stage hunk" })[0]!);
+    await waitFor(() =>
+      expect(c.stageLines).toHaveBeenCalledWith(
+        "r1",
+        expect.objectContaining({ options: { contextLines: 7, ignoreWhitespace: false } }),
+      ),
+    );
+  });
+
   it("selects lines by click and Shift+click and stages exactly those", async () => {
     const { commands, user } = await openDiff();
     await user.click(diffRow("new A"));

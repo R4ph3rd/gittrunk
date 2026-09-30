@@ -11,7 +11,7 @@ import {
 } from "@/design/components";
 import type { FileDiff, LineSelection } from "@/ipc/bindings";
 import {
-  STAGING_DIFF_OPTIONS,
+  useStagingDiffOptions,
   useStageLines,
   useUnstageLines,
   useWorktreeDiff,
@@ -40,6 +40,7 @@ interface Props {
 
 /** Split/unified diff of one worktree or index file with hunk and line level staging. */
 export function DiffViewer({ repoId, path, staged }: Props) {
+  const diffOptions = useStagingDiffOptions();
   const query = useWorktreeDiff(repoId, path, staged);
   const mode = useRepoStore((s) => s.diffMode);
   const setMode = useRepoStore((s) => s.setDiffMode);
@@ -82,8 +83,8 @@ export function DiffViewer({ repoId, path, staged }: Props) {
   };
   const onLineClick = (ref: LineRef, shift: boolean) =>
     setSel({ diff, state: shift ? extendRange(diff, state, ref) : toggleLine(state, ref) });
-  const lineSelection = buildLineSelection(path, STAGING_DIFF_OPTIONS, state);
-  const hunkSel = (i: number) => buildHunkSelection(path, STAGING_DIFF_OPTIONS, i);
+  const lineSelection = buildLineSelection(path, diffOptions, state);
+  const hunkSel = (i: number) => buildHunkSelection(path, diffOptions, i);
 
   const shown = visibleHunkCount(diff, showAll === diff);
   const hidden = diff.hunks.slice(shown).reduce((n, h) => n + h.lines.length, 0);

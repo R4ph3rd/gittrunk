@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   commands,
@@ -10,6 +10,7 @@ import {
   type RepoChanged,
   type StashSaveRequest,
 } from "./bindings";
+import { useSettings } from "@/stores/settings";
 import { unwrap } from "./client";
 
 /** Query keys are scoped by repo id so `repo-changed` events can invalidate precisely. */
@@ -158,8 +159,11 @@ export function useFileDiff(repoId: string, oid: string, path: string | null) {
 
 /* ---- Working copy (staging) ---- */
 
-/** Diff options for staging views. Line selections must be built against exactly these. */
-export const STAGING_DIFF_OPTIONS: DiffOptions = { contextLines: 3, ignoreWhitespace: false };
+/** Diff options for staging views (context lines follow settings). Line selections must be built against exactly these. */
+export function useStagingDiffOptions(): DiffOptions {
+  const contextLines = useSettings().diffContextLines;
+  return useMemo(() => ({ contextLines, ignoreWhitespace: false }), [contextLines]);
+}
 
 export const worktreeKeys = {
   all: (id: string) => ["repo", id, "worktree"] as const,
@@ -168,9 +172,10 @@ export const worktreeKeys = {
 };
 
 export function useWorktreeDiff(repoId: string, path: string | null, staged: boolean) {
+  const options = useStagingDiffOptions();
   return useQuery({
-    queryKey: worktreeKeys.diff(repoId, path ?? "", staged, STAGING_DIFF_OPTIONS),
-    queryFn: () => unwrap(commands.worktreeFileDiff(repoId, path!, staged, STAGING_DIFF_OPTIONS)),
+    queryKey: worktreeKeys.diff(repoId, path ?? "", staged, options),
+    queryFn: () => unwrap(commands.worktreeFileDiff(repoId, path!, staged, options)),
     enabled: path !== null,
   });
 }
