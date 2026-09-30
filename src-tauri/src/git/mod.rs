@@ -7,6 +7,8 @@
 pub mod advanced;
 pub mod cli;
 pub mod conflicts;
+#[cfg(test)]
+mod crlf_tests;
 pub mod graph;
 pub mod history;
 pub mod libgit;
