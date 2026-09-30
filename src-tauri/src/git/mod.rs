@@ -5,6 +5,7 @@
 //! Owned by `rust-git-agent`. Filled in during M1 (see docs/PLAN.md).
 
 pub mod cli;
+pub mod conflicts;
 pub mod graph;
 pub mod libgit;
 pub mod oplog;

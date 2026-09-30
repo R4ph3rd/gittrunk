@@ -1,28 +1,43 @@
-//! `conflicts` commands. Phase 0 stubs: typed signatures are the contract;
-//! bodies are filled in by the owning agent.
-#![allow(unused_variables)]
+//! `conflicts` commands: list, inspect and resolve conflicted files.
 
-use crate::ipc::error::{AppError, AppResult};
+use crate::git::conflicts::ConflictService;
+use crate::git::libgit::LibGit;
+use crate::git::GitState;
+use crate::ipc::error::AppResult;
 use crate::ipc::types::*;
 
 #[tauri::command]
 #[specta::specta]
-pub async fn conflict_list(repo: RepoId) -> AppResult<Vec<FileChange>> {
-    Err(AppError::not_implemented("conflict_list"))
+pub async fn conflict_list(
+    state: tauri::State<'_, GitState>,
+    repo: RepoId,
+) -> AppResult<Vec<FileChange>> {
+    let st = state.inner().clone();
+    crate::git::blocking(move || st.with_repo(&repo, |_, r| LibGit.conflict_list(r))).await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn conflict_file(repo: RepoId, path: String) -> AppResult<ConflictFile> {
-    Err(AppError::not_implemented("conflict_file"))
+pub async fn conflict_file(
+    state: tauri::State<'_, GitState>,
+    repo: RepoId,
+    path: String,
+) -> AppResult<ConflictFile> {
+    let st = state.inner().clone();
+    crate::git::blocking(move || st.with_repo(&repo, |_, r| LibGit.conflict_file(r, &path))).await
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn conflict_resolve(
+    state: tauri::State<'_, GitState>,
     repo: RepoId,
     path: String,
     resolution: ConflictResolution,
 ) -> AppResult<()> {
-    Err(AppError::not_implemented("conflict_resolve"))
+    let st = state.inner().clone();
+    crate::git::blocking(move || {
+        st.write_repo(&repo, |r| LibGit.conflict_resolve(r, &path, &resolution))
+    })
+    .await
 }
