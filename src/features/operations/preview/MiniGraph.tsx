@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { CommitSummary, RefUpdate } from "@/ipc/bindings";
-import { buildMiniGraph, type MiniNode, type MiniNodeKind } from "./miniGraph";
+import { buildMiniGraph, type MiniNode, type MiniNodeKind } from "./miniGraphModel";
 import { cachedRows } from "./rows";
 
 const STEP = 22;

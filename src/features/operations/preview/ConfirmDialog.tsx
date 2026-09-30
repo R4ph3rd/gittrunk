@@ -3,7 +3,7 @@ import { AlertDialog, Badge } from "@/design/components";
 import type { OpPreview, RefUpdate } from "@/ipc/bindings";
 import { useDndStore } from "@/stores/dnd";
 import { MiniGraph } from "./MiniGraph";
-import { shortRefName } from "./miniGraph";
+import { shortRefName } from "./miniGraphModel";
 import { executeOperation } from "./useConfirmedOperation";
 
 const oid7 = (oid: string | null, empty: string) => (oid ? oid.slice(0, 7) : empty);

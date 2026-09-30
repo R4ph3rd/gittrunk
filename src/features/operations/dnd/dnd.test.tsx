@@ -19,7 +19,7 @@ import { buildActionEntries, type ActionContext } from "../actions/entries";
 import type { ActionTarget } from "../actions/types";
 import { resolveDrop } from "./resolve";
 import type { DragSource, DropContext, DropTarget } from "./types";
-import { buildMiniGraph } from "../preview/miniGraph";
+import { buildMiniGraph } from "../preview/miniGraphModel";
 
 vi.mock("@/ipc/bindings", async () => (await import("@/app/mockBindings")).bindingsMock());
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(() => Promise.resolve("/work/demo")) }));
