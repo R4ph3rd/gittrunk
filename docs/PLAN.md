@@ -10,17 +10,17 @@ gittrunk is a cross-platform desktop Git client (alternative to GitKraken) built
 
 The brief's stack is kept. Deviations and clarifications, each with a two-sentence justification:
 
-| Area | Decision | Justification |
-|---|---|---|
-| Network ops (clone/fetch/pull/push) | **System `git` CLI**, not libgit2 | libgit2 does not read `~/.ssh/config`, handles SSH agents and proxies poorly, and cannot use Git Credential Manager, which is how most Windows users authenticate to GitHub/GitLab/Bitbucket. Shelling out gives us exactly the user's existing auth setup, and progress is parsed from `--progress` stderr. |
-| Graph layout | **Lane layout computed in Rust**, rendered on **Canvas 2D** with row virtualization; labels/text are DOM overlays only for visible rows | SVG with 100k+ commits creates too many nodes even when windowed, and computing lanes in JS blocks the UI thread. Rust computes lanes once per ref change and the frontend fetches visible row windows by index. |
-| Diff display | **`@git-diff-view/react`** (split + unified, Shiki-based highlighting) for viewing; line/hunk selection layered on its line-click hooks | It is an existing, maintained diff component with both modes and syntax highlighting, so we don't rebuild a diff viewer. Staging semantics (patch building) stay in Rust, so the viewer only reports selected line ranges. |
-| Conflict editor | **CodeMirror 6 + `@codemirror/merge`** | It provides a proven 3-way merge UI with editing, which the diff viewer does not. It also handles large files without virtualization work on our side. |
-| Virtualization | **`@tanstack/react-virtual`** | Same family as TanStack Query, headless, and works for both DOM lists and computing canvas row windows. |
-| Keychain | **`keyring` crate** (Windows Credential Manager / macOS Keychain / Secret Service) | One API over all three OS stores. Used for AI API keys and optional HTTPS tokens; git credentials otherwise go through the configured credential helper. |
-| AI HTTP calls | **Made from Rust**, never from the webview | API keys never enter JS memory and no CSP exception is needed for provider domains. Streaming tokens are forwarded to the UI as typed Tauri events. |
-| E2E tests | **WebdriverIO + `tauri-driver`** on Linux (xvfb) and Windows CI | It drives the real app against a real fixture repo, which the brief requires. `tauri-driver` does not support macOS, so macOS gets build + unit tests only. |
-| Undo | **App operation journal** (`.git/gittrunk/oplog.jsonl`) recording ref/HEAD/index state before each operation, restored via the reflog OIDs | Raw reflog alone doesn't say which entries belong to one user action (a rebase writes many). The journal groups them so "Undo" reverts exactly one operation. |
+| Area                                | Decision                                                                                                                                   | Justification                                                                                                                                                                                                                                                                                                |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Network ops (clone/fetch/pull/push) | **System `git` CLI**, not libgit2                                                                                                          | libgit2 does not read `~/.ssh/config`, handles SSH agents and proxies poorly, and cannot use Git Credential Manager, which is how most Windows users authenticate to GitHub/GitLab/Bitbucket. Shelling out gives us exactly the user's existing auth setup, and progress is parsed from `--progress` stderr. |
+| Graph layout                        | **Lane layout computed in Rust**, rendered on **Canvas 2D** with row virtualization; labels/text are DOM overlays only for visible rows    | SVG with 100k+ commits creates too many nodes even when windowed, and computing lanes in JS blocks the UI thread. Rust computes lanes once per ref change and the frontend fetches visible row windows by index.                                                                                             |
+| Diff display                        | **`@git-diff-view/react`** (split + unified, Shiki-based highlighting) for viewing; line/hunk selection layered on its line-click hooks    | It is an existing, maintained diff component with both modes and syntax highlighting, so we don't rebuild a diff viewer. Staging semantics (patch building) stay in Rust, so the viewer only reports selected line ranges.                                                                                   |
+| Conflict editor                     | **CodeMirror 6 + `@codemirror/merge`**                                                                                                     | It provides a proven 3-way merge UI with editing, which the diff viewer does not. It also handles large files without virtualization work on our side.                                                                                                                                                       |
+| Virtualization                      | **`@tanstack/react-virtual`**                                                                                                              | Same family as TanStack Query, headless, and works for both DOM lists and computing canvas row windows.                                                                                                                                                                                                      |
+| Keychain                            | **`keyring` crate** (Windows Credential Manager / macOS Keychain / Secret Service)                                                         | One API over all three OS stores. Used for AI API keys and optional HTTPS tokens; git credentials otherwise go through the configured credential helper.                                                                                                                                                     |
+| AI HTTP calls                       | **Made from Rust**, never from the webview                                                                                                 | API keys never enter JS memory and no CSP exception is needed for provider domains. Streaming tokens are forwarded to the UI as typed Tauri events.                                                                                                                                                          |
+| E2E tests                           | **WebdriverIO + `tauri-driver`** on Linux (xvfb) and Windows CI                                                                            | It drives the real app against a real fixture repo, which the brief requires. `tauri-driver` does not support macOS, so macOS gets build + unit tests only.                                                                                                                                                  |
+| Undo                                | **App operation journal** (`.git/gittrunk/oplog.jsonl`) recording ref/HEAD/index state before each operation, restored via the reflog OIDs | Raw reflog alone doesn't say which entries belong to one user action (a rebase writes many). The journal groups them so "Undo" reverts exactly one operation.                                                                                                                                                |
 
 Everything else is as specified: Tauri 2, `git2`, React + TS + Vite, Tailwind, shadcn/ui (Radix), dnd-kit, Zustand, TanStack Query, `tauri-specta`, cmdk, lucide-react.
 
@@ -99,20 +99,20 @@ Rule: an agent writes only inside its owned paths. Contract or shared config cha
 
 Command groups (stubs returning `Internal("not implemented")` in Phase 0, fully typed):
 
-| Group | Commands |
-|---|---|
-| repo | `repo_open`, `repo_init`, `repo_clone`, `repo_close`, `repo_recent`, `repo_status` |
-| graph | `graph_load(repo, filter) → GraphMeta {row_count, lane_count}`, `graph_rows(repo, start, len) → Vec<GraphRow>`, `graph_search(repo, query) → Vec<row_index>`, `commit_details`, `commit_diff` |
-| refs | `refs_list`, `branch_create/delete/rename`, `checkout`, `tag_create/delete`, `ref_move` |
-| worktree | `status`, `diff_file(staged, context)`, `stage_paths`, `unstage_paths`, `stage_lines(path, hunks/lines)`, `unstage_lines`, `discard_lines`, `commit(message, amend)` |
-| stash | `stash_list/save/apply/pop/drop` |
-| history ops | `merge`, `rebase`, `rebase_interactive(todo)`, `rebase_continue/skip/abort`, `cherry_pick(commits)`, `revert`, `reset(mode)` |
-| conflicts | `conflict_list`, `conflict_file(path) → {base, ours, theirs, merged}`, `conflict_resolve(path, content)` |
-| remotes | `remote_list/add/remove/rename/set_url`, `fetch(remote?)`, `pull`, `push(remote, refspec, force_with_lease)`, `set_upstream`, `credential_store/clear` |
-| advanced | `submodule_list/update/init`, `worktree_list/add/remove`, `blame`, `file_history`, `reflog` |
-| oplog | `oplog_list`, `undo`, `redo` |
-| ai | `ai_config_get/set`, `ai_key_set/clear`, `ai_commit_message`, `ai_conflict_suggest`, `ai_plan(nl) → AiPlan {steps: Vec<PlannedCommand>, preview}`, `ai_plan_execute(plan_id)`, `ai_summarize(commit|branch)`, `ai_pr_description(base, head)` |
-| settings | `settings_get/set`, `keybindings_get/set` |
+| Group       | Commands                                                                                                                                                                                            |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| repo        | `repo_open`, `repo_init`, `repo_clone`, `repo_close`, `repo_recent`, `repo_status`                                                                                                                  |
+| graph       | `graph_load(repo, filter) → GraphMeta {row_count, lane_count}`, `graph_rows(repo, start, len) → Vec<GraphRow>`, `graph_search(repo, query) → Vec<row_index>`, `commit_details`, `commit_diff`       |
+| refs        | `refs_list`, `branch_create/delete/rename`, `checkout`, `tag_create/delete`, `ref_move`                                                                                                             |
+| worktree    | `status`, `diff_file(staged, context)`, `stage_paths`, `unstage_paths`, `stage_lines(path, hunks/lines)`, `unstage_lines`, `discard_lines`, `commit(message, amend)`                                |
+| stash       | `stash_list/save/apply/pop/drop`                                                                                                                                                                    |
+| history ops | `merge`, `rebase`, `rebase_interactive(todo)`, `rebase_continue/skip/abort`, `cherry_pick(commits)`, `revert`, `reset(mode)`                                                                        |
+| conflicts   | `conflict_list`, `conflict_file(path) → {base, ours, theirs, merged}`, `conflict_resolve(path, content)`                                                                                            |
+| remotes     | `remote_list/add/remove/rename/set_url`, `fetch(remote?)`, `pull`, `push(remote, refspec, force_with_lease)`, `set_upstream`, `credential_store/clear`                                              |
+| advanced    | `submodule_list/update/init`, `worktree_list/add/remove`, `blame`, `file_history`, `reflog`                                                                                                         |
+| oplog       | `oplog_list`, `undo`, `redo`                                                                                                                                                                        |
+| ai          | `ai_config_get/set`, `ai_key_set/clear`, `ai_commit_message`, `ai_conflict_suggest`, `ai_plan(nl) → AiPlan {steps: Vec<PlannedCommand>, preview}`, `ai_plan_execute(plan_id)`, `ai_summarize(commit | branch)`, `ai_pr_description(base, head)` |
+| settings    | `settings_get/set`, `keybindings_get/set`                                                                                                                                                           |
 
 ---
 
@@ -142,6 +142,7 @@ graph TD
 ```
 
 ### M0 — Scaffold (sequential; orchestrator + build-agent + design-system-agent)
+
 - Tauri 2 + React/TS/Vite with pnpm; ESLint (flat config) + Prettier; rustfmt + clippy config; Vitest + Testing Library; Tailwind wired to CSS variables.
 - `.claude/agents/*.md` for all 7 agents.
 - Full IPC contract (types + stub commands) and generated `bindings.ts`, plus the drift check.
@@ -150,35 +151,42 @@ graph TD
 - **Accept**: all quality-gate commands pass on the stub app; the Windows workflow produces an installer for the empty shell. Proving the pipeline early removes the biggest late risk.
 
 ### M1 — Read path (parallel: tracks a, b, g)
+
 - **a (rust-git-agent)**: `GitService` trait, libgit2 impl for open/refs/status/commit details/diffs; graph walker (topo + date order, first-parent option) and lane assignment returning windowed rows; fixture builders (linear, branchy merges, octopus, 100k-commit synthetic repo).
 - **b (frontend-agent)**: canvas graph renderer (lanes, nodes, merge curves, ref labels, tags, HEAD, selection), virtualized with overlays; commit details panel; search box and filters (branch, author, date, path, text).
 - **g (design-system-agent)**: tokens (color, spacing, radius, type, elevation, motion, gradients), dark + light themes, wrapped components (Button, IconButton, Input, Dialog, AlertDialog, DropdownMenu, ContextMenu, Tooltip, Tabs, Toast, Badge, Kbd, ScrollArea, Resizable panels, CommandPalette), `/design` route in dev.
 - **Accept**: open a fixture repo and scroll 100k commits at 60 fps (a perf test asserts `graph_rows` < 5 ms per 200-row window and first graph load < 1.5 s for 100k commits in release mode).
 
 ### M2 — Working copy (track c)
+
 - Status, file / hunk / line stage–unstage–discard (patch building in Rust via `git2::Diff` + `apply` to the index), commit / amend, stash CRUD, split/unified diff with highlighting.
 - **Accept**: Rust tests cover partial staging of added, removed and modified lines, including files with no trailing newline and CRLF files. A component test covers line selection → `stage_lines` call.
 
 ### M3 — Remotes (track d)
+
 - Multiple remotes CRUD, per-remote fetch/push, pull (merge/rebase/ff-only per setting), upstream tracking, ahead/behind, clone with progress, auth: system credential helper via CLI with `GIT_TERMINAL_PROMPT=0` + an askpass bridge back to a UI prompt; optional token storage in keychain.
 - **Accept**: tests against local bare-repo remotes (file:// and a local `git daemon`/`http-backend` fixture); auth failure surfaces `AuthRequired` and a prompt.
 
 ### M4 — History operations (track e, backend-heavy)
+
 - Branch/checkout/merge/rebase/interactive rebase (CLI with a generated `GIT_SEQUENCE_EDITOR` todo), cherry-pick, revert, reset, tags; conflict state detection + 3-way data; oplog journal with undo/redo; `dry_run` previews for every mutation.
 - **Accept**: each op has fixture tests for the success, conflict and abort paths; undo restores refs/HEAD/index exactly (asserted by OID comparison).
 
 ### M5 — Drag and drop (track e, frontend)
+
 - dnd-kit on graph and branch list: branch → branch (menu: merge / rebase), commit → branch (cherry-pick), ref → commit (move ref / reset), interactive rebase editor with drag reorder, drop onto commit to squash/fixup, pick/edit/drop/reword actions.
 - Every destructive drop → confirmation dialog showing the `OpPreview` (a mini before/after graph) → execute → toast with **Undo**.
 - Keyboard alternative for every drag action (accessibility).
 - **Accept**: E2E test opens a fixture repo, renders the graph, drags `feature` onto `main`, confirms the merge, and asserts the new merge commit appears in the graph and in `git log` on disk.
 
 ### M6 — AI (track f) and advanced Git (track h, rust-git-agent + frontend-agent)
+
 - **AI**: `Provider` trait (Anthropic default; OpenAI-compatible second provider covers OpenAI, Azure, local Ollama/LM Studio). Features: commit message from staged diff, conflict suggestions, NL → `AiPlan` (only whitelisted `PlannedCommand` variants, each rendered with its `OpPreview`, executed only on explicit confirm, fully undoable), commit/branch summaries, PR description draft. AI is **off by default**; with AI disabled, no network code path is reachable (asserted by a test). Diffs are size-capped and the user sees what will be sent.
 - **Advanced**: submodules, worktrees, blame, file history (follows renames), reflog view.
 - **Accept**: AI provider tested against a mock HTTP server; plan executor tested to reject non-whitelisted commands.
 
 ### M7 — Hardening and release (checker + build-agent)
+
 - Command palette covering every action; keyboard shortcuts map (editable); focus states audited; error toasts with details; settings (theme, AI, git binary path, pull strategy).
 - Docs: `README.md`, `docs/BUILD.md`, `docs/ARCHITECTURE.md`, `docs/DESIGN.md`.
 - **Accept (definition of done)**: full quality gate passes locally and in CI; Windows release workflow is green and uploads `gittrunk.exe`, `*-setup.exe` (NSIS), `*.msi`.
@@ -189,17 +197,18 @@ graph TD
 
 Files in `.claude/agents/`. Each has a narrow `tools` list and a prompt that tells it to read only its brief, the contract files and its owned files.
 
-| Agent | Model | Effort | Tools | Owns |
-|---|---|---|---|---|
-| orchestrator | opus | high | Read, Grep, Glob, Write/Edit (docs + contract + shared config only), Bash (git) | PLAN, contract, shared config |
-| rust-git-agent | sonnet | medium | Read, Grep, Glob, Edit, Write, Bash (cargo, git) | `src-tauri/src/git/`, `remote/`, `commands/{repo,graph,refs,worktree,stash,history,remotes,advanced,oplog}.rs` |
-| frontend-agent | sonnet | medium | Read, Grep, Glob, Edit, Write, Bash (pnpm) | `src/features/*` (except ai, settings), `src/app/`, `src/ipc/queries.ts`, `e2e/` specs |
-| design-system-agent | sonnet | medium | Read, Grep, Glob, Edit, Write, Bash (pnpm) | `src/design/`, `src/features/settings/`, `docs/DESIGN.md` |
-| ai-agent | sonnet | medium | Read, Grep, Glob, Edit, Write, Bash (cargo, pnpm) | `src-tauri/src/ai/`, `commands/ai.rs`, `src/features/ai/` |
-| build-agent | haiku | low | Read, Glob, Edit, Write, Bash | `.github/`, `src-tauri/icons/`, bundle section of `tauri.conf.json`, `scripts/`, `docs/BUILD.md` |
-| checker | opus | high | Read, Grep, Glob, Edit, Bash | none; small integration fixes only, anything larger goes back to the owner with a failure report |
+| Agent               | Model  | Effort | Tools                                                                           | Owns                                                                                                           |
+| ------------------- | ------ | ------ | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| orchestrator        | opus   | high   | Read, Grep, Glob, Write/Edit (docs + contract + shared config only), Bash (git) | PLAN, contract, shared config                                                                                  |
+| rust-git-agent      | sonnet | medium | Read, Grep, Glob, Edit, Write, Bash (cargo, git)                                | `src-tauri/src/git/`, `remote/`, `commands/{repo,graph,refs,worktree,stash,history,remotes,advanced,oplog}.rs` |
+| frontend-agent      | sonnet | medium | Read, Grep, Glob, Edit, Write, Bash (pnpm)                                      | `src/features/*` (except ai, settings), `src/app/`, `src/ipc/queries.ts`, `e2e/` specs                         |
+| design-system-agent | sonnet | medium | Read, Grep, Glob, Edit, Write, Bash (pnpm)                                      | `src/design/`, `src/features/settings/`, `docs/DESIGN.md`                                                      |
+| ai-agent            | sonnet | medium | Read, Grep, Glob, Edit, Write, Bash (cargo, pnpm)                               | `src-tauri/src/ai/`, `commands/ai.rs`, `src/features/ai/`                                                      |
+| build-agent         | haiku  | low    | Read, Glob, Edit, Write, Bash                                                   | `.github/`, `src-tauri/icons/`, bundle section of `tauri.conf.json`, `scripts/`, `docs/BUILD.md`               |
+| checker             | opus   | high   | Read, Grep, Glob, Edit, Bash                                                    | none; small integration fixes only, anything larger goes back to the owner with a failure report               |
 
 **Dispatch template** (every task):
+
 ```
 Goal: <one paragraph>
 Branch/worktree: feat/<area>-<task>
@@ -218,6 +227,7 @@ Mechanical work (renames, boilerplate, config, docs formatting) goes to build-ag
 ## 7. Quality gates
 
 Per merge and per milestone:
+
 ```
 cargo fmt --all --check
 cargo clippy --all-targets -- -D warnings
@@ -227,25 +237,27 @@ pnpm typecheck
 pnpm test
 pnpm tauri build          # Linux locally; Windows via release workflow
 ```
+
 Plus: bindings drift check and the E2E drag-and-drop merge test from M5 onward.
 
 ---
 
 ## 8. Risks
 
-| Risk | Mitigation |
-|---|---|
-| Graph performance at 100k+ commits | Rust-side layout, windowed row fetch, canvas rendering, perf test in CI from M1 |
+| Risk                                                          | Mitigation                                                                                                                                           |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Graph performance at 100k+ commits                            | Rust-side layout, windowed row fetch, canvas rendering, perf test in CI from M1                                                                      |
 | libgit2 vs CLI behavioral drift (hooks, config, line endings) | All writes that involve hooks/sequencer go through CLI; libgit2 writes limited to index/ref updates; fixture tests run both paths where they overlap |
-| `tauri-specta` v2 is still RC | Pin exact versions; the contract is plain serde types so swapping the generator is contained to `ipc/mod.rs` |
-| Windows-only issues (path length, CRLF, GCM prompts) | Windows CI job runs `cargo test` from M0; fixtures include CRLF + long paths |
-| AI leaking repository content | Off by default, network code gated behind config, explicit preview of payload, keys only in keychain |
+| `tauri-specta` v2 is still RC                                 | Pin exact versions; the contract is plain serde types so swapping the generator is contained to `ipc/mod.rs`                                         |
+| Windows-only issues (path length, CRLF, GCM prompts)          | Windows CI job runs `cargo test` from M0; fixtures include CRLF + long paths                                                                         |
+| AI leaking repository content                                 | Off by default, network code gated behind config, explicit preview of payload, keys only in keychain                                                 |
 
 ---
 
 ## 9. Approval needed
 
 Please confirm or adjust:
+
 1. The stack deviations in §1 (CLI for network ops, canvas graph, `@git-diff-view/react`, CodeMirror merge, Rust-side AI calls).
 2. The environment adaptations in §2: Windows build via GitHub Actions, the designated branch as integration branch with local-only feature worktrees, and the main session acting as orchestrator.
 3. Milestone order (M0 → M7). The Windows installer pipeline is proven in M0 on the empty shell.
