@@ -25,6 +25,11 @@ pub async fn redo(repo: RepoId, dry_run: bool) -> AppResult<OpOutcome> {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn op_cancel(op_id: OpId) -> AppResult<()> {
-    Err(AppError::not_implemented("op_cancel"))
+pub async fn op_cancel(
+    state: tauri::State<'_, crate::git::GitState>,
+    op_id: OpId,
+) -> AppResult<()> {
+    // Cancelling an operation that already finished is not an error.
+    state.ops().cancel(&op_id);
+    Ok(())
 }

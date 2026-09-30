@@ -4,6 +4,7 @@
 //!
 //! Owned by `rust-git-agent`. Filled in during M1 (see docs/PLAN.md).
 
+pub mod cli;
 pub mod graph;
 pub mod libgit;
 pub mod recent;
@@ -77,6 +78,8 @@ pub struct GitState {
     repos: Arc<RwLock<HashMap<RepoId, Arc<RepoEntry>>>>,
     next_id: Arc<AtomicU64>,
     service: Arc<dyn GitService>,
+    cli: cli::GitCli,
+    ops: cli::OpRegistry,
 }
 
 impl Default for GitState {
@@ -85,6 +88,8 @@ impl Default for GitState {
             repos: Arc::default(),
             next_id: Arc::new(AtomicU64::new(1)),
             service: Arc::new(libgit::LibGit),
+            cli: cli::GitCli::new(),
+            ops: cli::OpRegistry::default(),
         }
     }
 }
@@ -92,6 +97,14 @@ impl Default for GitState {
 impl GitState {
     pub fn service(&self) -> &dyn GitService {
         &*self.service
+    }
+
+    pub fn cli(&self) -> &cli::GitCli {
+        &self.cli
+    }
+
+    pub fn ops(&self) -> &cli::OpRegistry {
+        &self.ops
     }
 
     /// Opens (or re-uses) the repository containing `path`.
