@@ -1,0 +1,84 @@
+# Builds the Android APK and uploads it as a workflow artifact. Dev-signed with
+# a throwaway key (never uses repository secrets). Releases are handled by
+# release.yml.
+name: Build Android
+
+on:
+  push:
+    branches: [main, develop, "claude/**", "feat/**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      abis:
+        description: "Comma list of ABIs: aarch64, armv7, x86_64"
+        default: "aarch64,x86_64"
+
+concurrency:
+  group: build-android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  android:
+    name: Android APK # required-status-check context
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: build
+        uses: ./.github/actions/build-android
+        with:
+          abis: ${{ inputs.abis || 'aarch64,x86_64' }}
+          sign: dev
+          lto: thin
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: gittrunk-android-${{ github.sha }}
+          path: out/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  # Non-blocking: installs the APK on an x86_64 emulator and checks it starts.
+  smoke:
+    name: Android emulator smoke
+    needs: android
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: gittrunk-android-${{ github.sha }}
+          path: apk
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: bash scripts/android/smoke.sh
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: android-smoke-${{ github.sha }}
+          path: smoke/
+          if-no-files-found: warn
+          retention-days: 14

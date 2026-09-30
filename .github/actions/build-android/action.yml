@@ -1,0 +1,239 @@
+# Builds, signs and verifies the Android APK on an ubuntu runner (which ships
+# the SDK and NDK). Used by build-android.yml (sign: dev) and release.yml
+# (sign: release). Composite actions have no post step, so keystore cleanup
+# happens at the end of the build step via `trap`.
+name: Build Android APK
+description: Build, sign and verify the gittrunk Android APK into out/
+
+inputs:
+  abis:
+    description: "Comma list of ABIs: aarch64, armv7, x86_64"
+    required: false
+    default: "aarch64,x86_64"
+  sign:
+    description: "dev (throwaway key, no secrets) or release (keystore inputs required)"
+    required: true
+  keystore-base64:
+    description: "Base64 of the release keystore (sign: release only)"
+    required: false
+    default: ""
+  keystore-password:
+    description: "Release keystore password (sign: release only)"
+    required: false
+    default: ""
+  key-alias:
+    description: "Release key alias (sign: release only)"
+    required: false
+    default: ""
+  key-password:
+    description: "Release key password (sign: release only)"
+    required: false
+    default: ""
+  lto:
+    description: "Empty for the Cargo profile default, or thin for faster CI builds"
+    required: false
+    default: ""
+
+outputs:
+  apk-path:
+    description: Absolute path of the single renamed APK in out/
+    value: ${{ steps.verify.outputs.apk-path }}
+  version:
+    description: App version from tauri.conf.json
+    value: ${{ steps.verify.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate inputs and derive Rust targets
+      id: targets
+      shell: bash
+      env:
+        ABIS: ${{ inputs.abis }}
+        SIGN: ${{ inputs.sign }}
+        LTO: ${{ inputs.lto }}
+      run: |
+        set -euo pipefail
+        case "$SIGN" in dev | release) ;; *) echo "::error::sign must be dev or release"; exit 1 ;; esac
+        case "$LTO" in "" | thin) ;; *) echo "::error::lto must be empty or thin"; exit 1 ;; esac
+        triples=()
+        for a in ${ABIS//,/ }; do
+          case "$a" in
+            aarch64) triples+=(aarch64-linux-android) ;;
+            armv7) triples+=(armv7-linux-androideabi) ;;
+            x86_64) triples+=(x86_64-linux-android) ;;
+            *) echo "::error::unsupported ABI '$a' (allowed: aarch64, armv7, x86_64)"; exit 1 ;;
+          esac
+        done
+        if [ "${#triples[@]}" -eq 0 ]; then echo "::error::abis is empty"; exit 1; fi
+        echo "rust-targets=$(IFS=,; echo "${triples[*]}")" >> "$GITHUB_OUTPUT"
+
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 22
+    - name: Enable pnpm via Corepack
+      shell: bash
+      env:
+        COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+      run: |
+        corepack enable
+        pnpm --version
+    - name: Get pnpm store directory
+      id: pnpm-cache
+      shell: bash
+      run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+    - uses: actions/cache@v6
+      name: Setup pnpm cache
+      with:
+        path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-store-
+
+    - uses: actions/setup-java@v5
+      with:
+        distribution: temurin
+        java-version: "17"
+        cache: gradle
+        cache-dependency-path: |
+          src-tauri/gen/android/**/*.gradle*
+          src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties
+
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ steps.targets.outputs.rust-targets }}
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: src-tauri
+        key: android-${{ inputs.abis }}-${{ inputs.lto }}
+
+    - run: pnpm install --frozen-lockfile
+      shell: bash
+
+    - name: Configure Android SDK and NDK
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -z "${ANDROID_NDK_LATEST_HOME:-}" ]; then
+          echo "::error::ANDROID_NDK_LATEST_HOME is empty; this action needs an ubuntu runner image with the Android NDK"
+          exit 1
+        fi
+        {
+          echo "NDK_HOME=$ANDROID_NDK_LATEST_HOME"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME"
+          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME"
+        } >> "$GITHUB_ENV"
+        echo "$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" >> "$GITHUB_PATH"
+        echo "ANDROID_HOME=${ANDROID_HOME:-}"
+        ls "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools"
+
+    - name: Build signed APK
+      id: build
+      shell: bash
+      env:
+        ABIS: ${{ inputs.abis }}
+        SIGN: ${{ inputs.sign }}
+        LTO: ${{ inputs.lto }}
+        KEYSTORE_BASE64: ${{ inputs.keystore-base64 }}
+        KEYSTORE_PASSWORD: ${{ inputs.keystore-password }}
+        KEY_ALIAS: ${{ inputs.key-alias }}
+        KEY_PASSWORD: ${{ inputs.key-password }}
+      run: |
+        set -euo pipefail
+        props=src-tauri/gen/android/keystore.properties
+        jks=""
+        cleanup() { rm -f "$props" "$jks"; }
+        trap cleanup EXIT
+
+        if [ "$SIGN" = release ]; then
+          missing=()
+          [ -n "$KEYSTORE_BASE64" ] || missing+=(keystore-base64)
+          [ -n "$KEYSTORE_PASSWORD" ] || missing+=(keystore-password)
+          [ -n "$KEY_ALIAS" ] || missing+=(key-alias)
+          [ -n "$KEY_PASSWORD" ] || missing+=(key-password)
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::sign=release requires inputs: ${missing[*]} (empty)"
+            exit 1
+          fi
+          jks="$RUNNER_TEMP/release.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$jks"
+          store_pw="$KEYSTORE_PASSWORD"
+          alias="$KEY_ALIAS"
+          key_pw="$KEY_PASSWORD"
+        else
+          jks="$RUNNER_TEMP/ci.jks"
+          store_pw="$(openssl rand -hex 16)"
+          echo "::add-mask::$store_pw"
+          alias=gittrunk-ci
+          key_pw="$store_pw"
+          keytool -genkeypair -keystore "$jks" -alias "$alias" -keyalg RSA -keysize 2048 \
+            -validity 10000 -dname "CN=gittrunk CI" \
+            -storepass "$store_pw" -keypass "$key_pw" > /dev/null
+          echo "::notice::Android APK is signed with a throwaway CI key: it installs fine, but cannot be updated over another build (uninstall first)."
+        fi
+        {
+          echo "keyAlias=$alias"
+          echo "keyPassword=$key_pw"
+          echo "storeFile=$jks"
+          echo "storePassword=$store_pw"
+        } > "$props"
+
+        if [ "$LTO" = thin ]; then
+          export CARGO_PROFILE_RELEASE_LTO=thin
+          export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
+        fi
+
+        pnpm tauri android build --help | head -60
+        # `--target` takes a list of values (see the help output above).
+        pnpm tauri android build --apk --ci --target ${ABIS//,/ }
+
+    - name: Verify and collect APK
+      id: verify
+      shell: bash
+      env:
+        ABIS: ${{ inputs.abis }}
+      run: |
+        set -euo pipefail
+        version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+
+        dir=src-tauri/gen/android/app/build/outputs/apk/universal/release
+        mapfile -t apks < <(find "$dir" -maxdepth 1 -name '*.apk' ! -name '*-unsigned.apk')
+        if [ "${#apks[@]}" -ne 1 ]; then
+          echo "::error::expected exactly one signed release APK in $dir, found ${#apks[@]}"
+          ls -la "$dir" || true
+          exit 1
+        fi
+        apk="${apks[0]}"
+
+        bt="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)"
+        echo "Using build-tools $bt"
+        "${bt}apksigner" verify --print-certs "$apk"
+        badging="$("${bt}aapt2" dump badging "$apk")"
+        grep -q "package: name='dev.gittrunk.client'" <<< "$badging" \
+          || { echo "::error::unexpected package name"; exit 1; }
+        grep -q "sdkVersion:'24'" <<< "$badging" \
+          || { echo "::error::expected minSdk 24"; exit 1; }
+
+        libs="$(unzip -l "$apk" | grep 'libgittrunk_lib.so' || true)"
+        echo "$libs"
+        want="$(wc -w <<< "${ABIS//,/ }")"
+        got="$(grep -c . <<< "$libs" || true)"
+        if [ "$got" -ne "$want" ]; then
+          echo "::error::expected $want libgittrunk_lib.so entries (one per ABI), found $got"
+          exit 1
+        fi
+
+        sorted="$(tr ',' '\n' <<< "$ABIS" | sort | paste -sd, -)"
+        if [ "$sorted" = "aarch64,armv7,x86_64" ]; then
+          suffix=universal
+        else
+          suffix="${ABIS//,/-}"
+        fi
+        mkdir -p out
+        dest="$PWD/out/gittrunk_${version}_android-${suffix}.apk"
+        cp "$apk" "$dest"
+        ls -la out
+        {
+          echo "apk-path=$dest"
+          echo "version=$version"
+        } >> "$GITHUB_OUTPUT"
