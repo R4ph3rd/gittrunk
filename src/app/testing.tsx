@@ -14,6 +14,7 @@ import type {
 } from "@/ipc/bindings";
 import { useRepoStore } from "@/stores/repo";
 import { App } from "./App";
+import { DESKTOP_PLATFORM } from "./platform";
 
 import { TooltipProvider } from "@/design/components";
 import { useRemotesUi } from "@/stores/remotes";
@@ -180,6 +181,13 @@ export async function installBackend(rowCount = 1000, searchHits: number[] = [])
   commands.appInfo.mockImplementation(() =>
     ok({ version: "0.1.0", gitVersion: "git version 2.45.0", platform: "windows" }),
   );
+  commands.platformInfo.mockImplementation(() => ok(DESKTOP_PLATFORM));
+  commands.appExit.mockImplementation(() => ok(null));
+  commands.gitIdentityGet.mockImplementation(() =>
+    ok({ name: "Test User", email: "test@example.com" }),
+  );
+  commands.gitIdentitySet.mockImplementation((name: string, email: string) => ok({ name, email }));
+  commands.repoDelete.mockImplementation(() => ok(null));
   commands.repoRecent.mockImplementation(() =>
     ok([{ path: "/work/demo", name: "demo", lastOpened: 1 }]),
   );

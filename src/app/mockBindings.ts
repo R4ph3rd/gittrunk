@@ -34,6 +34,11 @@ export const fail = (kind: string, message: string) =>
 
 export const names = [
   "appInfo",
+  "platformInfo",
+  "appExit",
+  "gitIdentityGet",
+  "gitIdentitySet",
+  "repoDelete",
   "blame",
   "fileHistory",
   "reflog",

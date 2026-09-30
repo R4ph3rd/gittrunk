@@ -5,6 +5,7 @@ import {
   events,
   type CommitRequest,
   type DiffOptions,
+  type GitIdentity,
   type GraphFilter,
   type LineSelection,
   type RepoChanged,
@@ -16,6 +17,8 @@ import { unwrap } from "./client";
 /** Query keys are scoped by repo id so `repo-changed` events can invalidate precisely. */
 export const queryKeys = {
   appInfo: ["appInfo"] as const,
+  platformInfo: ["platformInfo"] as const,
+  gitIdentity: ["gitIdentity"] as const,
   aiSettings: ["aiSettings"] as const,
   recent: ["repoRecent"] as const,
   repo: (id: string) => ["repo", id] as const,
@@ -39,6 +42,33 @@ export function useAppInfo() {
     queryKey: queryKeys.appInfo,
     queryFn: () => unwrap(commands.appInfo()),
     staleTime: Infinity,
+  });
+}
+
+/** Compile-time platform capabilities. Prefer `usePlatform()` in components. */
+export function usePlatformInfo() {
+  return useQuery({
+    queryKey: queryKeys.platformInfo,
+    queryFn: () => unwrap(commands.platformInfo()),
+    staleTime: Infinity,
+    retry: false,
+  });
+}
+
+/** Global git identity (`user.name` / `user.email`). */
+export function useGitIdentity() {
+  return useQuery({
+    queryKey: queryKeys.gitIdentity,
+    queryFn: () => unwrap(commands.gitIdentityGet()),
+  });
+}
+
+export function useSetGitIdentity() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (identity: { name: string; email: string }): Promise<GitIdentity> =>
+      unwrap(commands.gitIdentitySet(identity.name, identity.email)),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.gitIdentity }),
   });
 }
 
