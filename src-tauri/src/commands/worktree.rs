@@ -7,19 +7,30 @@ use crate::ipc::types::*;
 
 #[tauri::command]
 #[specta::specta]
-pub async fn status(repo: RepoId) -> AppResult<StatusSnapshot> {
-    Err(AppError::not_implemented("status"))
+pub async fn status(
+    state: tauri::State<'_, crate::git::GitState>,
+    repo: RepoId,
+) -> AppResult<StatusSnapshot> {
+    let st = state.inner().clone();
+    crate::git::blocking(move || st.with_repo(&repo, |svc, r| svc.status(r))).await
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn worktree_file_diff(
+    state: tauri::State<'_, crate::git::GitState>,
     repo: RepoId,
     path: String,
     staged: bool,
     options: DiffOptions,
 ) -> AppResult<FileDiff> {
-    Err(AppError::not_implemented("worktree_file_diff"))
+    let st = state.inner().clone();
+    crate::git::blocking(move || {
+        st.with_repo(&repo, |svc, r| {
+            svc.worktree_file_diff(r, &path, staged, &options)
+        })
+    })
+    .await
 }
 
 #[tauri::command]

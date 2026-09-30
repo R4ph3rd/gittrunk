@@ -7,8 +7,12 @@ use crate::ipc::types::*;
 
 #[tauri::command]
 #[specta::specta]
-pub async fn refs_list(repo: RepoId) -> AppResult<RefsSnapshot> {
-    Err(AppError::not_implemented("refs_list"))
+pub async fn refs_list(
+    state: tauri::State<'_, crate::git::GitState>,
+    repo: RepoId,
+) -> AppResult<RefsSnapshot> {
+    let st = state.inner().clone();
+    crate::git::blocking(move || st.with_repo(&repo, |svc, r| svc.refs_list(r))).await
 }
 
 #[tauri::command]

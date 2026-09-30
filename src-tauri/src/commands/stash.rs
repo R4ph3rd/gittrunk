@@ -7,8 +7,12 @@ use crate::ipc::types::*;
 
 #[tauri::command]
 #[specta::specta]
-pub async fn stash_list(repo: RepoId) -> AppResult<Vec<StashEntry>> {
-    Err(AppError::not_implemented("stash_list"))
+pub async fn stash_list(
+    state: tauri::State<'_, crate::git::GitState>,
+    repo: RepoId,
+) -> AppResult<Vec<StashEntry>> {
+    let st = state.inner().clone();
+    crate::git::blocking(move || st.with_repo(&repo, |svc, r| svc.stash_list(r))).await
 }
 
 #[tauri::command]
