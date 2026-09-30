@@ -54,3 +54,25 @@ Secrets (Tauri reads these natively): `APPLE_CERTIFICATE` (base64 `.p12`), `APPL
 - **SignPath Foundation**: free code signing for qualifying open source projects, integrates with GitHub Actions.
 
 The PFX path above suits OV certificates; the other options need a `bundle.windows.signCommand` and a workflow change.
+
+## Protecting main
+
+The ruleset file `.github/rulesets/main-protection.json` enforces branch protection on `main` and can be imported by the repository owner:
+
+1. Go to Settings → Rules → Rulesets
+2. Click **New ruleset** ▾ → **Import a ruleset**
+3. Select the file `.github/rulesets/main-protection.json`
+4. Click **Create**
+
+The ruleset enforces:
+
+- No deletion of the branch and no force-pushes
+- Linear history: changes land through a pull request, merged by squash or rebase
+- All pull request conversations must be resolved before merging
+- Four required status checks must pass and be up to date with `main`:
+  - `Checks (ubuntu-24.04)` — from CI
+  - `Checks (windows-latest)` — from CI
+  - `E2E tests` — from CI
+  - `build` — from Build Windows
+
+Admins can bypass rules only via pull request. The Release workflow reads only from `main` and does not push to it, so it is unaffected by these protections.
