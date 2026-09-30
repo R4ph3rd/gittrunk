@@ -1,0 +1,57 @@
+# Builds the Windows app and installers and uploads them as workflow artifacts.
+# Runs on every push to main and to development branches, on PRs into main,
+# and on demand. Releases are handled by release.yml.
+name: Build Windows
+
+on:
+  push:
+    branches: [main, develop, "claude/**", "feat/**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: pnpm install --frozen-lockfile
+
+      # Tauri downloads NSIS and WiX on demand; WebView2 is preinstalled on
+      # GitHub Windows runners and bootstrapped by the installer on user machines.
+      - name: Build app and installers
+        run: pnpm tauri build --bundles nsis,msi
+
+      - name: Collect artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item src-tauri/target/release/gittrunk.exe out/
+          Copy-Item src-tauri/target/release/bundle/nsis/*.exe out/
+          Copy-Item src-tauri/target/release/bundle/msi/*.msi out/
+          Get-ChildItem out | Format-Table Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gittrunk-windows-${{ github.sha }}
+          path: out/*
+          if-no-files-found: error
+          retention-days: 14

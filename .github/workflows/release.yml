@@ -1,0 +1,86 @@
+# Publishes a draft GitHub Release with installers for every platform when a
+# version tag (v*) is pushed. Tag releases from `main` only:
+#   git checkout main && git tag v0.1.0 && git push origin v0.1.0
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build a draft release for, e.g. v0.1.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  guard:
+    name: Tag must point at main
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.tag || github.ref }}
+      - name: Verify tag commit is on main
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor HEAD origin/main || {
+            echo "::error::Release tags must point at a commit on main."
+            exit 1
+          }
+
+  publish:
+    needs: guard
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: "--bundles nsis,msi"
+          - platform: macos-latest
+            args: "--target universal-apple-darwin"
+          - platform: ubuntu-24.04
+            args: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev librsvg2-dev
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: pnpm install --frozen-lockfile
+
+      # Optional Windows code signing: add WINDOWS_CERTIFICATE (base64 .pfx) and
+      # WINDOWS_CERTIFICATE_PASSWORD secrets, then configure
+      # bundle.windows.certificateThumbprint. See docs/BUILD.md.
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ inputs.tag || github.ref_name }}
+          releaseName: "gittrunk ${{ inputs.tag || github.ref_name }}"
+          releaseBody: "See the assets below to download and install this version."
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
