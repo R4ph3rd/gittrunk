@@ -32,8 +32,9 @@ pub async fn branch_create(
     state: tauri::State<'_, GitState>,
     repo: RepoId,
     request: BranchCreateRequest,
+    dry_run: bool,
 ) -> AppResult<OpOutcome> {
-    ref_write!(state, repo, |r| LibGit.branch_create(r, &request, false))
+    ref_write!(state, repo, |r| LibGit.branch_create(r, &request, dry_run))
 }
 
 #[tauri::command]
@@ -54,9 +55,10 @@ pub async fn branch_rename(
     repo: RepoId,
     old_name: String,
     new_name: String,
+    dry_run: bool,
 ) -> AppResult<OpOutcome> {
     ref_write!(state, repo, |r| LibGit
-        .branch_rename(r, &old_name, &new_name, false))
+        .branch_rename(r, &old_name, &new_name, dry_run))
 }
 
 #[tauri::command]
@@ -76,8 +78,9 @@ pub async fn tag_create(
     state: tauri::State<'_, GitState>,
     repo: RepoId,
     request: TagCreateRequest,
+    dry_run: bool,
 ) -> AppResult<OpOutcome> {
-    ref_write!(state, repo, |r| LibGit.tag_create(r, &request, false))
+    ref_write!(state, repo, |r| LibGit.tag_create(r, &request, dry_run))
 }
 
 #[tauri::command]
