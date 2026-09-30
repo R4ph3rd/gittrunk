@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Toaster } from "@/design/components";
@@ -262,7 +262,7 @@ describe("keyboard drag and drop and the confirmation flow", () => {
     const user = await openWithBranches();
     const sidebar = await screen.findByRole("navigation", { name: "References" });
     const feature = await within(sidebar).findByRole("button", { name: "feature" });
-    feature.focus();
+    act(() => feature.focus());
     await user.keyboard(" ");
     await user.keyboard("{ArrowDown}");
     await user.keyboard("{Enter}");

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -40,12 +40,14 @@ function setup(initial: Parameters<typeof installAiBackend>[1] = {}, onResult = 
 }
 
 const runCommand = (id: string, repoId: string | null = "r1") =>
-  useCommandStore.getState().commands[id]!.run({
-    repoId,
-    queryClient: new QueryClient(),
-    platform: "other",
-    openPalette: () => {},
-    openShortcutsHelp: () => {},
+  act(async () => {
+    await useCommandStore.getState().commands[id]!.run({
+      repoId,
+      queryClient: new QueryClient(),
+      platform: "other",
+      openPalette: () => {},
+      openShortcutsHelp: () => {},
+    });
   });
 
 beforeEach(() => {

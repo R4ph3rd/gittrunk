@@ -107,7 +107,7 @@ describe("command palette", () => {
       { id: "t.a", title: "Aardvark", group: "Test", run: () => {} },
       { id: "t.b", title: "Badger", group: "Test", run: () => {} },
     ]);
-    useCommandStore.getState().markUsed("t.b");
+    act(() => useCommandStore.getState().markUsed("t.b"));
     await user.keyboard(ctrl("k"));
     await screen.findByText("Recent");
     const items = screen.getAllByRole("option").map((o) => o.textContent ?? "");

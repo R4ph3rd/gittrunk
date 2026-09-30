@@ -209,7 +209,7 @@ describe("conflict resolver", () => {
     await openResolver();
     const view = resultView();
     const content = view.contentDOM;
-    view.focus();
+    act(() => view.focus());
     fireEvent.keyDown(content, { key: "ArrowDown", altKey: true });
     const first = resultText().indexOf("<<<<<<<");
     expect(view.state.selection.main.head).toBe(first);
@@ -332,7 +332,7 @@ describe("interactive rebase editor", () => {
   it("reorders a row with alt+arrow keys", async () => {
     const { list } = await openEditor();
     const first = rows(list)[0]!;
-    first.focus();
+    act(() => first.focus());
     fireEvent.keyDown(first, { key: "ArrowDown", altKey: true });
     expect(oids(list)).toEqual([oid(2), oid(3), oid(1)]);
     await waitFor(() => expect(document.activeElement?.id).toBe(`rebase-row-${oid(3)}`));
@@ -436,7 +436,7 @@ describe("interactive rebase editor", () => {
     const { user, list } = await openEditor();
     fireEvent.keyDown(rows(list)[2]!, { key: "e" });
     const last = rows(list)[2]!;
-    last.focus();
+    act(() => last.focus());
     fireEvent.keyDown(last, { key: "ArrowUp", altKey: true });
     await user.click(screen.getByRole("button", { name: "Start rebase" }));
     const request = backend.commands.rebaseInteractive!.mock.calls[0]![1] as {

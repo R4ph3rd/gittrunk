@@ -78,7 +78,7 @@ describe("graph view", () => {
   it("supports keyboard navigation", async () => {
     const user = await openRepo();
     const grid = screen.getByRole("grid", { name: "Commit graph" });
-    grid.focus();
+    act(() => grid.focus());
     await user.keyboard("{ArrowDown}");
     await waitFor(() =>
       expect(screen.getAllByRole("row").find((r) => r.dataset.index === "0")).toHaveAttribute(
@@ -100,7 +100,7 @@ describe("graph view", () => {
       Promise.resolve({ status: "ok", data: [5, 42] }),
     );
     const user = await openRepo();
-    screen.getByRole("grid", { name: "Commit graph" }).focus();
+    act(() => screen.getByRole("grid", { name: "Commit graph" }).focus());
     await user.keyboard("/");
     const input = screen.getByRole("searchbox", { name: "Search commits" });
     expect(input).toHaveFocus();

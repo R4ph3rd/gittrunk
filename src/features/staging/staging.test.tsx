@@ -111,12 +111,12 @@ describe("WIP row", () => {
     await backend();
     const user = await openRepo();
     const row = await screen.findByTestId("wip-row");
-    row.focus();
+    act(() => row.focus());
     await user.keyboard("{Enter}");
     expect(await screen.findByRole("complementary", { name: "Working copy" })).toBeInTheDocument();
 
     const grid = screen.getByRole("grid", { name: "Commit graph" });
-    grid.focus();
+    act(() => grid.focus());
     await user.keyboard("{ArrowDown}");
     expect(await screen.findByText("Details for 0")).toBeInTheDocument();
     await user.keyboard("{ArrowUp}");
@@ -193,7 +193,7 @@ describe("file list", () => {
   it("Enter opens the diff of the focused file", async () => {
     const commands = await backend();
     const user = await openStaging();
-    screen.getByRole("listbox", { name: "Changed files" }).focus();
+    act(() => screen.getByRole("listbox", { name: "Changed files" }).focus());
     await user.keyboard("{Enter}"); // focusing the list focuses the first file
     await waitFor(() =>
       expect(commands.worktreeFileDiff).toHaveBeenCalledWith(
@@ -280,7 +280,7 @@ describe("diff viewer", () => {
     expect(useRepoStore.getState().diffMode).toBe("split");
     await waitFor(() => expect(document.querySelector("[data-line-num]")).toBeTruthy());
     expect(window.localStorage.getItem("gittrunk.diffMode")).toBe("split");
-    useRepoStore.getState().setDiffMode("unified");
+    act(() => useRepoStore.getState().setDiffMode("unified"));
   });
 
   it("stages a whole hunk with lines: null and the fetch options", async () => {
@@ -375,7 +375,7 @@ describe("diff viewer", () => {
         }),
       ),
     );
-    useRepoStore.getState().setDiffMode("unified");
+    act(() => useRepoStore.getState().setDiffMode("unified"));
   });
 
   it("discards selected lines through the dry-run confirmation", async () => {
