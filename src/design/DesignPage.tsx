@@ -3,6 +3,7 @@ import { Copy, GitBranch, GitCommit, Inbox, Plus, RefreshCw, Trash2 } from "luci
 import { useState, type ReactNode } from "react";
 import {
   AlertDialog,
+  Avatar,
   Badge,
   Button,
   CommandPalette,
@@ -58,19 +59,25 @@ const colorGroups: Record<string, string[]> = {
   Surfaces: ["bg", "bg-subtle", "surface", "surface-raised", "surface-hover"],
   Borders: ["border", "border-strong"],
   Text: ["fg", "fg-muted", "fg-subtle"],
-  Accent: ["accent", "accent-fg", "accent-muted", "focus-ring"],
+  Accent: ["accent", "accent-hover", "accent-fg", "accent-muted", "focus-ring"],
   Status: ["danger", "danger-fg", "success", "warning", "diff-add-bg", "diff-del-bg"],
   Overlay: ["overlay", "selection", "scrollbar-thumb", "scrollbar-thumb-hover"],
-  Primitives: [
-    "indigo-950",
-    "indigo-900",
-    "indigo-700",
-    "teal-900",
-    "teal-500",
-    "teal-400",
-    "amber-400",
-    "rose-500",
-    "green-500",
+  Shell: [
+    "tabbar-bg",
+    "toolbar-bg",
+    "tab-active-bg",
+    "tab-hover-bg",
+    "panel-header-bg",
+    "lane-fg",
+    "staged-accent",
+    "staged-bg",
+    "unstaged-accent",
+    "unstaged-bg",
+    "terminal-bg",
+    "terminal-fg",
+    "terminal-cursor",
+    "terminal-selection",
+    "avatar-ring",
   ],
 };
 const typeScale = ["xs", "sm", "base", "lg", "xl", "2xl"];
@@ -250,6 +257,28 @@ function Components() {
         </Row>
         <Row label="Spinner">
           <Spinner />
+        </Row>
+      </Section>
+
+      <Section title="Avatar">
+        <Row label="With initials">
+          <Avatar name="Ada Lovelace" size={20} />
+          <Avatar name="Ada Lovelace" size={32} />
+          <Avatar name="Ada Lovelace" size={40} />
+        </Row>
+        <Row label="With ring">
+          <Avatar name="Ada Lovelace" size={32} ring />
+          <Avatar name="Ada Lovelace" size={32} ring color="var(--lane-1)" />
+          <Avatar name="Ada Lovelace" size={32} ring color="var(--lane-4)" />
+        </Row>
+        <Row label="Different names">
+          <Avatar name="Ada Lovelace" size={32} />
+          <Avatar name="r4ph3rd" size={32} />
+          <Avatar name="dev@example.com" size={32} />
+          <Avatar name="" size={32} />
+        </Row>
+        <Row label="With image (error fallback)">
+          <Avatar name="Ada Lovelace" size={32} src="data:image/broken" />
         </Row>
       </Section>
 

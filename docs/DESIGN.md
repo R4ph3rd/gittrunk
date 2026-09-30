@@ -6,10 +6,10 @@ Direction: Clerk, Linear, Vercel. Dark first plus a light theme, 13px base text,
 
 ## Rules
 
-- No hex or rgb literals in components. Use token classes (`bg-surface`, `text-fg-muted`, `border-border`, `bg-accent`) or `var(--token)` arbitrary values (`h-[var(--control-md)]`, `bg-[color:var(--overlay)]`).
+- No hex or rgb literals outside `src/design/tokens.css`. Use token classes (`bg-surface`, `text-fg-muted`, `border-border`, `bg-accent`, `bg-toolbar`, `text-staged`) or `var(--token)` arbitrary values (`h-[var(--control-md)]`, `bg-[color:var(--overlay)]`).
 - Changing `--accent` restyles every accent use. Never hardcode a color class.
 - Every interactive component shows a `:focus-visible` ring from `--focus-ring`.
-- Tokens not mapped in `@theme inline` (control heights, z-index, overlay, scrollbar, danger-fg) are consumed through `var(--x)`.
+- Tokens not mapped in `@theme inline` (control heights, z-index, overlay, scrollbar, danger-fg, terminal, lane-fg) are consumed through `var(--x)`.
 
 ## Theming
 
@@ -31,31 +31,46 @@ Values shown as dark / light where they differ.
 
 ### Color
 
-| Token                                                            | Dark / Light                                                      | Use                           |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------- |
-| `--bg`                                                           | `#0b0c14` / `#fbfbfd`                                             | App background                |
-| `--bg-subtle`                                                    | `#10121c` / `#f4f5f9`                                             | Inputs, code wells            |
-| `--surface`                                                      | `#13151f` / `#ffffff`                                             | Panels                        |
-| `--surface-raised`                                               | `#181b27` / `#ffffff`                                             | Menus, dialogs, popovers      |
-| `--surface-hover`                                                | `#1e2230` / `#f1f2f7`                                             | Hover and selected rows       |
-| `--border` / `--border-strong`                                   | `#242838`, `#323750` / `#e3e5ee`, `#cfd2df`                       | Hairlines                     |
-| `--fg` / `--fg-muted` / `--fg-subtle`                            | `#e6e8f0`, `#9096ad`, `#626881` / `#151827`, `#5b6078`, `#8a8fa6` | Text                          |
-| `--accent` / `--accent-fg` / `--accent-muted`                    | teal-400 / `#0d9488`                                              | Primary actions, active state |
-| `--focus-ring`                                                   | teal at 55% / 45%                                                 | `:focus-visible` ring         |
-| `--danger` `--success` `--warning`                               | rose / green / amber (light: darker)                              | Status                        |
-| `--danger-fg`                                                    | `#ffffff`                                                         | Text on danger                |
-| `--diff-add-bg` / `--diff-del-bg`                                | green / rose at 12-14%                                            | Diff lines                    |
-| `--overlay`                                                      | near-black 60% / slate 35%                                        | Modal backdrop                |
-| `--selection`                                                    | teal at 30% / 22%                                                 | Text selection                |
-| `--scrollbar-thumb` / `-hover`                                   | `#2c3146`, `#3d4360` / `#cfd2df`, `#b3b8cb`                       | Scrollbars                    |
-| `--lane-0` .. `--lane-7`                                         | 8 graph lane colors (light: darker set)                           | Graph lane = `color % 8`      |
-| `--indigo-*` `--teal-*` `--amber-400` `--rose-500` `--green-500` | palette primitives                                                | Source colors for gradients   |
+| Token                                                            | Dark / Light                                                                                | Use                           |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ----------------------------- |
+| `--bg`                                                           | `#0c0c0d` / `#fafafa`                                                                       | App background                |
+| `--bg-subtle`                                                    | `#111113` / `#f4f4f5`                                                                       | Inputs, code wells            |
+| `--surface`                                                      | `#161618` / `#ffffff`                                                                       | Panels                        |
+| `--surface-raised`                                               | `#1c1c1f` / `#ffffff`                                                                       | Menus, dialogs, popovers      |
+| `--surface-hover`                                                | `#232326` / `#efeff1`                                                                       | Hover and selected rows       |
+| `--border` / `--border-strong`                                   | `#2a2a2e`, `#3a3a3f` / `#e4e4e7`, `#d0d0d6`                                                 | Hairlines                     |
+| `--fg` / `--fg-muted` / `--fg-subtle`                            | `#ececef`, `#a3a3ab`, `#8a8a92` / `#18181b`, `#52525b`, `#6b6b74`                           | Text                          |
+| `--accent` / `--accent-hover` / `--accent-fg` / `--accent-muted` | `#ff4f7b` (pinky-red, hover `#ff6b90`) / `#d6195a` (hover `#bf1650`), fg `#ffffff`          | Primary actions, active state |
+| `--focus-ring`                                                   | `#ff4f7b` at 60% / `#d6195a` at 45%                                                         | `:focus-visible` ring         |
+| `--danger` / `--danger-fg`                                       | `#ff6a4d` (coral) / `#c2410c`, both with fg `#ffffff`                                       | Destructive state             |
+| `--success` / `--warning`                                        | `#3ecf8e` / `#15803d`, `#f5b83d` / `#b45309`                                                | Status                        |
+| `--diff-add-bg` / `--diff-del-bg`                                | green at 12% / 12%, coral at 12% / 10%                                                      | Diff lines                    |
+| `--overlay`                                                      | near-black 60% / slate 35%                                                                  | Modal backdrop                |
+| `--selection`                                                    | `#ff4f7b` at 28% / `#d6195a` at 18%                                                         | Text selection                |
+| `--scrollbar-thumb` / `-hover`                                   | `#2e2e33`, `#45454c` / `#d0d0d6`, `#b0b0b8`                                                 | Scrollbars                    |
+| `--lane-0` .. `--lane-7`                                         | 8 harmonized graph lane colors (pinky-red, cyan, gold, purple, green, coral, teal, magenta) | Graph lane = `color % 8`      |
 
 ### Gradient
 
-| Token               | Use                                                                                 |
-| ------------------- | ----------------------------------------------------------------------------------- |
-| `--gradient-chrome` | Indigo to teal with faint warm glow. Utility `bg-chrome`. Chrome/empty states only. |
+| Token               | Use                                                                     |
+| ------------------- | ----------------------------------------------------------------------- |
+| `--gradient-chrome` | Neutral surfaces with pinky-red glow. Utility `bg-chrome`. Chrome only. |
+
+### Shell (tab strip, toolbar, panels, staged/unstaged, terminal, avatar)
+
+| Token                                                   | Dark / Light                                        | Use                                |
+| ------------------------------------------------------- | --------------------------------------------------- | ---------------------------------- |
+| `--tabbar-bg`                                           | `#09090a` / `#e9e9ec`                               | Tab strip background               |
+| `--toolbar-bg`                                          | `#19191b` / `#fafafa`                               | Toolbar and active tab background  |
+| `--tab-active-bg`                                       | `var(--toolbar-bg)` (both themes)                   | Active tab background              |
+| `--tab-hover-bg`                                        | `#141416` / `#f1f1f3`                               | Tab hover state                    |
+| `--panel-header-bg`                                     | `var(--bg-subtle)` (both themes)                    | Right panel header                 |
+| `--lane-fg`                                             | `#111113` / `#ffffff`                               | Text/initials on lane-colored fill |
+| `--avatar-ring`                                         | `var(--surface)` (both themes)                      | Avatar ring separator              |
+| `--staged-accent` / `--staged-bg`                       | `var(--success)` / success at 6%                    | Staged file indicators             |
+| `--unstaged-accent` / `--unstaged-bg`                   | `var(--warning)` / transparent                      | Unstaged file indicators           |
+| `--terminal-bg` / `--terminal-fg` / `--terminal-cursor` | `#0e0e10` / `#ffffff`, `var(--fg)`, `var(--accent)` | Terminal emulator                  |
+| `--terminal-selection`                                  | `#ff4f7b` at 30% / `#d6195a` at 20%                 | Terminal text selection            |
 
 ### Typography
 
@@ -131,6 +146,14 @@ Button sizes: `xs` (20px), `sm` (24px), `md` (28px, default).
 
 ```tsx
 <Badge variant="success">merged</Badge>
+```
+
+**Avatar**: round disc with an optional image (from `src` data: URL) or uppercase initials fallback. Props: `name` (required, display name and accessible title), `src` (optional image URL, shows initials on error), `size` (default 20px), `color` (fallback disc and ring color, default `var(--accent)`, use `laneVar(n)` for lane colors), `ring` (optional 2px border in `color` separated by `--avatar-ring`). Fallback text is on `--lane-fg` with size ~42% of the avatar `size`, semibold. Calling `initials(name)` directly: returns up to two uppercase letters (first letters of the first two words, or first two chars of the email local part, or `"?"`).
+
+```tsx
+<Avatar name="Ada Lovelace" size={32} />
+<Avatar name="r4ph3rd" size={32} ring color="var(--lane-1)" />
+<Avatar name="Ada Lovelace" size={32} src="data:image/..." />
 ```
 
 **Tooltip**: works without a provider (mounts its own when none is above). Wrap the app in `TooltipProvider` to share delay settings across tooltips. Optional shortcut hint.
