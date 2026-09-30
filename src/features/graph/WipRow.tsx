@@ -7,7 +7,19 @@ import { useWipCount } from "./useWipCount";
  * Pseudo-row above the graph for uncommitted changes. It sits outside the virtualized list, so
  * row indices, scroll offsets and the canvas are unaffected. Renders nothing when clean.
  */
-export function WipRow({ repoId, gutter }: { repoId: string; gutter: number }) {
+export function WipRow({
+  repoId,
+  gutter,
+  compact,
+  onOpen,
+}: {
+  repoId: string;
+  gutter: number;
+  /** Touch height (`--touch-target-row`). */
+  compact?: boolean;
+  /** Called after the row is selected; the mobile History screen switches to Changes. */
+  onOpen?: () => void;
+}) {
   const { staged, unstaged } = useWipCount(repoId);
   const selected = useRepoStore((s) => s.selection[repoId]?.kind === "wip");
   const selectWip = useRepoStore((s) => s.selectWip);
@@ -19,12 +31,16 @@ export function WipRow({ repoId, gutter }: { repoId: string; gutter: number }) {
       data-testid="wip-row"
       aria-pressed={selected}
       aria-label={`Working copy: ${staged} staged, ${unstaged} unstaged`}
-      onClick={() => selectWip(repoId)}
+      onClick={() => {
+        selectWip(repoId);
+        onOpen?.();
+      }}
       className={cn(
         "flex w-full shrink-0 items-center gap-3 border-b border-border pr-3 text-left text-sm",
+        compact && "min-h-[var(--touch-target-row)] text-base",
         selected ? "bg-accent-muted" : "hover:bg-surface-hover",
       )}
-      style={{ height: ROW_HEIGHT, paddingLeft: gutter }}
+      style={compact ? { paddingLeft: gutter } : { height: ROW_HEIGHT, paddingLeft: gutter }}
     >
       <span className="font-mono font-semibold text-accent">{"// WIP"}</span>
       <span className="text-fg-muted">

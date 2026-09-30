@@ -1,6 +1,13 @@
 import type { GraphRow } from "@/ipc/bindings";
 import type { Palette } from "./colors";
-import { drawRange, edgeGeometry, laneColor, laneX, NODE_RADIUS, ROW_HEIGHT } from "./layout";
+import {
+  DESKTOP_METRICS,
+  drawRange,
+  edgeGeometry,
+  laneColor,
+  laneX,
+  type GraphMetrics,
+} from "./layout";
 
 export interface DrawParams {
   ctx: CanvasRenderingContext2D;
@@ -11,22 +18,25 @@ export interface DrawParams {
   headRow: number | null;
   palette: Palette;
   getRow: (index: number) => GraphRow | undefined;
+  /** Geometry; defaults to the desktop values. */
+  metrics?: GraphMetrics;
 }
 
 /** Draws one frame: lane edges then nodes for the visible rows +/- 1. Coordinates are CSS pixels. */
 export function drawGraph(p: DrawParams): void {
   const { ctx, palette } = p;
+  const m = p.metrics ?? DESKTOP_METRICS;
   ctx.clearRect(0, 0, p.width, p.height);
-  const { first, last } = drawRange(p.scrollTop, p.height, p.rowCount);
+  const { first, last } = drawRange(p.scrollTop, p.height, p.rowCount, 1, m);
   ctx.lineWidth = 1.5;
   ctx.lineCap = "round";
 
   for (let i = first; i <= last; i++) {
     const row = p.getRow(i);
     if (!row) continue;
-    const top = i * ROW_HEIGHT - p.scrollTop;
+    const top = i * m.rowHeight - p.scrollTop;
     for (const edge of row.edges) {
-      const g = edgeGeometry(edge, top);
+      const g = edgeGeometry(edge, top, m);
       ctx.strokeStyle = laneColor(palette.lanes, edge.color);
       ctx.beginPath();
       ctx.moveTo(g.x0, g.y0);
@@ -39,12 +49,12 @@ export function drawGraph(p: DrawParams): void {
   for (let i = first; i <= last; i++) {
     const row = p.getRow(i);
     if (!row) continue;
-    const cx = laneX(row.lane);
-    const cy = i * ROW_HEIGHT - p.scrollTop + ROW_HEIGHT / 2;
+    const cx = laneX(row.lane, m);
+    const cy = i * m.rowHeight - p.scrollTop + m.rowHeight / 2;
     const color = laneColor(palette.lanes, row.color);
     const isMerge = row.parents.length > 1;
     ctx.beginPath();
-    ctx.arc(cx, cy, NODE_RADIUS, 0, Math.PI * 2);
+    ctx.arc(cx, cy, m.nodeRadius, 0, Math.PI * 2);
     if (isMerge) {
       ctx.fillStyle = palette.surface;
       ctx.fill();
@@ -57,7 +67,7 @@ export function drawGraph(p: DrawParams): void {
     }
     if (p.headRow === i) {
       ctx.beginPath();
-      ctx.arc(cx, cy, NODE_RADIUS + 3, 0, Math.PI * 2);
+      ctx.arc(cx, cy, m.nodeRadius + 3, 0, Math.PI * 2);
       ctx.strokeStyle = palette.accent;
       ctx.lineWidth = 2;
       ctx.stroke();

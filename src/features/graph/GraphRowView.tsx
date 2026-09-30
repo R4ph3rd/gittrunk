@@ -1,4 +1,7 @@
-import { memo, type HTMLAttributes, type MouseEvent, type Ref } from "react";
+import { memo, useRef, type HTMLAttributes, type MouseEvent, type Ref } from "react";
+import { EllipsisVertical } from "lucide-react";
+import { IconButton } from "@/design/components";
+import { useLongPress } from "@/design/hooks";
 import type { GraphRow, RefLabel } from "@/ipc/bindings";
 import { cn } from "@/lib/cn";
 import type { ActionTarget } from "@/features/operations/actions/types";
@@ -121,9 +124,108 @@ interface Props {
   selected: boolean;
   onSelect: (index: number) => void;
   onMenu: OpenMenu;
+  /** Two-line touch layout (compact layouts). */
+  compact?: boolean;
+  /** Row height in px; the desktop value by default. */
+  rowHeight?: number;
+  /** Compact only: long-press and the overflow button open the commit action sheet. */
+  onCompactMenu?: (row: GraphRow) => void;
 }
 
-function GraphRowViewImpl({ repoId, index, row, top, gutter, selected, onSelect, onMenu }: Props) {
+const MAX_COMPACT_BADGES = 2;
+
+function CompactRow({
+  index,
+  row,
+  top,
+  gutter,
+  selected,
+  onSelect,
+  rowHeight,
+  onCompactMenu,
+}: Props & { rowHeight: number }) {
+  const fired = useRef(false);
+  const press = useLongPress(
+    () => {
+      if (!row) return;
+      fired.current = true;
+      onCompactMenu?.(row);
+    },
+    { disabled: !row || !onCompactMenu },
+  );
+  const badges = row?.refs.slice(0, MAX_COMPACT_BADGES) ?? [];
+  const extra = row ? row.refs.length - badges.length : 0;
+  return (
+    <div
+      {...press}
+      onPointerDown={(e) => {
+        fired.current = false;
+        press.onPointerDown(e);
+      }}
+      role="row"
+      id={`graph-row-${index}`}
+      aria-rowindex={index + 1}
+      aria-selected={selected}
+      data-index={index}
+      data-compact=""
+      onClick={() => {
+        if (fired.current) {
+          fired.current = false;
+          return;
+        }
+        onSelect(index);
+      }}
+      className={cn(
+        "absolute left-0 flex w-full touch-pan-y items-center gap-1 pr-1 text-left active:bg-surface-hover",
+        selected && "bg-accent-muted",
+      )}
+      style={{ top, height: rowHeight, paddingLeft: gutter }}
+    >
+      {row && (
+        <>
+          <div role="gridcell" className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
+            <span className="truncate text-base leading-tight text-fg">{row.summary}</span>
+            <span className="flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-sm leading-tight text-fg-muted">
+              <span className="min-w-0 shrink truncate">{row.authorName}</span>
+              <span className="shrink-0" title={absoluteDate(row.authorTime)}>
+                {relativeDate(row.authorTime)}
+              </span>
+              <span className="shrink-0 font-mono text-xs text-fg-subtle">{row.shortOid}</span>
+              {badges.map((l) => (
+                <RefBadge key={l.fullName} label={l} />
+              ))}
+              {extra > 0 && <span className="shrink-0 text-xs text-fg-subtle">+{extra}</span>}
+            </span>
+          </div>
+          {onCompactMenu ? (
+            <IconButton
+              aria-label={`Actions for ${row.shortOid}`}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onCompactMenu(row);
+              }}
+            >
+              <EllipsisVertical />
+            </IconButton>
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
+function DesktopRow({
+  repoId,
+  index,
+  row,
+  top,
+  gutter,
+  selected,
+  onSelect,
+  onMenu,
+  rowHeight,
+}: Props & { rowHeight: number }) {
   const badges = row?.refs.slice(0, MAX_BADGES) ?? [];
   const extra = row ? row.refs.length - badges.length : 0;
   const commit = row
@@ -152,7 +254,7 @@ function GraphRowViewImpl({ repoId, index, row, top, gutter, selected, onSelect,
         selected ? "bg-accent-muted" : "hover:bg-surface-hover",
         dndState && dndStateClass[dndState],
       )}
-      style={{ top, height: ROW_HEIGHT, paddingLeft: gutter }}
+      style={{ top, height: rowHeight, paddingLeft: gutter }}
     >
       {row && (
         <>
@@ -179,6 +281,15 @@ function GraphRowViewImpl({ repoId, index, row, top, gutter, selected, onSelect,
         </>
       )}
     </div>
+  );
+}
+
+function GraphRowViewImpl(props: Props) {
+  const rowHeight = props.rowHeight ?? ROW_HEIGHT;
+  return props.compact ? (
+    <CompactRow {...props} rowHeight={rowHeight} />
+  ) : (
+    <DesktopRow {...props} rowHeight={rowHeight} />
   );
 }
 

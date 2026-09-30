@@ -2,14 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { GraphFilter, GraphMeta, GraphRow } from "@/ipc/bindings";
-import {
-  graphPageOptions,
-  locateOid,
-  PAGE_SIZE,
-  useGraphMeta,
-  useGraphSearch,
-  useRefs,
-} from "@/ipc/queries";
+import { graphPageOptions, locateOid, PAGE_SIZE, useGraphMeta, useRefs } from "@/ipc/queries";
 import { DEFAULT_FILTER, selectedOidOf, useRepoStore } from "@/stores/repo";
 import { openActionMenu } from "@/features/operations/actions/openMenu";
 import { useActionContext } from "@/features/operations/actions/useActionContext";
@@ -17,8 +10,15 @@ import { onThemeChange, readPalette, type Palette } from "./colors";
 import { drawGraph } from "./draw";
 import { GraphRowView, type OpenMenu } from "./GraphRowView";
 import { GraphToolbar } from "./GraphToolbar";
-import { gutterWidth, ROW_HEIGHT } from "./layout";
+import {
+  COMPACT_METRICS,
+  DESKTOP_METRICS,
+  effectiveDpr,
+  gutterWidth,
+  type GraphMetrics,
+} from "./layout";
 import { pageOf, pagesForRange } from "./pages";
+import { useGraphSearchState } from "./useGraphSearchState";
 import { useWipCount } from "./useWipCount";
 import { WipRow } from "./WipRow";
 
@@ -26,6 +26,19 @@ interface Props {
   repoId: string;
   /** Called when Enter is pressed on a row (focus the details panel). */
   onOpenDetails?: () => void;
+}
+
+/** Current window width, for sizing the compact lane gutter. */
+function useWindowWidth(): number {
+  const [width, setWidth] = useState(() =>
+    typeof window === "undefined" ? 390 : window.innerWidth,
+  );
+  useEffect(() => {
+    const onResize = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return width;
 }
 
 /** Commit graph: toolbar plus the virtualized list. Owns search and filter state. */
@@ -36,35 +49,12 @@ export function GraphView({ repoId, onOpenDetails }: Props) {
   const refs = useRefs(repoId);
   const generation = meta.dataUpdatedAt;
 
-  const [query, setQuery] = useState("");
-  const [debounced, setDebounced] = useState("");
-  const [pos, setPos] = useState<{ matches: number[]; at: number }>({ matches: [], at: -1 });
+  const { query, setQuery, matches, matchPos, step, jumpRef } = useGraphSearchState(
+    repoId,
+    generation,
+  );
   const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const jumpRef = useRef<(index: number) => void>(() => {});
-
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(query), 150);
-    return () => clearTimeout(t);
-  }, [query]);
-  const search = useGraphSearch(repoId, generation, debounced);
-  const matches = useMemo(
-    () => (debounced.trim() && search.data ? search.data : []),
-    [debounced, search.data],
-  );
-  const matchPos = pos.matches === matches ? pos.at : -1;
-
-  const step = (dir: 1 | -1) => {
-    if (matches.length === 0) return;
-    const next =
-      matchPos < 0
-        ? dir === 1
-          ? 0
-          : matches.length - 1
-        : (matchPos + dir + matches.length) % matches.length;
-    setPos({ matches, at: next });
-    jumpRef.current(matches[next] ?? 0);
-  };
 
   const onKeyDown = (e: KeyboardEvent) => {
     const target = e.target as HTMLElement;
@@ -116,7 +106,7 @@ export function GraphView({ repoId, onOpenDetails }: Props) {
   );
 }
 
-interface ListProps {
+export interface GraphListProps {
   repoId: string;
   filter: GraphFilter;
   meta: GraphMeta;
@@ -124,9 +114,13 @@ interface ListProps {
   listRef: React.RefObject<HTMLDivElement | null>;
   jumpRef: React.RefObject<(index: number) => void>;
   onOpenDetails?: () => void;
+  /** Two-line touch rows and compact metrics. */
+  variant?: "desktop" | "compact";
+  /** Compact: a row was tapped. */
+  onOpenCommit?: (oid: string) => void;
 }
 
-function GraphList({
+export function GraphList({
   repoId,
   filter,
   meta,
@@ -134,7 +128,12 @@ function GraphList({
   listRef,
   jumpRef,
   onOpenDetails,
-}: ListProps) {
+  variant = "desktop",
+  onOpenCommit,
+}: GraphListProps) {
+  const compact = variant === "compact";
+  const metrics: GraphMetrics = compact ? COMPACT_METRICS : DESKTOP_METRICS;
+  const listWidth = useWindowWidth();
   const client = useQueryClient();
   const selection = useRepoStore((s) => s.selection[repoId]);
   const selectedOid = selectedOidOf(selection);
@@ -147,7 +146,7 @@ function GraphList({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const paletteRef = useRef<Palette | null>(null);
   const frameRef = useRef(0);
-  const gutter = gutterWidth(meta.laneCount);
+  const gutter = gutterWidth(meta.laneCount, metrics, compact ? listWidth : undefined);
   const actionContext = useActionContext(repoId);
   const openMenu: OpenMenu = useCallback(
     (e, target) => {
@@ -161,8 +160,8 @@ function GraphList({
   const virtualizer = useVirtualizer({
     count: meta.rowCount,
     getScrollElement: () => listRef.current,
-    estimateSize: () => ROW_HEIGHT,
-    overscan: 6,
+    estimateSize: () => metrics.rowHeight,
+    overscan: metrics.overscan,
     initialRect: { width: 800, height: 600 },
   });
   const items = virtualizer.getVirtualItems();
@@ -197,7 +196,7 @@ function GraphList({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const height = scroller.clientHeight || scroller.offsetHeight;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = effectiveDpr(window.devicePixelRatio, metrics);
     if (canvas.width !== Math.round(gutter * dpr) || canvas.height !== Math.round(height * dpr)) {
       canvas.width = Math.round(gutter * dpr);
       canvas.height = Math.round(height * dpr);
@@ -215,8 +214,9 @@ function GraphList({
       headRow: meta.headRow,
       palette: paletteRef.current,
       getRow: (i) => getRowRef.current(i),
+      metrics,
     });
-  }, [gutter, listRef, meta.rowCount, meta.headRow]);
+  }, [gutter, listRef, meta.rowCount, meta.headRow, metrics]);
 
   const requestDraw = useCallback(() => {
     if (!frameRef.current) frameRef.current = requestAnimationFrame(draw);
@@ -283,10 +283,33 @@ function GraphList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedOid, client, repoId, generation]);
 
+  const openCompactMenu = useCallback(
+    (row: GraphRow) =>
+      openActionMenu(
+        0,
+        0,
+        { kind: "commit", oid: row.oid, shortOid: row.shortOid },
+        actionContext(),
+      ),
+    [actionContext],
+  );
+
+  const onRowSelect = (i: number) => {
+    if (!compact) {
+      void selectIndex(i, false);
+      return;
+    }
+    const row = getRow(i);
+    if (!row) return;
+    setSelectedIndex(i);
+    selectCommit(repoId, row.oid);
+    onOpenCommit?.(row.oid);
+  };
+
   const onKeyDown = (e: KeyboardEvent) => {
     const pageRows = Math.max(
       1,
-      Math.floor((listRef.current?.clientHeight || 560) / ROW_HEIGHT) - 1,
+      Math.floor((listRef.current?.clientHeight || 560) / metrics.rowHeight) - 1,
     );
     const cur = selectedIndex ?? -1;
     const selectedRow = cur >= 0 ? getRow(cur) : undefined;
@@ -333,6 +356,7 @@ function GraphList({
         aria-activedescendant={selectedIndex !== null ? `graph-row-${selectedIndex}` : undefined}
         tabIndex={0}
         onKeyDown={onKeyDown}
+        data-scroll-root={compact ? "" : undefined}
         className="absolute inset-0 overflow-x-hidden overflow-y-auto outline-none focus-visible:outline-none"
       >
         <div style={{ height: virtualizer.getTotalSize(), position: "relative", width: "100%" }}>
@@ -346,7 +370,10 @@ function GraphList({
               top={item.start}
               gutter={gutter}
               selected={item.index === selectedIndex}
-              onSelect={(i) => void selectIndex(i, false)}
+              onSelect={onRowSelect}
+              compact={compact}
+              rowHeight={metrics.rowHeight}
+              onCompactMenu={compact ? openCompactMenu : undefined}
             />
           ))}
         </div>

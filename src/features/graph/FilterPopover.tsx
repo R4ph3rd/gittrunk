@@ -11,10 +11,14 @@ interface Props {
   onApply: (filter: GraphFilter) => void;
 }
 
-const field = "h-7 w-full rounded-sm border border-border bg-bg-subtle px-2 text-sm text-fg";
+const field =
+  "h-7 w-full rounded-sm border border-border bg-bg-subtle px-2 text-sm text-fg coarse:min-h-[var(--touch-target)] coarse:text-base";
 
-export function FilterPopover({ filter, refs, onApply }: Props) {
-  const [open, setOpen] = useState(false);
+/**
+ * The filter form: fields plus Reset / Apply. Renders a fragment so a popover or a sheet can supply
+ * the surrounding flex column. Mount it fresh per opening: the draft starts from `filter`.
+ */
+export function FilterFields({ filter, refs, onApply }: Props) {
   const [draft, setDraft] = useState(filter);
 
   const branchNames = [...(refs?.local ?? []), ...(refs?.remote ?? [])].map((b) => b.fullName);
@@ -27,13 +31,112 @@ export function FilterPopover({ filter, refs, onApply }: Props) {
   };
 
   return (
-    <Popover.Root
-      open={open}
-      onOpenChange={(o) => {
-        if (o) setDraft(filter);
-        setOpen(o);
-      }}
-    >
+    <>
+      <fieldset className="flex flex-col gap-1">
+        <legend className="mb-1 text-xs text-fg-muted">Refs</legend>
+        <label className="flex items-center gap-2">
+          <input
+            type="radio"
+            name="refs-mode"
+            checked={draft.refs === null}
+            onChange={() => setDraft({ ...draft, refs: null })}
+          />
+          All refs
+        </label>
+        <label className="flex items-center gap-2">
+          <input
+            type="radio"
+            name="refs-mode"
+            checked={draft.refs !== null}
+            onChange={() => setDraft({ ...draft, refs: draft.refs ?? [] })}
+          />
+          Selected refs
+        </label>
+        {draft.refs !== null && (
+          <div className="ml-5 max-h-32 overflow-auto">
+            {branchNames.map((name) => (
+              <label key={name} className="flex items-center gap-2 font-mono text-xs">
+                <input
+                  type="checkbox"
+                  checked={selected.has(name)}
+                  onChange={() => toggleRef(name)}
+                />
+                {name.replace(/^refs\/(heads|remotes)\//, "")}
+              </label>
+            ))}
+          </div>
+        )}
+      </fieldset>
+      <label className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={draft.firstParent}
+          onChange={(e) => setDraft({ ...draft, firstParent: e.target.checked })}
+        />
+        First parent only
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-xs text-fg-muted">Order</span>
+        <select
+          className={field}
+          value={draft.order}
+          onChange={(e) => setDraft({ ...draft, order: e.target.value as CommitOrder })}
+        >
+          <option value="topo">Topological</option>
+          <option value="date">Date</option>
+        </select>
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-xs text-fg-muted">Author</span>
+        <input
+          className={field}
+          value={draft.author ?? ""}
+          onChange={(e) => setDraft({ ...draft, author: e.target.value || null })}
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-xs text-fg-muted">Path</span>
+        <input
+          className={cn(field, "font-mono")}
+          value={draft.path ?? ""}
+          onChange={(e) => setDraft({ ...draft, path: e.target.value || null })}
+        />
+      </label>
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          className="h-7 rounded-sm px-2 text-fg-muted hover:bg-surface-hover"
+          onClick={() =>
+            setDraft({
+              ...draft,
+              refs: null,
+              firstParent: false,
+              order: "topo",
+              author: null,
+              path: null,
+            })
+          }
+        >
+          Reset
+        </button>
+        <button
+          type="button"
+          className="h-7 rounded-sm bg-accent px-3 font-medium text-accent-fg"
+          onClick={() => {
+            onApply(draft);
+          }}
+        >
+          Apply
+        </button>
+      </div>
+    </>
+  );
+}
+
+export function FilterPopover({ filter, refs, onApply }: Props) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
         <button
           type="button"
@@ -53,104 +156,14 @@ export function FilterPopover({ filter, refs, onApply }: Props) {
           sideOffset={6}
           className="z-50 flex w-72 flex-col gap-3 rounded-md border border-border-strong bg-surface-raised p-3 text-sm shadow-md"
         >
-          <fieldset className="flex flex-col gap-1">
-            <legend className="mb-1 text-xs text-fg-muted">Refs</legend>
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="refs-mode"
-                checked={draft.refs === null}
-                onChange={() => setDraft({ ...draft, refs: null })}
-              />
-              All refs
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="refs-mode"
-                checked={draft.refs !== null}
-                onChange={() => setDraft({ ...draft, refs: draft.refs ?? [] })}
-              />
-              Selected refs
-            </label>
-            {draft.refs !== null && (
-              <div className="ml-5 max-h-32 overflow-auto">
-                {branchNames.map((name) => (
-                  <label key={name} className="flex items-center gap-2 font-mono text-xs">
-                    <input
-                      type="checkbox"
-                      checked={selected.has(name)}
-                      onChange={() => toggleRef(name)}
-                    />
-                    {name.replace(/^refs\/(heads|remotes)\//, "")}
-                  </label>
-                ))}
-              </div>
-            )}
-          </fieldset>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={draft.firstParent}
-              onChange={(e) => setDraft({ ...draft, firstParent: e.target.checked })}
-            />
-            First parent only
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-fg-muted">Order</span>
-            <select
-              className={field}
-              value={draft.order}
-              onChange={(e) => setDraft({ ...draft, order: e.target.value as CommitOrder })}
-            >
-              <option value="topo">Topological</option>
-              <option value="date">Date</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-fg-muted">Author</span>
-            <input
-              className={field}
-              value={draft.author ?? ""}
-              onChange={(e) => setDraft({ ...draft, author: e.target.value || null })}
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-fg-muted">Path</span>
-            <input
-              className={cn(field, "font-mono")}
-              value={draft.path ?? ""}
-              onChange={(e) => setDraft({ ...draft, path: e.target.value || null })}
-            />
-          </label>
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              className="h-7 rounded-sm px-2 text-fg-muted hover:bg-surface-hover"
-              onClick={() =>
-                setDraft({
-                  ...draft,
-                  refs: null,
-                  firstParent: false,
-                  order: "topo",
-                  author: null,
-                  path: null,
-                })
-              }
-            >
-              Reset
-            </button>
-            <button
-              type="button"
-              className="h-7 rounded-sm bg-accent px-3 font-medium text-accent-fg"
-              onClick={() => {
-                onApply(draft);
-                setOpen(false);
-              }}
-            >
-              Apply
-            </button>
-          </div>
+          <FilterFields
+            filter={filter}
+            refs={refs}
+            onApply={(f) => {
+              onApply(f);
+              setOpen(false);
+            }}
+          />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
