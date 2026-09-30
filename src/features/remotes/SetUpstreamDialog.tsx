@@ -2,12 +2,12 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
   Label,
   toast,
 } from "@/design/components";
@@ -45,10 +45,12 @@ function Form({
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle>Set upstream for {branch.name}</DialogTitle>
-        <DialogDescription>Choose the remote branch this branch tracks.</DialogDescription>
-      </DialogHeader>
+      <ResponsiveDialogHeader>
+        <ResponsiveDialogTitle>Set upstream for {branch.name}</ResponsiveDialogTitle>
+        <ResponsiveDialogDescription>
+          Choose the remote branch this branch tracks.
+        </ResponsiveDialogDescription>
+      </ResponsiveDialogHeader>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -79,14 +81,14 @@ function Form({
             {error}
           </p>
         )}
-        <DialogFooter>
+        <ResponsiveDialogFooter>
           <Button type="button" onClick={onClose}>
             Cancel
           </Button>
           <Button type="submit" variant="primary" loading={save.isPending}>
             Set upstream
           </Button>
-        </DialogFooter>
+        </ResponsiveDialogFooter>
       </form>
     </>
   );
@@ -104,12 +106,12 @@ export function SetUpstreamDialog({
   onClose: () => void;
 }) {
   return (
-    <Dialog open={branch !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+    <ResponsiveDialog open={branch !== null} onOpenChange={(open) => !open && onClose()}>
+      <ResponsiveDialogContent>
         {branch && (
           <Form repoId={repoId} branch={branch} remoteBranches={remoteBranches} onClose={onClose} />
         )}
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

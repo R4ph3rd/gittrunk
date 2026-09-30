@@ -1,17 +1,18 @@
 import { useState } from "react";
 import {
   Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
   Input,
   Label,
   toast,
   Checkbox,
 } from "@/design/components";
+import { usePlatform } from "@/app/platform";
 import { commands, type CredentialRequested } from "@/ipc/bindings";
 import { unwrap } from "@/ipc/client";
 import { useCredentialQueue } from "./credentials";
@@ -26,7 +27,16 @@ function CredentialForm({ request }: { request: CredentialRequested }) {
   const isUsername = request.kind === "username";
   const [value, setValue] = useState(isUsername ? (request.username ?? "") : "");
   const [remember, setRemember] = useState(false);
-  const label = isUsername ? "Username" : request.kind === "password" ? "Password" : "Passphrase";
+  const { supportsSsh } = usePlatform();
+  // Without SSH the only secret is an HTTPS personal access token.
+  const tokenOnly = !supportsSsh && request.kind === "password";
+  const label = isUsername
+    ? "Username"
+    : tokenOnly
+      ? "Personal access token"
+      : request.kind === "password"
+        ? "Password"
+        : "Passphrase";
 
   const respond = (secret: string | null) => {
     // Remove first so a second click or a close event cannot answer twice.
@@ -41,10 +51,12 @@ function CredentialForm({ request }: { request: CredentialRequested }) {
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle>{TITLES[request.kind]}</DialogTitle>
-        <DialogDescription className="break-all font-mono text-sm">{request.url}</DialogDescription>
-      </DialogHeader>
+      <ResponsiveDialogHeader>
+        <ResponsiveDialogTitle>{TITLES[request.kind]}</ResponsiveDialogTitle>
+        <ResponsiveDialogDescription className="break-all font-mono text-sm">
+          {request.url}
+        </ResponsiveDialogDescription>
+      </ResponsiveDialogHeader>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -73,14 +85,14 @@ function CredentialForm({ request }: { request: CredentialRequested }) {
           checked={remember}
           onCheckedChange={setRemember}
         />
-        <DialogFooter>
+        <ResponsiveDialogFooter>
           <Button type="button" onClick={() => respond(null)}>
             Cancel
           </Button>
           <Button type="submit" variant="primary">
             {isUsername ? "Continue" : "Sign in"}
           </Button>
-        </DialogFooter>
+        </ResponsiveDialogFooter>
       </form>
     </>
   );
@@ -91,7 +103,7 @@ export function CredentialPrompt() {
   const request = useCredentialQueue((s) => s.queue[0] ?? null);
   const pending = useCredentialQueue((s) => s.queue.length);
   return (
-    <Dialog
+    <ResponsiveDialog
       open={request !== null}
       onOpenChange={(open) => {
         if (!open && request) {
@@ -100,7 +112,7 @@ export function CredentialPrompt() {
         }
       }}
     >
-      <DialogContent hideClose>
+      <ResponsiveDialogContent hideClose>
         {request && (
           <>
             <CredentialForm key={request.requestId} request={request} />
@@ -109,7 +121,7 @@ export function CredentialPrompt() {
             )}
           </>
         )}
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

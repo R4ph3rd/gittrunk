@@ -1,12 +1,12 @@
 import { useState } from "react";
 import {
   Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
   Input,
   Label,
   SegmentedControl,
@@ -45,16 +45,16 @@ function Form({
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle>Push {branch}</DialogTitle>
-        <DialogDescription>
+      <ResponsiveDialogHeader>
+        <ResponsiveDialogTitle>Push {branch}</ResponsiveDialogTitle>
+        <ResponsiveDialogDescription>
           This branch has no upstream. Choose where to push it; it will track the new branch.
-        </DialogDescription>
-      </DialogHeader>
+        </ResponsiveDialogDescription>
+      </ResponsiveDialogHeader>
       {remotes.isSuccess && list.length === 0 ? (
         <div className="flex flex-col gap-3">
           <p className="text-base text-fg-muted">This repository has no remotes yet.</p>
-          <DialogFooter>
+          <ResponsiveDialogFooter>
             <Button onClick={onClose}>Cancel</Button>
             <Button
               variant="primary"
@@ -65,7 +65,7 @@ function Form({
             >
               Add remote
             </Button>
-          </DialogFooter>
+          </ResponsiveDialogFooter>
         </div>
       ) : (
         <form
@@ -93,14 +93,14 @@ function Form({
               onChange={(e) => setRemoteBranch(e.target.value)}
             />
           </div>
-          <DialogFooter>
+          <ResponsiveDialogFooter>
             <Button type="button" onClick={onClose}>
               Cancel
             </Button>
             <Button type="submit" variant="primary" disabled={!chosen || !remoteBranch.trim()}>
               Push and set upstream
             </Button>
-          </DialogFooter>
+          </ResponsiveDialogFooter>
         </form>
       )}
     </>
@@ -114,8 +114,11 @@ export function PushDialog() {
   const branch = state?.branch ?? null;
   const close = () => setPushDialog(null);
   return (
-    <Dialog open={state !== null && branch !== null} onOpenChange={(open) => !open && close()}>
-      <DialogContent>
+    <ResponsiveDialog
+      open={state !== null && branch !== null}
+      onOpenChange={(open) => !open && close()}
+    >
+      <ResponsiveDialogContent>
         {state && branch && (
           <Form
             key={`${state.repoId}/${branch}`}
@@ -124,7 +127,7 @@ export function PushDialog() {
             onClose={close}
           />
         )}
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

@@ -7,10 +7,23 @@ export function validateRemoteName(name: string): string | null {
   return null;
 }
 
-export function validateRemoteUrl(url: string): string | null {
+export const HTTPS_ONLY_MESSAGE = "Use an HTTPS URL and a personal access token";
+
+/** With `httpsOnly` (no SSH on this platform) anything but an `https://` URL is rejected. */
+export function validateRemoteUrl(url: string, opts: { httpsOnly?: boolean } = {}): string | null {
   if (url.trim().length === 0) return "Enter a URL";
   if (url.trim().startsWith("-")) return "The URL cannot start with a dash";
+  if (opts.httpsOnly && !/^https:\/\/[^/\s]+/i.test(url.trim())) return HTTPS_ONLY_MESSAGE;
   return null;
+}
+
+/** `https://user@host:443/x` becomes `host:443`; null when it is not a URL. */
+export function hostOfUrl(url: string): string | null {
+  try {
+    return new URL(url.trim()).host || null;
+  } catch {
+    return null;
+  }
 }
 
 /** `https://host/acme/demo.git` or `git@host:acme/demo.git` becomes `demo`. */

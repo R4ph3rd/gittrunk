@@ -2,12 +2,12 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
   Input,
   Label,
   toast,
@@ -84,12 +84,12 @@ function Form({
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>
+      <ResponsiveDialogHeader>
+        <ResponsiveDialogTitle>{title}</ResponsiveDialogTitle>
+        <ResponsiveDialogDescription>
           {mode.kind === "url" ? `URL of the remote ${mode.name}.` : "Name and URL of the remote."}
-        </DialogDescription>
-      </DialogHeader>
+        </ResponsiveDialogDescription>
+      </ResponsiveDialogHeader>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -147,14 +147,14 @@ function Form({
             {serverError}
           </p>
         )}
-        <DialogFooter>
+        <ResponsiveDialogFooter>
           <Button type="button" onClick={onDone}>
             Cancel
           </Button>
           <Button type="submit" variant="primary" loading={save.isPending}>
             {mode.kind === "add" ? "Add remote" : "Save"}
           </Button>
-        </DialogFooter>
+        </ResponsiveDialogFooter>
       </form>
     </>
   );
@@ -171,8 +171,10 @@ export function RemoteFormDialog({
   onClose: () => void;
 }) {
   return (
-    <Dialog open={mode !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>{mode && <Form repoId={repoId} mode={mode} onDone={onClose} />}</DialogContent>
-    </Dialog>
+    <ResponsiveDialog open={mode !== null} onOpenChange={(open) => !open && onClose()}>
+      <ResponsiveDialogContent>
+        {mode && <Form repoId={repoId} mode={mode} onDone={onClose} />}
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }
