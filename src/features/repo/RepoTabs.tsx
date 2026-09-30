@@ -1,4 +1,5 @@
 import { FolderOpen, GitBranch, X } from "lucide-react";
+import { usePlatform } from "@/app/platform";
 import { cn } from "@/lib/cn";
 import { useRepoStore } from "@/stores/repo";
 import { useCloseRepo, useOpenRepo } from "./useOpenRepo";
@@ -11,6 +12,7 @@ export function RepoTabs() {
   const error = useRepoStore((s) => s.openError);
   const { pickAndOpen } = useOpenRepo();
   const close = useCloseRepo();
+  const { canPickFolder } = usePlatform();
 
   return (
     <header className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
@@ -52,14 +54,16 @@ export function RepoTabs() {
           </div>
         ))}
       </div>
-      <button
-        type="button"
-        onClick={() => void pickAndOpen()}
-        className="ml-1 flex h-7 items-center gap-1.5 rounded-sm border border-border px-2 text-sm text-fg-muted hover:bg-surface-hover"
-      >
-        <FolderOpen className="size-3.5" aria-hidden />
-        Open
-      </button>
+      {canPickFolder ? (
+        <button
+          type="button"
+          onClick={() => void pickAndOpen()}
+          className="ml-1 flex h-7 items-center gap-1.5 rounded-sm border border-border px-2 text-sm text-fg-muted hover:bg-surface-hover"
+        >
+          <FolderOpen className="size-3.5" aria-hidden />
+          Open
+        </button>
+      ) : null}
       {error && repos.length > 0 && (
         <span role="alert" className="ml-2 truncate text-sm text-danger">
           {error}

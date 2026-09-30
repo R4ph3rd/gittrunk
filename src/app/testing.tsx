@@ -13,6 +13,7 @@ import type {
   StatusSnapshot,
 } from "@/ipc/bindings";
 import { useRepoStore } from "@/stores/repo";
+import { setViewport } from "@/test/viewport";
 import { App } from "./App";
 import { DESKTOP_PLATFORM } from "./platform";
 
@@ -342,6 +343,12 @@ export function resetStore() {
   useOpsStore.getState().reset();
   useRemotesUi.getState().reset();
   useSettingsStore.setState({ settings: null });
+}
+
+/** Renders the app at a viewport size (compact below 768 px wide), see `setViewport`. */
+export function renderAppAt(width: number, height: number) {
+  setViewport(width, height);
+  return renderApp();
 }
 
 export function renderApp() {

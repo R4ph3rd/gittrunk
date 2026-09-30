@@ -21,13 +21,15 @@ import { useAppInfo } from "@/ipc/queries";
 import type { CommitOrder, PullStrategy, ThemePreference } from "@/ipc/bindings";
 import { useRepoStore } from "@/stores/repo";
 import { updateSettings, useSettings, useSettingsStore, type SectionId } from "@/stores/settings";
+import { usePlatform } from "@/app/platform";
+import { GitIdentityForm } from "./GitIdentityForm";
 import { KeyboardSection } from "./KeyboardSection";
 
 export const AI_SETTINGS_COMMAND = "ai.settings";
 const DOCS_URL = "https://github.com/R4ph3rd/gittrunk#readme";
 const RUN_DELAY_MS = 60;
 
-function Row({
+export function Row({
   title,
   description,
   htmlFor,
@@ -51,7 +53,7 @@ function Row({
   );
 }
 
-function General() {
+export function General() {
   const s = useSettings();
   return (
     <>
@@ -82,8 +84,9 @@ function General() {
   );
 }
 
-function Git() {
+export function Git() {
   const s = useSettings();
+  const { hasGitCli, supportsRebase } = usePlatform();
   const [path, setPath] = useState(s.gitPath ?? "");
   const [error, setError] = useState<string | null>(null);
   const [context, setContext] = useState(String(s.diffContextLines));
@@ -126,39 +129,47 @@ function Git() {
 
   return (
     <>
-      <div className="border-b border-border py-3">
-        <Label htmlFor="settings-git-path" className="text-base text-fg">
-          Git executable path
-        </Label>
-        <p className="mb-2 text-sm text-fg-muted">Leave empty to use git from PATH.</p>
-        <div className="flex gap-2">
-          <Input
-            id="settings-git-path"
-            value={path}
-            placeholder="git"
-            spellCheck={false}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? "settings-git-path-error" : undefined}
-            onChange={(e) => {
-              setPath(e.target.value);
-              setError(null);
-            }}
-            onBlur={() => void commitPath(path)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void commitPath(path);
-            }}
-          />
-          <Button onClick={() => void browse()}>Browse…</Button>
+      {hasGitCli ? (
+        <div className="border-b border-border py-3">
+          <Label htmlFor="settings-git-path" className="text-base text-fg">
+            Git executable path
+          </Label>
+          <p className="mb-2 text-sm text-fg-muted">Leave empty to use git from PATH.</p>
+          <div className="flex gap-2">
+            <Input
+              id="settings-git-path"
+              value={path}
+              placeholder="git"
+              spellCheck={false}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? "settings-git-path-error" : undefined}
+              onChange={(e) => {
+                setPath(e.target.value);
+                setError(null);
+              }}
+              onBlur={() => void commitPath(path)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void commitPath(path);
+              }}
+            />
+            <Button onClick={() => void browse()}>Browse…</Button>
+          </div>
+          {error ? (
+            <p id="settings-git-path-error" role="alert" className="mt-1 text-sm text-danger">
+              {error}
+            </p>
+          ) : null}
         </div>
-        {error ? (
-          <p id="settings-git-path-error" role="alert" className="mt-1 text-sm text-danger">
-            {error}
-          </p>
-        ) : null}
-      </div>
+      ) : (
+        <GitIdentityForm />
+      )}
       <Row
         title="Default pull strategy"
-        description="Used by Pull when a branch has no preference."
+        description={
+          supportsRebase
+            ? "Used by Pull when a branch has no preference."
+            : "Used by Pull when a branch has no preference. Rebase is not available on this device."
+        }
       >
         <SegmentedControl<PullStrategy>
           aria-label="Default pull strategy"
@@ -166,7 +177,7 @@ function Git() {
           onValueChange={(pullStrategy) => void updateSettings({ pullStrategy })}
           options={[
             { value: "merge", label: "Merge" },
-            { value: "rebase", label: "Rebase" },
+            { value: "rebase", label: "Rebase", disabled: !supportsRebase },
             { value: "ffOnly", label: "Fast-forward only" },
           ]}
         />
@@ -225,7 +236,7 @@ function useRunCommand() {
   };
 }
 
-function Ai() {
+export function Ai() {
   const run = useRunCommand();
   const close = useSettingsStore((s) => s.closeDialog);
   return (

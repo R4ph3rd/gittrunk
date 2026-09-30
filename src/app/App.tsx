@@ -11,9 +11,19 @@ import { Welcome } from "@/features/repo/Welcome";
 import { useRepoStore } from "@/stores/repo";
 import { useMemo } from "react";
 import { CommandHost } from "./commands";
+import { MobileShell } from "./layout/MobileShell";
+import { useLayout } from "./layout/useLayout";
+import { usePlatformEffects } from "./layout/usePlatformEffects";
 
-/** App shell: tabs, the active repository (or welcome screen) and the status bar. */
+/** Compact layouts get the single-pane mobile shell; regular layouts the desktop tree. */
 export function App() {
+  const { isCompact } = useLayout();
+  usePlatformEffects();
+  return isCompact ? <MobileShell /> : <DesktopShell />;
+}
+
+/** Desktop shell: tabs, the active repository (or welcome screen) and the status bar. */
+function DesktopShell() {
   const activeId = useRepoStore((s) => s.activeId);
   const aiEnabled = useAiEnabled();
   // Offered to the conflict resolver only while AI is enabled.
