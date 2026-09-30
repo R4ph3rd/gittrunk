@@ -53,7 +53,9 @@ jobs:
 
       # Tauri downloads NSIS and WiX on demand; WebView2 is preinstalled on
       # GitHub Windows runners and bootstrapped by the installer on user machines.
+      # bash keeps `nsis,msi` a single argument; pwsh would turn it into an array.
       - name: Build app and installers
+        shell: bash
         run: pnpm tauri build --bundles nsis,msi
 
       - name: Collect artifacts
