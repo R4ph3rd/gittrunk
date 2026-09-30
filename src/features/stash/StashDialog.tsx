@@ -1,12 +1,12 @@
 import { useState } from "react";
 import {
   Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
   Input,
   Label,
   Switch,
@@ -77,14 +77,14 @@ function StashForm({ repoId, onDone }: { repoId: string; onDone: () => void }) {
           {error}
         </p>
       )}
-      <DialogFooter>
+      <ResponsiveDialogFooter>
         <Button variant="secondary" onClick={onDone}>
           Cancel
         </Button>
         <Button type="submit" variant="primary" loading={save.isPending}>
           Stash changes
         </Button>
-      </DialogFooter>
+      </ResponsiveDialogFooter>
     </form>
   );
 }
@@ -94,16 +94,16 @@ export function StashDialog({ repoId }: { repoId: string }) {
   const open = useRepoStore((s) => s.stashDialog[repoId] ?? false);
   const setOpen = useRepoStore((s) => s.setStashDialog);
   return (
-    <Dialog open={open} onOpenChange={(o) => setOpen(repoId, o)}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Stash changes</DialogTitle>
-          <DialogDescription>
+    <ResponsiveDialog open={open} onOpenChange={(o) => setOpen(repoId, o)}>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Stash changes</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
             Save your uncommitted changes and clean the working tree.
-          </DialogDescription>
-        </DialogHeader>
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
         <StashForm repoId={repoId} onDone={() => setOpen(repoId, false)} />
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

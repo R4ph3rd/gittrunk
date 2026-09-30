@@ -2,11 +2,13 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight, GitMerge } from "lucide-react";
 import { AlertDialog, Button } from "@/design/components";
 import { useRepoInfo, useStatus } from "@/ipc/queries";
+import { useLayout } from "@/app/layout/useLayout";
 import { useOperationsStore } from "@/stores/operations";
+import { CompactBanner } from "./CompactBanner";
 import { canSkip, isSequencerState, stateTitle, useSequencerActions } from "./actions";
 
 /** Shown at the top of a repo view while a merge, rebase, cherry-pick or revert is in progress. */
-export function OperationBanner({ repoId }: { repoId: string }) {
+function DesktopBanner({ repoId }: { repoId: string }) {
   const info = useRepoInfo(repoId);
   const status = useStatus(repoId);
   const { run, pending } = useSequencerActions(repoId);
@@ -102,4 +104,10 @@ export function OperationBanner({ repoId }: { repoId: string }) {
       />
     </div>
   );
+}
+
+/** Banner under the AppBar: the desktop bar, or a sticky one-line bar with a sheet on compact. */
+export function OperationBanner({ repoId }: { repoId: string }) {
+  const { isCompact } = useLayout();
+  return isCompact ? <CompactBanner repoId={repoId} /> : <DesktopBanner repoId={repoId} />;
 }
