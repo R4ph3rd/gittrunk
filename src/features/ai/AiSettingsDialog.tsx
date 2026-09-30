@@ -3,12 +3,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Badge,
   Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
   Input,
   Label,
   SegmentedControl,
@@ -20,6 +20,7 @@ import { unwrap } from "@/ipc/client";
 import { queryKeys } from "@/ipc/queries";
 import { useAiStore } from "@/stores/ai";
 import { DEFAULT_MODELS, PROVIDER_NAMES, errorMessage, loadAiSettings } from "./api";
+import { SheetBody } from "./SheetBody";
 
 function Field({
   label,
@@ -106,13 +107,13 @@ function Form({ initial, onClose }: { initial: AiSettings; onClose: () => void }
   const compat = draft.provider === "openAiCompatible";
 
   return (
-    <>
-      <DialogHeader>
-        <DialogTitle>AI settings</DialogTitle>
-        <DialogDescription>
+    <SheetBody>
+      <ResponsiveDialogHeader>
+        <ResponsiveDialogTitle>AI settings</ResponsiveDialogTitle>
+        <ResponsiveDialogDescription>
           Repository content is sent to {providerName} only when you use an AI action.
-        </DialogDescription>
-      </DialogHeader>
+        </ResponsiveDialogDescription>
+      </ResponsiveDialogHeader>
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between gap-4">
           <div className="flex flex-col gap-0.5">
@@ -215,13 +216,13 @@ function Form({ initial, onClose }: { initial: AiSettings; onClose: () => void }
           />
         </Field>
       </div>
-      <DialogFooter>
+      <ResponsiveDialogFooter>
         <Button onClick={onClose}>Cancel</Button>
         <Button variant="primary" loading={saving} onClick={() => void save()}>
           Save
         </Button>
-      </DialogFooter>
-    </>
+      </ResponsiveDialogFooter>
+    </SheetBody>
   );
 }
 
@@ -242,17 +243,17 @@ function Loader({ onClose }: { onClose: () => void }) {
 
   if (settings) return <Form initial={settings} onClose={onClose} />;
   return (
-    <>
-      <DialogHeader>
-        <DialogTitle>AI settings</DialogTitle>
-        <DialogDescription>{error ?? "Loading..."}</DialogDescription>
-      </DialogHeader>
+    <SheetBody>
+      <ResponsiveDialogHeader>
+        <ResponsiveDialogTitle>AI settings</ResponsiveDialogTitle>
+        <ResponsiveDialogDescription>{error ?? "Loading..."}</ResponsiveDialogDescription>
+      </ResponsiveDialogHeader>
       {error ? (
-        <DialogFooter>
+        <ResponsiveDialogFooter>
           <Button onClick={onClose}>Close</Button>
-        </DialogFooter>
+        </ResponsiveDialogFooter>
       ) : null}
-    </>
+    </SheetBody>
   );
 }
 
@@ -261,10 +262,10 @@ export function AiSettingsDialog() {
   const open = useAiStore((s) => s.settingsOpen);
   const close = useAiStore((s) => s.closeSettings);
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && close()}>
-      <DialogContent className="max-w-md">
+    <ResponsiveDialog open={open} onOpenChange={(o) => !o && close()}>
+      <ResponsiveDialogContent className="max-w-md">
         <Loader onClose={close} />
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

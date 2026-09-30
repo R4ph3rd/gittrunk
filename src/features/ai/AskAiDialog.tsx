@@ -3,12 +3,12 @@ import { useState } from "react";
 import {
   AlertDialog,
   Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
   Label,
   toast,
 } from "@/design/components";
@@ -17,6 +17,7 @@ import { unwrap } from "@/ipc/client";
 import { invalidateAfterOp } from "@/ipc/queries";
 import { openAiSettings, useAiStore } from "@/stores/ai";
 import { errorMessage, isAiDisabled } from "./api";
+import { SheetBody } from "./SheetBody";
 import { PayloadPreview } from "./PayloadPreview";
 import { PlanView } from "./PlanView";
 
@@ -102,14 +103,14 @@ function Form({ repoId, onClose }: { repoId: string; onClose: () => void }) {
   };
 
   return (
-    <>
-      <DialogHeader>
-        <DialogTitle>Ask AI</DialogTitle>
-        <DialogDescription>
+    <SheetBody>
+      <ResponsiveDialogHeader>
+        <ResponsiveDialogTitle>Ask AI</ResponsiveDialogTitle>
+        <ResponsiveDialogDescription>
           Describe what you want to do. You will see exactly what is sent, then a plan to review
           before anything runs.
-        </DialogDescription>
-      </DialogHeader>
+        </ResponsiveDialogDescription>
+      </ResponsiveDialogHeader>
 
       {error ? (
         <div
@@ -151,26 +152,26 @@ function Form({ repoId, onClose }: { repoId: string; onClose: () => void }) {
               className="w-full resize-y rounded-md border border-border bg-bg-subtle p-2 text-base text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--focus-ring)]"
             />
           </div>
-          <DialogFooter>
+          <ResponsiveDialogFooter>
             <Button type="button" onClick={onClose}>
               Cancel
             </Button>
             <Button type="submit" variant="primary" disabled={!prompt.trim()}>
               Preview request
             </Button>
-          </DialogFooter>
+          </ResponsiveDialogFooter>
         </form>
       ) : null}
 
       {phase.name === "preview" ? (
         <>
           <PayloadPreview preview={phase.preview} />
-          <DialogFooter>
+          <ResponsiveDialogFooter>
             <Button onClick={() => setPhase({ name: "input" })}>Back</Button>
             <Button variant="primary" onClick={() => void send()}>
               Send
             </Button>
-          </DialogFooter>
+          </ResponsiveDialogFooter>
         </>
       ) : null}
 
@@ -183,7 +184,7 @@ function Form({ repoId, onClose }: { repoId: string; onClose: () => void }) {
       {phase.name === "plan" ? (
         <>
           <PlanView plan={phase.plan} />
-          <DialogFooter>
+          <ResponsiveDialogFooter>
             <Button onClick={onClose}>Cancel</Button>
             <Button
               variant="primary"
@@ -192,7 +193,7 @@ function Form({ repoId, onClose }: { repoId: string; onClose: () => void }) {
             >
               Run plan
             </Button>
-          </DialogFooter>
+          </ResponsiveDialogFooter>
           <AlertDialog
             open={confirming}
             onOpenChange={setConfirming}
@@ -204,7 +205,7 @@ function Form({ repoId, onClose }: { repoId: string; onClose: () => void }) {
           />
         </>
       ) : null}
-    </>
+    </SheetBody>
   );
 }
 
@@ -213,10 +214,10 @@ export function AskAiDialog() {
   const repoId = useAiStore((s) => s.askRepoId);
   const close = useAiStore((s) => s.closeAsk);
   return (
-    <Dialog open={repoId !== null} onOpenChange={(open) => !open && close()}>
-      <DialogContent className="max-w-xl">
+    <ResponsiveDialog open={repoId !== null} onOpenChange={(open) => !open && close()}>
+      <ResponsiveDialogContent className="max-w-xl">
         {repoId ? <Form repoId={repoId} onClose={close} /> : null}
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

@@ -1,18 +1,19 @@
 import { useRef, useState, type ReactNode } from "react";
 import {
   Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
 } from "@/design/components";
 import { commands, type AiPayloadPreview, type AiRequest } from "@/ipc/bindings";
 import { unwrap } from "@/ipc/client";
 import { useAiStore } from "@/stores/ai";
 import { reportAiError, runText } from "./api";
 import { PayloadPreview } from "./PayloadPreview";
+import { SheetBody } from "./SheetBody";
 
 interface Pending {
   request: AiRequest;
@@ -75,23 +76,25 @@ export function usePreviewedRun(repoId: string) {
   };
 
   const dialog: ReactNode = (
-    <Dialog open={pending !== null} onOpenChange={(open) => !open && finish(null)}>
-      <DialogContent className="max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Send this to the AI provider?</DialogTitle>
-          <DialogDescription>
-            This is exactly what will be sent. You will only be asked once per session.
-          </DialogDescription>
-        </DialogHeader>
-        {pending ? <PayloadPreview preview={pending.preview} /> : null}
-        <DialogFooter>
-          <Button onClick={() => finish(null)}>Cancel</Button>
-          <Button variant="primary" onClick={() => void send()}>
-            Send
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ResponsiveDialog open={pending !== null} onOpenChange={(open) => !open && finish(null)}>
+      <ResponsiveDialogContent className="max-w-xl">
+        <SheetBody>
+          <ResponsiveDialogHeader>
+            <ResponsiveDialogTitle>Send this to the AI provider?</ResponsiveDialogTitle>
+            <ResponsiveDialogDescription>
+              This is exactly what will be sent. You will only be asked once per session.
+            </ResponsiveDialogDescription>
+          </ResponsiveDialogHeader>
+          {pending ? <PayloadPreview preview={pending.preview} /> : null}
+          <ResponsiveDialogFooter>
+            <Button onClick={() => finish(null)}>Cancel</Button>
+            <Button variant="primary" onClick={() => void send()}>
+              Send
+            </Button>
+          </ResponsiveDialogFooter>
+        </SheetBody>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 
   return { start, busy, dialog };

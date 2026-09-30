@@ -1,17 +1,18 @@
 import { useState } from "react";
 import {
   Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
   Input,
   Label,
   toast,
 } from "@/design/components";
 import { useAiStore } from "@/stores/ai";
+import { SheetBody } from "./SheetBody";
 import { usePreviewedRun } from "./usePreviewedRun";
 
 function Form({
@@ -44,13 +45,13 @@ function Form({
   };
 
   return (
-    <>
-      <DialogHeader>
-        <DialogTitle>Draft pull request description</DialogTitle>
-        <DialogDescription>
+    <SheetBody>
+      <ResponsiveDialogHeader>
+        <ResponsiveDialogTitle>Draft pull request description</ResponsiveDialogTitle>
+        <ResponsiveDialogDescription>
           Summarizes the commits and changes in base..head. Edit the draft before using it.
-        </DialogDescription>
-      </DialogHeader>
+        </ResponsiveDialogDescription>
+      </ResponsiveDialogHeader>
       <div className="flex gap-3">
         <div className="flex flex-1 flex-col gap-1">
           <Label htmlFor="pr-base">Base</Label>
@@ -70,7 +71,7 @@ function Form({
           className="w-full resize-y rounded-md border border-border bg-bg-subtle p-2 font-mono text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--focus-ring)]"
         />
       ) : null}
-      <DialogFooter>
+      <ResponsiveDialogFooter>
         <Button onClick={onClose}>Close</Button>
         {text ? <Button onClick={() => void copy()}>Copy</Button> : null}
         <Button
@@ -81,9 +82,9 @@ function Form({
         >
           {text ? "Regenerate" : "Generate"}
         </Button>
-      </DialogFooter>
+      </ResponsiveDialogFooter>
       {dialog}
-    </>
+    </SheetBody>
   );
 }
 
@@ -102,16 +103,16 @@ export function AiPrDescriptionDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl">
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent className="max-w-xl">
         <Form
           repoId={repoId}
           initialBase={base}
           initialHead={head}
           onClose={() => onOpenChange(false)}
         />
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }
 
