@@ -1,5 +1,10 @@
 import { useState, type ComponentProps, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import {
+  dndStateClass,
+  useDndNode,
+  type DndNodeConfig,
+} from "@/features/operations/dnd/useDndNode";
 import { cn } from "@/lib/cn";
 
 export function Section({
@@ -36,6 +41,10 @@ export function Item({
   hint,
   nested,
   onClick,
+  dnd,
+  ref: outerRef,
+  onPointerDown,
+  onKeyDown,
   ...rest
 }: {
   label: string;
@@ -44,17 +53,38 @@ export function Item({
   /** Indent one level (remote branches under their remote). */
   nested?: boolean;
   onClick?: () => void;
+  /** Makes the item draggable and/or a drop target (branches and tags). */
+  dnd?: DndNodeConfig;
 } & Omit<ComponentProps<"button">, "children" | "className" | "type">) {
+  const { setNodeRef, dragProps, state: dndState, isDragging } = useDndNode(dnd);
+  const drag = dragProps;
   return (
     <li>
       <button
         {...rest}
+        {...dragProps}
+        ref={(el) => {
+          setNodeRef(el);
+          if (typeof outerRef === "function") outerRef(el);
+          else if (outerRef) outerRef.current = el;
+        }}
+        // The context-menu trigger and the drag sensors both listen to these; run both.
+        onPointerDown={(e) => {
+          onPointerDown?.(e);
+          drag.onPointerDown?.(e);
+        }}
+        onKeyDown={(e) => {
+          onKeyDown?.(e);
+          drag.onKeyDown?.(e);
+        }}
         type="button"
         onClick={onClick}
         className={cn(
           "flex h-6 w-full items-center gap-2 truncate pr-2 text-left text-sm hover:bg-surface-hover",
           nested ? "pl-10" : "pl-6",
           active ? "font-semibold text-accent" : "text-fg",
+          dndState && dndStateClass[dndState],
+          isDragging && "opacity-50",
         )}
       >
         <span className="truncate">{label}</span>

@@ -1,3 +1,4 @@
+import { OperationsProvider } from "@/features/operations/dnd/OperationsProvider";
 import { RemotesHost } from "@/features/remotes/RemotesHost";
 import { SettingsHost } from "@/features/settings";
 import { RepoTabs } from "@/features/repo/RepoTabs";
@@ -15,7 +16,13 @@ export function App() {
     <div className="flex h-full flex-col bg-chrome">
       <RepoTabs />
       <main className="flex min-h-0 flex-1 flex-col">
-        {activeId ? <RepoView key={activeId} repoId={activeId} /> : <Welcome />}
+        {activeId ? (
+          <OperationsProvider>
+            <RepoView key={activeId} repoId={activeId} />
+          </OperationsProvider>
+        ) : (
+          <Welcome />
+        )}
       </main>
       <StatusBar />
       <CommandHost />

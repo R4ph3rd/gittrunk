@@ -11,9 +11,11 @@ import {
   useRefs,
 } from "@/ipc/queries";
 import { DEFAULT_FILTER, selectedOidOf, useRepoStore } from "@/stores/repo";
+import { openActionMenu } from "@/features/operations/actions/openMenu";
+import { useActionContext } from "@/features/operations/actions/useActionContext";
 import { onThemeChange, readPalette, type Palette } from "./colors";
 import { drawGraph } from "./draw";
-import { GraphRowView } from "./GraphRowView";
+import { GraphRowView, type OpenMenu } from "./GraphRowView";
 import { GraphToolbar } from "./GraphToolbar";
 import { gutterWidth, ROW_HEIGHT } from "./layout";
 import { pageOf, pagesForRange } from "./pages";
@@ -146,6 +148,14 @@ function GraphList({
   const paletteRef = useRef<Palette | null>(null);
   const frameRef = useRef(0);
   const gutter = gutterWidth(meta.laneCount);
+  const actionContext = useActionContext(repoId);
+  const openMenu: OpenMenu = useCallback(
+    (e, target) => {
+      e.preventDefault();
+      openActionMenu(e.clientX, e.clientY, target, actionContext());
+    },
+    [actionContext],
+  );
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual is used as documented
   const virtualizer = useVirtualizer({
@@ -279,6 +289,18 @@ function GraphList({
       Math.floor((listRef.current?.clientHeight || 560) / ROW_HEIGHT) - 1,
     );
     const cur = selectedIndex ?? -1;
+    const selectedRow = cur >= 0 ? getRow(cur) : undefined;
+    if ((e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) && selectedRow) {
+      e.preventDefault();
+      const rect = document.getElementById(`graph-row-${cur}`)?.getBoundingClientRect();
+      openActionMenu(
+        (rect?.left ?? 0) + gutter,
+        rect?.bottom ?? 0,
+        { kind: "commit", oid: selectedRow.oid, shortOid: selectedRow.shortOid },
+        actionContext(),
+      );
+      return;
+    }
     if (e.key === "ArrowUp" && cur === 0 && hasWip) {
       e.preventDefault();
       selectWip(repoId);
@@ -317,6 +339,8 @@ function GraphList({
           {items.map((item) => (
             <GraphRowView
               key={item.index}
+              repoId={repoId}
+              onMenu={openMenu}
               index={item.index}
               row={getRow(item.index)}
               top={item.start}

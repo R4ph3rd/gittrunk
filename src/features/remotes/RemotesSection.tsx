@@ -26,6 +26,7 @@ import { unwrap } from "@/ipc/client";
 import { invalidateAfterOp, useRemotes } from "@/ipc/queries";
 import { useRemotesUi } from "@/stores/remotes";
 import { useRepoStore } from "@/stores/repo";
+import { branchDnd } from "@/features/operations/dnd/refs";
 import { Item, Section } from "@/features/repo/SidebarParts";
 import { fetchRemote } from "./actions";
 import { RemoteFormDialog, type RemoteFormMode } from "./RemoteFormDialog";
@@ -202,6 +203,7 @@ export function RemotesSection({ repoId, branches }: { repoId: string; branches:
                       <ContextMenuTrigger asChild>
                         <Item
                           nested
+                          dnd={branchDnd(repoId, b, true)}
                           label={localNameOf(b, remote.name)}
                           onClick={() => select(repoId, b.oid)}
                         />

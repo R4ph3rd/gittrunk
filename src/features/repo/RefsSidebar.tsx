@@ -15,6 +15,8 @@ import { SetUpstreamDialog } from "@/features/remotes/SetUpstreamDialog";
 import type { BranchInfo } from "@/ipc/bindings";
 import { useRefs } from "@/ipc/queries";
 import { useRepoStore } from "@/stores/repo";
+import { TargetEntries } from "@/features/operations/actions/ActionMenu";
+import { branchActionTarget, branchDnd, tagDnd } from "@/features/operations/dnd/refs";
 import { Item, Section } from "./SidebarParts";
 
 export function RefsSidebar({ repoId }: { repoId: string }) {
@@ -38,10 +40,13 @@ export function RefsSidebar({ repoId }: { repoId: string }) {
                     label={b.name}
                     active={b.isHead}
                     hint={b.ahead || b.behind ? `+${b.ahead} -${b.behind}` : undefined}
+                    dnd={branchDnd(repoId, b, false)}
                     onClick={() => select(repoId, b.oid)}
                   />
                 </ContextMenuTrigger>
                 <ContextMenuContent>
+                  <TargetEntries repoId={repoId} target={branchActionTarget(b, false)} />
+                  <ContextMenuSeparator />
                   <ContextMenuItem
                     icon={<ArrowUp />}
                     onSelect={() => void pushBranch(client, repoId, { branch: b.name })}
@@ -58,7 +63,21 @@ export function RefsSidebar({ repoId }: { repoId: string }) {
           <RemotesSection repoId={repoId} branches={data.remote} />
           <Section title="Tags" count={data.tags.length}>
             {data.tags.map((t) => (
-              <Item key={t.name} label={t.name} onClick={() => select(repoId, t.oid)} />
+              <ContextMenu key={t.name}>
+                <ContextMenuTrigger asChild>
+                  <Item
+                    label={t.name}
+                    dnd={tagDnd(repoId, t)}
+                    onClick={() => select(repoId, t.oid)}
+                  />
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  <TargetEntries
+                    repoId={repoId}
+                    target={{ kind: "tag", name: t.name, oid: t.oid }}
+                  />
+                </ContextMenuContent>
+              </ContextMenu>
             ))}
           </Section>
           <Section title="Stashes" count={data.stashes.length}>

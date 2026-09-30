@@ -252,6 +252,21 @@ export async function installBackend(rowCount = 1000, searchHits: number[] = [])
   commands.undo.mockImplementation(() => ok(applied("Undone")));
   commands.checkout.mockImplementation(() => ok(applied("Checked out")));
   commands.branchDelete.mockImplementation(dryRunnable("delete branch"));
+  for (const [name, msg] of [
+    ["merge", "merge"],
+    ["rebase", "rebase"],
+    ["cherryPick", "cherry-pick"],
+    ["revert", "revert"],
+    ["reset", "reset"],
+    ["refMove", "move ref"],
+    ["branchCreate", "create branch"],
+    ["tagCreate", "create tag"],
+    ["tagDelete", "delete tag"],
+  ] as const) {
+    commands[name].mockImplementation(dryRunnable(msg));
+  }
+  commands.branchRename.mockImplementation(dryRunnable("rename branch"));
+  commands.graphFind.mockImplementation(() => ok(null));
   commands.remoteList.mockImplementation(() =>
     ok([
       {
