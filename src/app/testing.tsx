@@ -172,6 +172,11 @@ type Mocked = Record<(typeof names)[number], ReturnType<typeof vi.fn>>;
 export async function installBackend(rowCount = 1000, searchHits: number[] = []) {
   const { commands } = (await import("@/ipc/bindings")) as unknown as { commands: Mocked };
   installSettingsBackend(commands);
+  // Advanced views: empty by default; suites override as needed.
+  commands.submoduleList.mockImplementation(() => ok([]));
+  commands.worktreeList.mockImplementation(() => ok([]));
+  commands.reflog.mockImplementation(() => ok([]));
+  commands.fileHistory.mockImplementation(() => ok([]));
   commands.appInfo.mockImplementation(() =>
     ok({ version: "0.1.0", gitVersion: "git version 2.45.0", platform: "windows" }),
   );

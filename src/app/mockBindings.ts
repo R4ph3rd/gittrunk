@@ -34,6 +34,14 @@ export const fail = (kind: string, message: string) =>
 
 export const names = [
   "appInfo",
+  "blame",
+  "fileHistory",
+  "reflog",
+  "submoduleList",
+  "submoduleUpdate",
+  "worktreeList",
+  "worktreeAdd",
+  "worktreeRemove",
   "settingsGet",
   "settingsSet",
   "keybindingsGet",
