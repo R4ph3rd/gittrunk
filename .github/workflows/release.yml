@@ -134,11 +134,27 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev \
             libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev
 
-      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: pnpm
+      - name: Enable pnpm via Corepack
+        shell: bash
+        env:
+          COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+        run: |
+          corepack enable
+          pnpm --version
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        name: Setup pnpm cache
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
@@ -199,17 +215,18 @@ jobs:
             echo "::notice::macOS build is unsigned (APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY secrets not all configured). Gatekeeper will warn users."
             exit 0
           fi
-          {
-            echo "APPLE_CERTIFICATE=$APPLE_CERTIFICATE"
-            echo "APPLE_CERTIFICATE_PASSWORD=$APPLE_CERTIFICATE_PASSWORD"
-            echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY"
-          } >> "$GITHUB_ENV"
+          # Multiline-safe export (a base64 certificate may contain newlines).
+          export_env() {
+            local delim="EOF_$(openssl rand -hex 8)"
+            { echo "$1<<$delim"; printf '%s\n' "$2"; echo "$delim"; } >> "$GITHUB_ENV"
+          }
+          export_env APPLE_CERTIFICATE "$APPLE_CERTIFICATE"
+          export_env APPLE_CERTIFICATE_PASSWORD "$APPLE_CERTIFICATE_PASSWORD"
+          export_env APPLE_SIGNING_IDENTITY "$APPLE_SIGNING_IDENTITY"
           if [ -n "$APPLE_ID" ] && [ -n "$APPLE_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
-            {
-              echo "APPLE_ID=$APPLE_ID"
-              echo "APPLE_PASSWORD=$APPLE_PASSWORD"
-              echo "APPLE_TEAM_ID=$APPLE_TEAM_ID"
-            } >> "$GITHUB_ENV"
+            export_env APPLE_ID "$APPLE_ID"
+            export_env APPLE_PASSWORD "$APPLE_PASSWORD"
+            export_env APPLE_TEAM_ID "$APPLE_TEAM_ID"
           else
             echo "::notice::macOS build is signed but not notarized (APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID not all configured)."
           fi
