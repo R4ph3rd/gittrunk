@@ -34,6 +34,10 @@ export const fail = (kind: string, message: string) =>
 
 export const names = [
   "appInfo",
+  "settingsGet",
+  "settingsSet",
+  "keybindingsGet",
+  "keybindingsSet",
   "repoOpen",
   "repoClose",
   "repoInfo",

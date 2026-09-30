@@ -1,3 +1,4 @@
+import { installSettingsBackend } from "@/features/settings/testing";
 /* Test helpers: a mocked backend contract and DOM shims for jsdom. Only imported from tests. */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render } from "@testing-library/react";
@@ -169,6 +170,7 @@ type Mocked = Record<(typeof names)[number], ReturnType<typeof vi.fn>>;
 /** Installs default implementations on the mocked commands. */
 export async function installBackend(rowCount = 1000, searchHits: number[] = []) {
   const { commands } = (await import("@/ipc/bindings")) as unknown as { commands: Mocked };
+  installSettingsBackend(commands);
   commands.appInfo.mockImplementation(() =>
     ok({ version: "0.1.0", gitVersion: "git version 2.45.0", platform: "windows" }),
   );
