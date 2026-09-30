@@ -48,6 +48,7 @@ fn subjects(t: &TestRepo) -> Vec<String> {
         .collect()
 }
 
+#[cfg(not(embedded_git))]
 fn body(t: &TestRepo, rev: &str) -> String {
     git(t, &["log", "-1", "--format=%B", rev])
 }
@@ -181,6 +182,7 @@ fn merge_req(source: &str, strategy: MergeStrategy) -> MergeRequest {
     }
 }
 
+#[cfg(not(embedded_git))]
 fn no_temp_left(t: &TestRepo) -> bool {
     match std::fs::read_dir(t.repo.path().join("gittrunk")) {
         Ok(rd) => !rd
@@ -374,6 +376,7 @@ fn sequencer_without_an_operation_is_an_error() {
 
 // ------------------------------------------------------------------- rebase
 
+#[cfg(not(embedded_git))]
 #[test]
 fn rebase_replays_commits_and_undoes() {
     let t = diverged();
@@ -398,6 +401,7 @@ fn rebase_replays_commits_and_undoes() {
     assert!(is_clean(&t));
 }
 
+#[cfg(not(embedded_git))]
 #[test]
 fn rebase_of_another_branch_checks_it_out() {
     let t = diverged();
@@ -423,6 +427,7 @@ fn rebase_up_to_date_is_a_noop_preview() {
     assert!(p.summary.contains("up to date"));
 }
 
+#[cfg(not(embedded_git))]
 #[test]
 fn rebase_conflict_then_abort() {
     let t = conflicting();
@@ -448,6 +453,7 @@ fn rebase_conflict_then_abort() {
     assert!(is_clean(&t));
 }
 
+#[cfg(not(embedded_git))]
 #[test]
 fn rebase_conflict_resolve_and_continue() {
     let t = conflicting();
@@ -537,6 +543,7 @@ fn todo_load_refuses_merges_and_non_ancestors() {
     assert_eq!(err.kind, ErrorKind::InvalidInput);
 }
 
+#[cfg(not(embedded_git))]
 #[test]
 fn interactive_reorders_commits() {
     let (t, a, o) = seq();
@@ -565,6 +572,7 @@ fn interactive_reorders_commits() {
     assert!(is_clean(&t));
 }
 
+#[cfg(not(embedded_git))]
 #[test]
 fn interactive_drops_omitted_and_dropped_commits() {
     let (t, a, o) = seq();
@@ -592,6 +600,7 @@ fn interactive_drops_omitted_and_dropped_commits() {
     assert!(exists(&t, "f2.txt") && exists(&t, "f3.txt"));
 }
 
+#[cfg(not(embedded_git))]
 #[test]
 fn interactive_squash_with_custom_message() {
     let (t, a, o) = seq();
@@ -610,6 +619,7 @@ fn interactive_squash_with_custom_message() {
     assert_eq!(rev(&t, "HEAD"), before);
 }
 
+#[cfg(not(embedded_git))]
 #[test]
 fn interactive_squash_without_message_concatenates_and_fixup_discards() {
     let (t, a, o) = seq();
@@ -627,6 +637,7 @@ fn interactive_squash_without_message_concatenates_and_fixup_discards() {
     assert!(exists(&t, "f3.txt"));
 }
 
+#[cfg(not(embedded_git))]
 #[test]
 fn interactive_reword_changes_only_the_message() {
     let (t, a, o) = seq();
@@ -651,6 +662,7 @@ fn interactive_reword_changes_only_the_message() {
     assert!(no_temp_left(&t));
 }
 
+#[cfg(not(embedded_git))]
 #[test]
 fn interactive_edit_stops_and_continues() {
     let (t, a, o) = seq();
@@ -680,6 +692,7 @@ fn interactive_edit_stops_and_continues() {
     let _ = before;
 }
 
+#[cfg(not(embedded_git))]
 #[test]
 fn interactive_edit_can_be_aborted() {
     let (t, a, o) = seq();

@@ -1,18 +1,22 @@
+#[cfg(not(embedded_git))]
 use std::path::Path;
 use std::time::Instant;
 
+#[cfg(not(embedded_git))]
 use git2::Repository;
 
 use super::*;
 use crate::git::cli::GitCli;
 use crate::git::fixtures::{self, TestRepo};
 use crate::git::refs_write::RefWriteService;
+#[cfg(not(embedded_git))]
 use crate::git::remote::net::NetSession;
 
 fn cli() -> GitCli {
     GitCli::new()
 }
 
+#[cfg(not(embedded_git))]
 fn run(dir: &Path, args: &[&str]) -> String {
     cli().run(dir, args).unwrap().stdout_str()
 }
@@ -58,6 +62,7 @@ fn injection_attempts_are_neutralised_or_rejected() {
     assert!(blame::blame(&t.repo, "f.txt", Some("--upload-pack=x")).is_err());
 }
 
+#[cfg(not(embedded_git))]
 #[test]
 fn file_history_with_option_like_path_runs_safely() {
     let mut t = TestRepo::new();
@@ -74,6 +79,7 @@ fn file_history_with_option_like_path_runs_safely() {
 // ------------------------------------------------------------ submodules
 
 /// Superproject with one submodule `sub` (origin has two commits).
+#[cfg(not(embedded_git))]
 fn with_submodule() -> (TestRepo, TestRepo) {
     let mut origin = TestRepo::new();
     origin.write("lib.txt", "one\n");
@@ -114,12 +120,14 @@ fn with_submodule() -> (TestRepo, TestRepo) {
     (sup, origin)
 }
 
+#[cfg(not(embedded_git))]
 fn only(repo: &Repository) -> SubmoduleInfo {
     let mut l = submodule::list(repo).unwrap();
     assert_eq!(l.len(), 1);
     l.remove(0)
 }
 
+#[cfg(not(embedded_git))]
 #[test]
 fn submodule_status_states() {
     let (sup, origin) = with_submodule();
@@ -148,6 +156,7 @@ fn submodule_status_states() {
     assert_eq!(only(&sup.repo).status, SubmoduleStatus::Uninitialized);
 }
 
+#[cfg(not(embedded_git))]
 #[test]
 fn submodule_update_initialises_and_checks_out() {
     let (sup, origin) = with_submodule();
@@ -181,6 +190,7 @@ fn porcelain_parsing() {
     assert!(l[2].prunable && !l[2].locked);
 }
 
+#[cfg(not(embedded_git))]
 #[test]
 fn worktree_add_list_remove() {
     let (t, _) = fixtures::linear(2);
@@ -366,6 +376,7 @@ fn blame_large_file_is_fast_enough() {
 
 // ------------------------------------------------------------ history
 
+#[cfg(not(embedded_git))]
 #[test]
 fn file_history_follows_two_renames() {
     let mut t = TestRepo::new();

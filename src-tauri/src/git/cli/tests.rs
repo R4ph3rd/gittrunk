@@ -8,6 +8,7 @@ fn runs_git_version() {
     assert!(out.stdout_str().starts_with("git version"));
 }
 
+#[cfg(not(embedded_git))]
 #[test]
 fn maps_failure_to_git_cli_error() {
     let repo = TestRepo::new();
@@ -33,6 +34,7 @@ fn run_raw_keeps_exit_code() {
     assert!(!out.success());
 }
 
+#[cfg(not(embedded_git))]
 #[test]
 fn stdin_and_stderr_streaming() {
     let repo = TestRepo::new();
@@ -59,6 +61,7 @@ fn stdin_and_stderr_streaming() {
     assert!(!lines.is_empty());
 }
 
+#[cfg(not(embedded_git))]
 #[test]
 fn missing_executable_is_git_cli_error() {
     let repo = TestRepo::new();
@@ -68,6 +71,7 @@ fn missing_executable_is_git_cli_error() {
     assert_eq!(err.kind, ErrorKind::GitCli);
 }
 
+#[cfg(not(embedded_git))]
 #[cfg(unix)]
 #[test]
 fn cancels_running_command() {

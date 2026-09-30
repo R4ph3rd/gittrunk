@@ -761,6 +761,7 @@ fn missing_identity_is_reported_clearly() {
     assert!(commit::check_identity(&git2::Config::open(&path).unwrap()).is_ok());
 }
 
+#[cfg(not(embedded_git))]
 #[test]
 fn commit_runs_hooks() {
     #[cfg(unix)]
