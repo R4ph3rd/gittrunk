@@ -19,6 +19,7 @@
   --color-fg-muted: var(--fg-muted);
   --color-fg-subtle: var(--fg-subtle);
   --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
   --color-accent-fg: var(--accent-fg);
   --color-accent-muted: var(--accent-muted);
   --color-danger: var(--danger);
@@ -28,6 +29,18 @@
   --color-overlay: var(--overlay);
   --color-focus-ring: var(--focus-ring);
   --color-selection: var(--selection);
+
+  --color-tabbar: var(--tabbar-bg);
+  --color-toolbar: var(--toolbar-bg);
+  --color-tab-active: var(--tab-active-bg);
+  --color-tab-hover: var(--tab-hover-bg);
+  --color-panel-header: var(--panel-header-bg);
+  --color-lane-fg: var(--lane-fg);
+  --color-staged: var(--staged-accent);
+  --color-staged-bg: var(--staged-bg);
+  --color-unstaged: var(--unstaged-accent);
+  --color-unstaged-bg: var(--unstaged-bg);
+  --color-terminal: var(--terminal-bg);
 
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
