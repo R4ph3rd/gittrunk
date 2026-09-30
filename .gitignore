@@ -22,3 +22,4 @@ coverage/
 
 # agent worktrees
 .claude/worktrees/
+e2e/artifacts/

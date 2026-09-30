@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "bindings": "cargo run --manifest-path src-tauri/Cargo.toml --bin export-bindings --no-default-features"
+    "bindings": "cargo run --manifest-path src-tauri/Cargo.toml --bin export-bindings --no-default-features",
+    "e2e": "node e2e/run.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
