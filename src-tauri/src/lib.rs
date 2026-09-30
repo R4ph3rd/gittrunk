@@ -1,9 +1,11 @@
 //! gittrunk backend.
 
+pub mod ai;
 pub mod askpass;
 pub mod commands;
 pub mod git;
 pub mod ipc;
+pub mod settings;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
