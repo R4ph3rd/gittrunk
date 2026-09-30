@@ -28,6 +28,8 @@ const credentialRequested = eventMock<{
   username: string | null;
   kind: "username" | "password" | "passphrase";
 }>();
+const terminalOutput = eventMock<{ id: string; data: string }>();
+const terminalExit = eventMock<{ id: string; code: number | null }>();
 export const ok = <T>(data: T) => Promise.resolve({ status: "ok" as const, data });
 export const fail = (kind: string, message: string) =>
   Promise.resolve({ status: "error" as const, error: { kind, message, detail: null } });
@@ -109,6 +111,23 @@ export const names = [
   "aiPayloadPreview",
   "aiRun",
   "aiPlanExecute",
+  "redo",
+  "oplogState",
+  "avatarsGet",
+  "forgeStatus",
+  "forgeTokenSource",
+  "forgeTokenSet",
+  "forgeTokenClear",
+  "forgeIssues",
+  "forgeIssue",
+  "forgeIssueCreate",
+  "forgeIssueComment",
+  "forgeCommitComments",
+  "forgeCommitComment",
+  "terminalOpen",
+  "terminalWrite",
+  "terminalResize",
+  "terminalClose",
 ] as const;
 
 /** Factory for `vi.mock("@/ipc/bindings", ...)`. */
@@ -116,7 +135,14 @@ export function bindingsMock() {
   const commands = Object.fromEntries(names.map((n) => [n, vi.fn()]));
   return {
     commands,
-    events: { repoChanged, opProgress, opFinished, credentialRequested },
+    events: {
+      repoChanged,
+      opProgress,
+      opFinished,
+      credentialRequested,
+      terminalOutput,
+      terminalExit,
+    },
   };
 }
 
@@ -140,6 +166,12 @@ export const emitCredentialRequested = (
   url = "https://github.com/acme/demo.git",
   username: string | null = null,
 ) => credentialRequested.emitMock({ requestId, url, username, kind });
+
+export const emitTerminalOutput = (id: string, data: string) =>
+  terminalOutput.emitMock({ id, data });
+
+export const emitTerminalExit = (id: string, code: number | null = 0) =>
+  terminalExit.emitMock({ id, code });
 
 /** Factory for `vi.mock("sonner", ...)`: every toast variant is a spy, so any code path is safe. */
 export function sonnerMock() {

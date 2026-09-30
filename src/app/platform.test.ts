@@ -28,6 +28,13 @@ describe("fallbackPlatform", () => {
   });
 });
 
+describe("capability flags", () => {
+  it("desktop can write and has a terminal, Android is read-only without one", () => {
+    expect([DESKTOP_PLATFORM.readOnly, DESKTOP_PLATFORM.supportsTerminal]).toEqual([false, true]);
+    expect([ANDROID_PLATFORM.readOnly, ANDROID_PLATFORM.supportsTerminal]).toEqual([true, false]);
+  });
+});
+
 describe("usePlatform", () => {
   beforeEach(() => platformInfo.mockReset());
 

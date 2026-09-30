@@ -14,6 +14,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   confirmDestructive: true,
   graphOrder: "topo",
   diffContextLines: 3,
+  avatars: "github",
 };
 
 export type UpdateResult = { ok: true } | { ok: false; message: string };

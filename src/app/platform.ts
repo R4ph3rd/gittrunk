@@ -15,6 +15,8 @@ export const DESKTOP_PLATFORM: PlatformInfo = {
   supportsSubmodules: true,
   supportsFileHistory: true,
   supportsHooks: true,
+  readOnly: false,
+  supportsTerminal: true,
   secretStore: "keychain",
   defaultReposDir: null,
 };
@@ -33,6 +35,8 @@ export const ANDROID_PLATFORM: PlatformInfo = {
   supportsSubmodules: false,
   supportsFileHistory: false,
   supportsHooks: false,
+  readOnly: true,
+  supportsTerminal: false,
   secretStore: "file",
   defaultReposDir: null,
 };

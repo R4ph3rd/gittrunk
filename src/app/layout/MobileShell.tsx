@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { FileDiff, GitBranch, GitCommitVertical, Menu } from "lucide-react";
 import { AiHost, suggestConflictResolution } from "@/features/ai";
-import { BottomNav, NavRail, type NavItem } from "@/design/components";
+import { BottomNav, EmptyState, NavRail, type NavItem } from "@/design/components";
 import { GraphView } from "@/features/graph/GraphView";
 import { useWipCount } from "@/features/graph/useWipCount";
 import { ConflictSuggestProvider } from "@/features/operations/conflicts/suggest";
@@ -101,10 +101,21 @@ function BranchesFallback({ repoId }: TabScreenProps) {
   );
 }
 
+/** Replaced by the forge issues screen (UI-MOBILE). */
+function IssuesPlaceholder({ repoId }: TabScreenProps) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <ShellAppBar repoId={repoId} />
+      <EmptyState title="Issues" />
+    </div>
+  );
+}
+
 const FALLBACK_TABS: Record<TabId, ComponentType<TabScreenProps>> = {
   history: HistoryFallback,
   changes: ChangesFallback,
   branches: BranchesFallback,
+  issues: IssuesPlaceholder,
   more: MoreScreen,
 };
 

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { useRepoStore } from "./repo";
 
-export type TabId = "history" | "changes" | "branches" | "more";
+export type TabId = "history" | "changes" | "branches" | "issues" | "more";
 export type Route =
   | { name: "commit"; oid: string } // UI-C
   | { name: "commitFile"; oid: string; path: string } // UI-C
@@ -12,7 +12,9 @@ export type Route =
   | { name: "conflicts" } // UI-B
   | { name: "conflict"; path: string } // UI-B
   | { name: "stash" } // UI-B
-  | { name: "settings"; section?: "general" | "git" | "ai" }; // UI-A
+  | { name: "issue"; number: number } // UI-FORGE
+  | { name: "newIssue" } // UI-FORGE
+  | { name: "settings"; section?: "general" | "git" | "ai" | "integrations" }; // UI-A
 export type RouteName = Route["name"];
 
 export interface RepoNav {

@@ -9,6 +9,7 @@ export const baseSettings: AppSettings = {
   confirmDestructive: true,
   graphOrder: "topo",
   diffContextLines: 3,
+  avatars: "github",
 };
 
 /** Factory for `vi.mock("@/ipc/bindings", ...)`: the shared mock plus the settings commands. */

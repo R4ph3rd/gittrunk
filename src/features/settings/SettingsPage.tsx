@@ -5,9 +5,14 @@ import { ListRow } from "@/design/components";
 import { useNav } from "@/stores/nav";
 import { AI_SETTINGS_COMMAND, Ai, General, Git } from "./SettingsDialog";
 
-type Section = "general" | "git" | "ai";
+type Section = "general" | "git" | "ai" | "integrations";
 
-const LABELS: Record<Section, string> = { general: "General", git: "Git", ai: "AI" };
+const LABELS: Record<Section, string> = {
+  general: "General",
+  git: "Git",
+  ai: "AI",
+  integrations: "Integrations",
+};
 
 /**
  * Settings as pages for compact layouts: a section list, and one page per section reusing the

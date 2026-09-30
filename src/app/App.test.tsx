@@ -125,6 +125,7 @@ describe("graph view", () => {
         confirmDestructive: true,
         graphOrder: "date",
         diffContextLines: 3,
+        avatars: "github",
       }),
     );
     await openRepo();

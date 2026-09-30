@@ -12,7 +12,9 @@ import type {
   RepoInfo,
   StatusSnapshot,
 } from "@/ipc/bindings";
+import { useLayoutStore } from "@/stores/layout";
 import { useRepoStore } from "@/stores/repo";
+import { useWorkspaceStore } from "@/stores/workspace";
 import { setViewport } from "@/test/viewport";
 import { App } from "./App";
 import { DESKTOP_PLATFORM } from "./platform";
@@ -26,12 +28,23 @@ import {
   emitOpFinished,
   emitOpProgress,
   emitRepoChanged,
+  emitTerminalExit,
+  emitTerminalOutput,
   fail,
   names,
   ok,
 } from "./mockBindings";
 
-export { emitCredentialRequested, emitOpFinished, emitOpProgress, emitRepoChanged, fail, ok };
+export {
+  emitCredentialRequested,
+  emitOpFinished,
+  emitOpProgress,
+  emitRepoChanged,
+  emitTerminalExit,
+  emitTerminalOutput,
+  fail,
+  ok,
+};
 
 export const repoInfo: RepoInfo = {
   id: "r1",
@@ -195,7 +208,9 @@ export async function installBackend(rowCount = 1000, searchHits: number[] = [])
   commands.repoOpen.mockImplementation(() => ok(repoInfo));
   commands.repoClose.mockImplementation(() => ok(null));
   commands.repoInfo.mockImplementation(() => ok(repoInfo));
-  commands.graphLoad.mockImplementation(() => ok({ rowCount, laneCount: 1, headRow: 0 }));
+  commands.graphLoad.mockImplementation(() =>
+    ok({ rowCount, laneCount: 1, headRow: 0, refColors: [] }),
+  );
   commands.graphRows.mockImplementation((_r: string, start: number, len: number) =>
     ok(
       Array.from({ length: Math.max(0, Math.min(len, rowCount - start)) }, (_, k) =>
@@ -310,6 +325,21 @@ export async function installBackend(rowCount = 1000, searchHits: number[] = [])
   for (const name of ["fetch", "pull", "push", "repoClone"] as const) {
     commands[name].mockImplementation(() => ok(`op-${name}`));
   }
+  commands.redo.mockImplementation(() => ok(applied("Redone")));
+  commands.oplogState.mockImplementation(() =>
+    ok({ canUndo: false, canRedo: false, undoDescription: null, redoDescription: null }),
+  );
+  commands.avatarsGet.mockImplementation((subjects: unknown[]) => ok(subjects.map(() => null)));
+  commands.forgeStatus.mockImplementation(() =>
+    ok({ repo: null, supported: false, tokenSource: "none" }),
+  );
+  commands.forgeTokenSource.mockImplementation(() => ok("none"));
+  commands.forgeIssues.mockImplementation(() => ok({ items: [], nextPage: null }));
+  commands.forgeCommitComments.mockImplementation(() => ok([]));
+  commands.terminalOpen.mockImplementation(() => ok("term-1"));
+  for (const name of ["terminalWrite", "terminalResize", "terminalClose"] as const) {
+    commands[name].mockImplementation(() => ok(null));
+  }
   return commands;
 }
 
@@ -343,6 +373,8 @@ export function resetStore() {
   useOpsStore.getState().reset();
   useRemotesUi.getState().reset();
   useSettingsStore.setState({ settings: null });
+  useLayoutStore.getState().reset();
+  useWorkspaceStore.getState().reset();
 }
 
 /** Renders the app at a viewport size (compact below 768 px wide), see `setViewport`. */
