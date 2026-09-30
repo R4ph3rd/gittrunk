@@ -367,4 +367,14 @@ mod state_tests {
         assert!(!Arc::ptr_eq(&before, &after));
         assert_eq!(after.meta().row_count, 1);
     }
+
+    #[test]
+    fn set_git_path_switches_the_shared_runner() {
+        let state = GitState::default();
+        let other = state.clone();
+        state.set_git_path(Some(PathBuf::from("definitely-not-git-xyz")));
+        assert!(other.cli().program().ends_with("definitely-not-git-xyz"));
+        state.set_git_path(None);
+        assert_eq!(other.cli().program(), Path::new("git"));
+    }
 }
