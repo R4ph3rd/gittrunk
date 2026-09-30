@@ -293,8 +293,8 @@ describe("keyboard drag and drop and the confirmation flow", () => {
       ),
     );
     const user = await openWithBranches();
-    const { requestOperation } = await import("./preview/useConfirmedOperation");
-    const { ops } = await import("./actions/ops");
+    const { requestOperation } = await import("../preview/useConfirmedOperation");
+    const { ops } = await import("../actions/ops");
     const { QueryClient } = await import("@tanstack/react-query");
     void requestOperation(
       new QueryClient(),
@@ -330,8 +330,8 @@ describe("keyboard drag and drop and the confirmation flow", () => {
       ok(dryRun ? drop({}) : { kind: "conflicted", oplogId: "o2", files: ["a.txt"] }),
     );
     await openWithBranches();
-    const { requestOperation } = await import("./preview/useConfirmedOperation");
-    const { ops } = await import("./actions/ops");
+    const { requestOperation } = await import("../preview/useConfirmedOperation");
+    const { ops } = await import("../actions/ops");
     const { QueryClient } = await import("@tanstack/react-query");
     void requestOperation(
       new QueryClient(),
@@ -348,8 +348,8 @@ describe("keyboard drag and drop and the confirmation flow", () => {
   it("reports dry-run errors as a toast without opening a dialog", async () => {
     commands.merge.mockImplementation(() => fail("conflict", "cannot merge"));
     await openWithBranches();
-    const { requestOperation } = await import("./preview/useConfirmedOperation");
-    const { ops } = await import("./actions/ops");
+    const { requestOperation } = await import("../preview/useConfirmedOperation");
+    const { ops } = await import("../actions/ops");
     const { QueryClient } = await import("@tanstack/react-query");
     await requestOperation(
       new QueryClient(),
