@@ -127,3 +127,18 @@ export const emitCredentialRequested = (
   url = "https://github.com/acme/demo.git",
   username: string | null = null,
 ) => credentialRequested.emitMock({ requestId, url, username, kind });
+
+/** Factory for `vi.mock("sonner", ...)`: every toast variant is a spy, so any code path is safe. */
+export function sonnerMock() {
+  return {
+    toast: Object.assign(vi.fn(), {
+      success: vi.fn(),
+      error: vi.fn(),
+      warning: vi.fn(),
+      info: vi.fn(),
+      message: vi.fn(),
+      dismiss: vi.fn(),
+    }),
+    Toaster: () => null,
+  };
+}

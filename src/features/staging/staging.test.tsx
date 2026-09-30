@@ -27,10 +27,7 @@ vi.mock("./diff/toHunkStrings", async (importOriginal) => {
   };
 });
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(() => Promise.resolve("/work/demo")) }));
-vi.mock("sonner", () => ({
-  toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), warning: vi.fn() }),
-  Toaster: () => null,
-}));
+vi.mock("sonner", async () => (await import("@/app/mockBindings")).sonnerMock());
 
 installDomShims();
 

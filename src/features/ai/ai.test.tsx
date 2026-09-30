@@ -15,15 +15,7 @@ import { AiCommitMessageButton, AiHost, suggestConflictResolution } from "./inde
 import { installAiBackend, type AiCommands } from "./testing";
 
 vi.mock("@/ipc/bindings", async () => (await import("./testing")).aiBindingsMock());
-vi.mock("sonner", () => ({
-  toast: Object.assign(vi.fn(), {
-    success: vi.fn(),
-    error: vi.fn(),
-    warning: vi.fn(),
-    info: vi.fn(),
-  }),
-  Toaster: () => null,
-}));
+vi.mock("sonner", async () => (await import("@/app/mockBindings")).sonnerMock());
 
 installDomShims();
 Element.prototype.scrollIntoView ??= () => {};
