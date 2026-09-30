@@ -1,6 +1,6 @@
 # gittrunk — Implementation Plan
 
-Status: **draft, awaiting approval**. No implementation agent is dispatched until this plan is approved.
+Status: **approved** (§1 stack deviations and §2 environment adaptations approved; M0 in progress).
 
 gittrunk is a cross-platform desktop Git client (alternative to GitKraken) built with Tauri 2. Windows (`.exe` + NSIS installer + MSI) is the release target; macOS and Linux build from the same codebase.
 
@@ -31,10 +31,10 @@ Everything else is as specified: Tauri 2, `git2`, React + TS + Vite, Tailwind, s
 These come from the environment this session runs in and change how parts of the brief are executed:
 
 1. **Windows artifacts are built by GitHub Actions, not locally.** This container is Linux, so the local `pnpm tauri build` produces Linux bundles (`.deb`/`.AppImage`). The Windows `.exe`, NSIS and MSI come from a `windows-latest` workflow. The final milestone counts as done only when that workflow is green and has uploaded the installers as artifacts; I'll read the run status and logs through the GitHub API.
-2. **Only one branch can be pushed**: `claude/relaxed-allen-0mjwae`. It acts as the integration branch ("`main`" in the brief). `feat/<area>-<task>` branches exist as **local worktrees only**; each is rebased and fast-forward merged into the integration branch after the checker passes, so history stays linear. Opening a PR to `main` is left to you (or ask me to).
+2. **Branch policy.** `main` holds only clean, checker-approved code and is the only source of releases (`v*` tags on `main` trigger `release.yml`, which refuses tags not on `main`). Development integrates on `claude/relaxed-allen-0mjwae`, the only branch this session can push. `feat/<area>-<task>` branches exist as **local worktrees only**; each is rebased and fast-forward merged into the integration branch after the checker passes, so history stays linear. At the end of each milestone, the integration branch is proposed to `main` through a pull request.
 3. **The orchestrator role is played by this main session.** Claude Code subagents cannot spawn other subagents, so an `orchestrator` subagent could not dispatch work. `.claude/agents/orchestrator.md` is still written, for reuse and documentation, but here dispatching is done by the top-level session running Opus.
-4. **Effort levels**: each agent file sets `model` in frontmatter. The effort level goes in the frontmatter too if the installed Claude Code version supports it; otherwise it is written as an explicit instruction in the agent prompt.
-5. Linux Tauri system deps (`webkit2gtk-4.1`, etc.) are not installed yet. Phase 0 installs them if the network policy allows. If it doesn't, local `tauri build` is replaced by CI on `ubuntu-latest`, and that is reported explicitly.
+4. **Effort levels**: each agent file sets `model` and `effort` in frontmatter.
+5. Linux Tauri system deps (`webkit2gtk-4.1`, etc.) are installed in this container, so `pnpm tauri build` runs locally for Linux bundles.
 6. No code-signing certificate is available, so installers are unsigned (SmartScreen will warn). The workflow has a documented optional signing step that reads secrets.
 
 ---
@@ -254,12 +254,6 @@ Plus: bindings drift check and the E2E drag-and-drop merge test from M5 onward.
 
 ---
 
-## 9. Approval needed
+## 9. Approval log
 
-Please confirm or adjust:
-
-1. The stack deviations in §1 (CLI for network ops, canvas graph, `@git-diff-view/react`, CodeMirror merge, Rust-side AI calls).
-2. The environment adaptations in §2: Windows build via GitHub Actions, the designated branch as integration branch with local-only feature worktrees, and the main session acting as orchestrator.
-3. Milestone order (M0 → M7). The Windows installer pipeline is proven in M0 on the empty shell.
-
-On approval I start M0 (sequential), then dispatch M1 tracks a, b and g in parallel.
+- 2026-09-30: §1 stack deviations and §2 environment adaptations approved. `main` is reserved for clean code and releases.
