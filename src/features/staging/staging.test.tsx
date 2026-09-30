@@ -449,6 +449,40 @@ describe("commit box", () => {
     expect(screen.getByTestId("commit-hint")).toHaveTextContent("Stage changes to commit");
   });
 
+  it("disables the AI draft button while AI is off", async () => {
+    await backend();
+    await openStaging();
+    expect(screen.getByRole("button", { name: "Generate commit message with AI" })).toBeDisabled();
+  });
+
+  it("fills summary and description from an AI draft", async () => {
+    const commands = await backend();
+    const c = commands as unknown as Record<string, Fn>;
+    c.aiSettingsGet!.mockImplementation(() =>
+      ok({
+        enabled: true,
+        provider: "anthropic",
+        model: "m",
+        baseUrl: null,
+        maxDiffBytes: 1000,
+        hasKey: true,
+      }),
+    );
+    c.aiPayloadPreview!.mockImplementation(() =>
+      ok({ bytes: 1, files: ["a"], truncated: false, content: "diff" }),
+    );
+    c.aiRun!.mockImplementation(() =>
+      ok({ kind: "text", text: "feat: add x\n\nLonger body\nsecond line" }),
+    );
+    const user = await openStaging();
+    const button = screen.getByRole("button", { name: "Generate commit message with AI" });
+    await waitFor(() => expect(button).toBeEnabled());
+    await user.click(button);
+    await user.click(await screen.findByRole("button", { name: "Send" }));
+    await waitFor(() => expect(screen.getByLabelText("Summary")).toHaveValue("feat: add x"));
+    expect(screen.getByLabelText("Description")).toHaveValue("Longer body\nsecond line");
+  });
+
   it("shows the 72 character soft limit", async () => {
     await backend();
     const user = await openStaging();

@@ -15,6 +15,7 @@ import { unwrap } from "./client";
 /** Query keys are scoped by repo id so `repo-changed` events can invalidate precisely. */
 export const queryKeys = {
   appInfo: ["appInfo"] as const,
+  aiSettings: ["aiSettings"] as const,
   recent: ["repoRecent"] as const,
   repo: (id: string) => ["repo", id] as const,
   info: (id: string) => ["repo", id, "info"] as const,
@@ -42,6 +43,20 @@ export function useAppInfo() {
 
 export function useRecentRepos() {
   return useQuery({ queryKey: queryKeys.recent, queryFn: () => unwrap(commands.repoRecent()) });
+}
+
+/** AI settings (global, not repo scoped). Invalidate `queryKeys.aiSettings` after saving. */
+export function useAiSettings() {
+  return useQuery({
+    queryKey: queryKeys.aiSettings,
+    queryFn: () => unwrap(commands.aiSettingsGet()),
+    retry: false,
+  });
+}
+
+/** True only once the backend confirmed AI is enabled. */
+export function useAiEnabled(): boolean {
+  return useAiSettings().data?.enabled === true;
 }
 
 export function useRepoInfo(repoId: string) {

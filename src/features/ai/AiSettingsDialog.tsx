@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Badge,
   Button,
@@ -16,6 +17,7 @@ import {
 } from "@/design/components";
 import { commands, type AiProviderKind, type AiSettings } from "@/ipc/bindings";
 import { unwrap } from "@/ipc/client";
+import { queryKeys } from "@/ipc/queries";
 import { useAiStore } from "@/stores/ai";
 import { DEFAULT_MODELS, PROVIDER_NAMES, errorMessage, loadAiSettings } from "./api";
 
@@ -44,6 +46,8 @@ function Form({ initial, onClose }: { initial: AiSettings; onClose: () => void }
   const [key, setKey] = useState("");
   const [saving, setSaving] = useState(false);
   const patch = (p: Partial<AiSettings>) => setDraft((d) => ({ ...d, ...p }));
+  const queryClient = useQueryClient();
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: queryKeys.aiSettings });
 
   // Provider changes are persisted immediately so `hasKey` reflects the new provider.
   const changeProvider = async (provider: AiProviderKind) => {
@@ -52,6 +56,7 @@ function Form({ initial, onClose }: { initial: AiSettings; onClose: () => void }
     try {
       setDraft(await unwrap(commands.aiSettingsSet({ ...draft, provider, model })));
       setKey("");
+      refresh();
     } catch (e) {
       toast.error(errorMessage(e));
     }
@@ -87,6 +92,7 @@ function Form({ initial, onClose }: { initial: AiSettings; onClose: () => void }
         }),
       );
       setDraft(saved);
+      refresh();
       toast.success("AI settings saved");
       onClose();
     } catch (e) {

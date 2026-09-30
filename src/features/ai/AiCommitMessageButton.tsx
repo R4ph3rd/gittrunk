@@ -10,27 +10,34 @@ export function AiCommitMessageButton({
   repoId,
   onResult,
   disabled,
+  disabledReason,
 }: {
   repoId: string;
   onResult: (text: string) => void;
   disabled?: boolean;
+  /** Shown as the tooltip while disabled (for example "Enable AI in settings"). */
+  disabledReason?: string;
 }) {
   const { start, busy, dialog } = usePreviewedRun(repoId);
   return (
     <>
-      <Tooltip content="Draft commit message with AI">
-        <IconButton
-          aria-label="Generate commit message with AI"
-          size="sm"
-          loading={busy}
-          disabled={disabled}
-          onClick={async () => {
-            const text = await start({ kind: "commitMessage" });
-            if (text) onResult(text);
-          }}
-        >
-          <Sparkles />
-        </IconButton>
+      <Tooltip
+        content={disabled && disabledReason ? disabledReason : "Draft commit message with AI"}
+      >
+        <span className="inline-flex">
+          <IconButton
+            aria-label="Generate commit message with AI"
+            size="sm"
+            loading={busy}
+            disabled={disabled}
+            onClick={async () => {
+              const text = await start({ kind: "commitMessage" });
+              if (text) onResult(text);
+            }}
+          >
+            <Sparkles />
+          </IconButton>
+        </span>
       </Tooltip>
       {dialog}
     </>

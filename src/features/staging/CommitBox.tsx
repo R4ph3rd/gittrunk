@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { AiCommitMessageButton } from "@/features/ai";
 import { Button, Input, Label, Switch, Textarea } from "@/design/components";
-import { useCommitCreate, useCommitDetails, useRepoInfo } from "@/ipc/queries";
+import { useAiEnabled, useCommitCreate, useCommitDetails, useRepoInfo } from "@/ipc/queries";
 import { cn } from "@/lib/cn";
 import { buildMessage, SUMMARY_SOFT_LIMIT } from "./message";
 import { useOutcomeToast } from "./ops";
@@ -13,6 +14,7 @@ interface Props {
 /** Summary, description, amend and sign-off; Ctrl/Cmd+Enter commits. */
 export function CommitBox({ repoId, stagedCount }: Props) {
   const info = useRepoInfo(repoId);
+  const aiEnabled = useAiEnabled();
   const commit = useCommitCreate(repoId);
   const notify = useOutcomeToast(repoId);
   const [summary, setSummary] = useState("");
@@ -58,6 +60,13 @@ export function CommitBox({ repoId, stagedCount }: Props) {
   const hint =
     trimmed.length === 0 ? "Enter a summary" : noStaged ? "Stage changes to commit" : null;
 
+  // First line becomes the summary, the rest (after blank lines) the description.
+  const applyAiMessage = (text: string) => {
+    const [first = "", ...rest] = text.trim().split("\n");
+    setSummary(first.trim());
+    setBody(rest.join("\n").trim());
+  };
+
   const submit = () => {
     if (disabled) return;
     setError(null);
@@ -93,12 +102,24 @@ export function CommitBox({ repoId, stagedCount }: Props) {
       <div className="flex flex-col gap-1">
         <div className="flex items-center justify-between">
           <Label htmlFor="commit-summary">Summary</Label>
-          <span
-            data-testid="summary-count"
-            data-over={over || undefined}
-            className={cn("font-mono text-xs", over ? "text-warning" : "text-fg-subtle")}
-          >
-            {summary.length}/{SUMMARY_SOFT_LIMIT}
+          <span className="flex items-center gap-1">
+            <AiCommitMessageButton
+              repoId={repoId}
+              onResult={applyAiMessage}
+              disabled={!aiEnabled || (stagedCount === 0 && !amend)}
+              disabledReason={
+                aiEnabled
+                  ? "Stage changes to draft a message"
+                  : "Enable AI in settings to draft messages"
+              }
+            />
+            <span
+              data-testid="summary-count"
+              data-over={over || undefined}
+              className={cn("font-mono text-xs", over ? "text-warning" : "text-fg-subtle")}
+            >
+              {summary.length}/{SUMMARY_SOFT_LIMIT}
+            </span>
           </span>
         </div>
         <Input
