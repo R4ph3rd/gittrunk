@@ -78,6 +78,28 @@
 - **Argument safety.** User-supplied refs, remote names, URLs and paths are validated and passed after `--` where git allows it, so a value such as `--upload-pack=...` can never become an option. The CLI is never invoked through a shell.
 - **Undo.** Every mutation records before/after snapshots (HEAD, branches, tags, branch config, index tree, and the working tree for destructive operations), pinned under `refs/gittrunk/oplog/` so garbage collection keeps them. Undo restores one whole user action, even when it wrote many reflog entries.
 
+## Android (embedded git backend)
+
+Android has no `git` executable, so `src-tauri/build.rs` sets `cfg(embedded_git)` for Android targets (the `embedded-git` cargo feature sets it on the host so CI can test it). `platform::EMBEDDED` (`src-tauri/src/platform.rs`) mirrors the cfg.
+
+| Concern         | Desktop                                         | Embedded (Android)                                                                                                                                                          |
+| --------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Git CLI calls   | `git/cli/` spawns `git`                         | `GitCli` keeps its API but dispatches in-process to the shim in `git/cli/embedded/` (commit, stash, merge, cherry-pick, revert, reset, switch, rebase, sequencer, and more) |
+| Unsupported ops | n/a                                             | The shim answers with an `UNSUPPORTED_PREFIX` error that `GitCli` maps to a typed `AppError`                                                                                |
+| Network         | `git fetch/pull/push/clone`, credential helpers | `git/remote/native.rs`: libgit2 with progress, cancellation and Android's system CA store; HTTPS and tokens only                                                            |
+| Secrets         | OS keychain                                     | `secrets::FileStore`: a JSON file in the app-private data dir written atomically with mode 0600 (`mobile.rs` initializes it)                                                |
+| Startup         | Tauri defaults                                  | `mobile.rs`: private data dir, libgit2 global/XDG config path inside it, CA store                                                                                           |
+| Capabilities    | everything on                                   | `platform_info` (`commands/app.rs`) returns `PlatformInfo` flags (`supportsSsh`, `supportsRebase`, `supportsHooks`, `secretStore`, ...)                                     |
+
+Two independent questions, two mechanisms:
+
+- **Capabilities** (can this build pick a folder, use SSH, rebase, run hooks?) come from the backend through `usePlatform()` (`src/app/platform.ts`). Features hide or explain what is unsupported.
+- **Layout** (compact phone vs regular) comes from the viewport through `useLayout()` and `LayoutProvider` (`src/app/layout/`). An Android tablet is regular layout with mobile capabilities; a narrow desktop window is compact layout with desktop capabilities. Never infer one from the other.
+
+The compact shell uses a bottom navigation (`src/design/components/BottomNav.tsx`) and a LIFO back-handler stack (`src/app/layout/back.ts`, `useBackHandler`) that the Android back button and swipe gesture drain before leaving the app. Repositories on Android live in the app's private storage and are cloned in-app.
+
+Build and release: `.github/actions/build-android` (shared composite action), `build-android.yml` (APK on every push, non-blocking emulator smoke test) and the `android` job of `release.yml`. `src-tauri/gen/android` is committed and patched by `scripts/android/customize.mjs`.
+
 ## AI and privacy
 
 AI is off by default. While it is off, no provider client is constructed. Every AI action first shows the exact payload that would be sent. API keys live only in the OS keychain (service `gittrunk-ai`) and never reach the webview or logs. Plans returned by the model are parsed strictly into the whitelisted `PlannedCommand` set, previewed with dry runs, and executed only after confirmation through the same services the UI uses.

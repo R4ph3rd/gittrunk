@@ -38,6 +38,20 @@ A fast, native desktop Git client. An alternative to GitKraken built with Tauri 
 | Undo last operation     | `Mod+Z`                                   |
 | Ask AI                  | `Mod+Shift+I`                             |
 
+## Android
+
+Releases include an APK (`gittrunk_<version>_android-universal.apk`, Android 7.0+ / API 24) for phones and tablets. Sideload it: copy it to the device and open it, allowing installs from your browser or file manager. The UI adapts to the screen (bottom navigation on phones, the desktop layout on tablets).
+
+Android has no `git` executable, so the app uses an embedded libgit2 backend. Differences from desktop:
+
+- **HTTPS with a personal access token only.** There is no SSH support. Credentials are asked for in the app.
+- **Repositories live in app storage** and are cloned in the app; there is no folder picker for existing checkouts.
+- **Secrets** (tokens, AI keys) are kept in an app-private file (mode 0600) rather than in the Android Keystore in this version.
+- **Not available:** hooks, commit signing, interactive rebase, submodule update, external editors. Depending on the build, non-interactive rebase, worktrees and per-file history may also be hidden; the app shows only what the platform supports.
+- Builds not signed with the maintainers' key cannot be updated in place: uninstall first. See [docs/RELEASING.md](docs/RELEASING.md).
+
+Build instructions: [docs/BUILD.md](docs/BUILD.md#building-for-android).
+
 ## Prerequisites
 
 - Node.js 22+ and pnpm 10+ (`corepack enable`)
@@ -80,8 +94,8 @@ Output lands in `src-tauri/target/release/` (app binary) and `src-tauri/target/r
 
 - `main` holds only clean, releasable code.
 - Work happens on feature/integration branches and reaches `main` through pull requests.
-- Pushing a `v*` tag on `main` runs `.github/workflows/release.yml`, which builds Windows, macOS and Linux installers and creates a draft GitHub Release.
-- Every push to `main` or a development branch runs `Build Windows`, which uploads the `.exe`, NSIS installer and MSI as workflow artifacts.
+- Pushing a `v*` tag on `main` runs `.github/workflows/release.yml`, which builds Windows, macOS and Linux installers plus the Android APK and creates a draft GitHub Release.
+- Every push to `main` or a development branch runs `Build Windows`, which uploads the `.exe`, NSIS installer and MSI as workflow artifacts, and `Build Android`, which uploads a test APK.
 
 ## Documentation
 
