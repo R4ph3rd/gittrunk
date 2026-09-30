@@ -5,6 +5,7 @@ You are given a compact description of the repository and the request. Reply wit
 {"explanation": string, "steps": [{"description": string, "command": <command>}]}
 
 Rules:
+
 - At most 10 steps. Prefer the fewest steps that do the job. Use an empty `steps` array and explain why when the request cannot be done with the operations below.
 - `description` is one short sentence for the user. `explanation` is two sentences at most.
 - `command` MUST be exactly one of the following shapes. Every key shown is allowed; no other keys, no other `kind` values. Include every key (use null for absent optional values).
