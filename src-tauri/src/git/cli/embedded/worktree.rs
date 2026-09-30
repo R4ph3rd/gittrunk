@@ -182,12 +182,30 @@ fn abs(ctx: &Ctx, raw: &str) -> PathBuf {
     }
 }
 
-fn same_path(a: &str, b: &Path) -> bool {
-    let a = Path::new(a);
-    match (a.canonicalize(), b.canonicalize()) {
-        (Ok(x), Ok(y)) => x == y,
-        _ => norm(a) == norm(b),
+/// `path` with its deepest existing ancestor canonicalized and the missing
+/// tail re-appended. Paths of removed (prunable) worktrees still compare
+/// equal whatever form they were given in: on Windows a temp dir may be an
+/// 8.3 short name (`RUNNER~1`) while libgit2 reports the long one.
+fn canonical_lossy(path: &Path) -> PathBuf {
+    let mut tail = Vec::new();
+    let mut cur = path;
+    loop {
+        if let Ok(c) = cur.canonicalize() {
+            return tail.iter().rev().fold(c, |acc, n| acc.join(n));
+        }
+        match (cur.parent(), cur.file_name()) {
+            (Some(parent), Some(name)) => {
+                tail.push(name.to_os_string());
+                cur = parent;
+            }
+            _ => return path.to_path_buf(),
+        }
     }
+}
+
+fn same_path(a: &str, b: &Path) -> bool {
+    let (x, y) = (canonical_lossy(Path::new(a)), canonical_lossy(b));
+    x == y || norm(&x) == norm(&y)
 }
 
 // -------------------------------------------------------------------- list

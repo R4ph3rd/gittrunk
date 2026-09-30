@@ -282,6 +282,27 @@ fn fwd(p: &std::path::Path) -> String {
     p.to_string_lossy().replace('\\', "/")
 }
 
+/// On Windows one directory can be spelled with 8.3 short names (`RUNNER~1`,
+/// what `%TEMP%` gives the fixtures) or long ones (what libgit2 reports), so
+/// `worktree <path>` lines are resolved to one form there. Elsewhere the
+/// listing is compared byte for byte.
+fn same_form(listing: &str) -> String {
+    if !cfg!(windows) {
+        return listing.to_string();
+    }
+    listing
+        .lines()
+        .map(|l| match l.strip_prefix("worktree ") {
+            Some(p) => {
+                let path = std::path::Path::new(p);
+                let canon = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+                format!("worktree {}\n", fwd(&canon))
+            }
+            None => format!("{l}\n"),
+        })
+        .collect()
+}
+
 #[test]
 fn worktree_list_porcelain_matches_git() {
     let (t, oids) = crate::git::fixtures::linear(2);
@@ -310,9 +331,9 @@ fn worktree_list_porcelain_matches_git() {
          worktree {b}\nHEAD {}\nbranch refs/heads/feat/b\n\n",
         oids[0]
     );
-    assert_eq!(out, expected);
+    assert_eq!(same_form(&out), same_form(&expected));
     if real_git_available() {
-        assert_eq!(out, real_porcelain(&t));
+        assert_eq!(same_form(&out), same_form(&real_porcelain(&t)));
     }
     // The human format lists the same worktrees.
     let plain = sh_ok(&t, &["worktree", "list"]).stdout_str();
@@ -385,6 +406,36 @@ fn worktree_remove_rules_and_prunable_reporting() {
     sh_ok(&t, &["worktree", "add", "-b", "w2", "--", &path]);
     sh_ok(&t, &["worktree", "remove", "--", &path]);
     assert!(!wt.exists());
+}
+
+/// A removed worktree is still matched when named through another spelling
+/// of its parent directory (a symlink here, an 8.3 short name on Windows).
+#[cfg(unix)]
+#[test]
+fn worktree_remove_matches_a_missing_worktree_through_an_alias() {
+    let (t, _) = crate::git::fixtures::linear(1);
+    let outside = tempfile::tempdir().unwrap();
+    let real = outside.path().join("real");
+    std::fs::create_dir(&real).unwrap();
+    let alias = outside.path().join("alias");
+    std::os::unix::fs::symlink(&real, &alias).unwrap();
+    sh_ok(
+        &t,
+        &["worktree", "add", "-b", "w", "--", &fwd(&real.join("wt"))],
+    );
+    std::fs::remove_dir_all(real.join("wt")).unwrap();
+    sh_ok(
+        &t,
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            "--",
+            &fwd(&alias.join("wt")),
+        ],
+    );
+    let listing = sh_ok(&t, &["worktree", "list", "--porcelain"]).stdout_str();
+    assert_eq!(listing.matches("worktree ").count(), 1, "{listing}");
 }
 
 // ------------------------------------------------------------ log --follow
