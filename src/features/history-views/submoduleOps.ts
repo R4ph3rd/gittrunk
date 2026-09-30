@@ -18,7 +18,7 @@ export function updateSubmodules(
   what: string,
 ) {
   return runOp({
-    kind: "fetch",
+    kind: "submodule",
     repoId,
     label: `Updating ${what}`,
     doneLabel: `Updated ${what}`,

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { OpProgress } from "@/ipc/bindings";
 
-export type OpKind = "fetch" | "pull" | "push" | "clone";
+export type OpKind = "fetch" | "pull" | "push" | "clone" | "submodule";
 
 export interface RunningOp {
   id: string;
