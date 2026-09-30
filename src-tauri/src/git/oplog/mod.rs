@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::git::libgit::repo::head_state;
 use crate::ipc::error::{AppError, AppResult, ErrorKind};
-use crate::ipc::types::{OpOutcome, OplogEntry};
+use crate::ipc::types::{OpOutcome, OplogEntry, OplogState};
 
 pub use snapshot::{HeadSnap, Snapshot};
 
@@ -126,6 +126,21 @@ fn internal(e: serde_json::Error) -> AppError {
     AppError::new(ErrorKind::Internal, format!("oplog: {e}"))
 }
 
+/// Entry undo reverts: the newest one that is not undone.
+fn undo_index(entries: &[JournalEntry]) -> Option<usize> {
+    entries.iter().rposition(|e| !e.undone)
+}
+
+/// Entry redo reapplies: the first non-superseded undone entry in the tail
+/// after the newest applied entry (undos walk backwards, redos forwards).
+fn redo_index(entries: &[JournalEntry]) -> Option<usize> {
+    let start = undo_index(entries).map_or(0, |i| i + 1);
+    entries[start..]
+        .iter()
+        .position(|e| e.undone && !e.superseded)
+        .map(|p| start + p)
+}
+
 /// Journal facade; all functions operate on one repository.
 pub struct Oplog;
 
@@ -186,17 +201,30 @@ impl Oplog {
         Self::step(repo, dry_run, true)
     }
 
-    /// Reapplies the most recently undone operation.
+    /// Reapplies the oldest undone operation after the last applied one.
     pub fn redo(repo: &Repository, dry_run: bool) -> AppResult<OpOutcome> {
         Self::step(repo, dry_run, false)
+    }
+
+    /// Undo/redo availability and the descriptions of the entries they would act on.
+    pub fn state(repo: &Repository) -> AppResult<OplogState> {
+        let entries = read_journal(repo)?;
+        let undo = undo_index(&entries).map(|i| entries[i].description.clone());
+        let redo = redo_index(&entries).map(|i| entries[i].description.clone());
+        Ok(OplogState {
+            can_undo: undo.is_some(),
+            can_redo: redo.is_some(),
+            undo_description: undo,
+            redo_description: redo,
+        })
     }
 
     fn step(repo: &Repository, dry_run: bool, undo: bool) -> AppResult<OpOutcome> {
         let mut entries = read_journal(repo)?;
         let idx = if undo {
-            entries.iter().rposition(|e| !e.undone)
+            undo_index(&entries)
         } else {
-            entries.iter().rposition(|e| e.undone && !e.superseded)
+            redo_index(&entries)
         }
         .ok_or_else(|| {
             AppError::new(

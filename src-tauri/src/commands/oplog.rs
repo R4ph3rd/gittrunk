@@ -47,31 +47,13 @@ pub async fn op_cancel(
     Ok(())
 }
 
-// Undo/redo availability for the toolbar. Stub until M9 Wave 1.
+/// Undo/redo availability for the toolbar.
 #[tauri::command]
 #[specta::specta]
 pub async fn oplog_state(
     state: tauri::State<'_, crate::git::GitState>,
     repo: RepoId,
 ) -> AppResult<OplogState> {
-    let _ = (&state, &repo);
-    Err(crate::ipc::error::AppError::not_implemented("oplog_state"))
-}
-
-#[cfg(test)]
-mod stub_tests {
-    use super::*;
-    use tauri::Manager;
-
-    #[test]
-    fn oplog_state_is_not_implemented() {
-        let app = tauri::test::mock_app();
-        app.manage(crate::git::GitState::default());
-        let err = tauri::async_runtime::block_on(oplog_state(
-            app.state::<crate::git::GitState>(),
-            "r".to_string(),
-        ))
-        .unwrap_err();
-        assert_eq!(err.kind, crate::ipc::error::ErrorKind::NotImplemented);
-    }
+    let st = state.inner().clone();
+    crate::git::blocking(move || st.with_repo(&repo, |_, r| Oplog::state(r))).await
 }

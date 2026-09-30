@@ -365,3 +365,61 @@ fn snapshot_captures_untracked_without_touching_worktree() {
         .iter()
         .any(|e| e.path() == Ok("new.txt")));
 }
+
+fn state(t: &TestRepo) -> OplogState {
+    Oplog::state(&t.repo).unwrap()
+}
+
+#[test]
+fn state_of_empty_repo_is_all_false() {
+    let t = TestRepo::new();
+    let s = state(&t);
+    assert!(!s.can_undo && !s.can_redo);
+    assert!(s.undo_description.is_none() && s.redo_description.is_none());
+}
+
+#[test]
+fn multi_step_undo_redo_walks_the_journal_in_order() {
+    let (t, ..) = fixtures::linear(2);
+    applied(LibGit.branch_create(&t.repo, &branch_req("a", None), false));
+    applied(LibGit.branch_create(&t.repo, &branch_req("b", None), false));
+    let s = state(&t);
+    assert!(s.can_undo && !s.can_redo);
+    assert!(s.undo_description.unwrap().contains('b'));
+
+    Oplog::undo(&t.repo, false).unwrap();
+    let s = state(&t);
+    assert!(s.can_undo && s.can_redo);
+    assert!(s.undo_description.unwrap().contains('a'));
+    assert!(s.redo_description.unwrap().contains('b'));
+
+    Oplog::undo(&t.repo, false).unwrap();
+    let s = state(&t);
+    assert!(!s.can_undo && s.can_redo);
+    assert!(s.redo_description.unwrap().contains('a'));
+    assert!(branch_tip(&t, "a").is_none() && branch_tip(&t, "b").is_none());
+
+    Oplog::redo(&t.repo, false).unwrap();
+    assert!(branch_tip(&t, "a").is_some());
+    assert!(branch_tip(&t, "b").is_none());
+    let s = state(&t);
+    assert!(s.can_undo && s.can_redo);
+    assert!(s.undo_description.unwrap().contains('a'));
+    assert!(s.redo_description.unwrap().contains('b'));
+
+    Oplog::redo(&t.repo, false).unwrap();
+    assert!(branch_tip(&t, "a").is_some() && branch_tip(&t, "b").is_some());
+    let s = state(&t);
+    assert!(s.can_undo && !s.can_redo && s.redo_description.is_none());
+}
+
+#[test]
+fn new_operation_after_undo_clears_redo_state() {
+    let (t, ..) = fixtures::linear(2);
+    applied(LibGit.branch_create(&t.repo, &branch_req("one", None), false));
+    Oplog::undo(&t.repo, false).unwrap();
+    assert!(state(&t).can_redo);
+    applied(LibGit.branch_create(&t.repo, &branch_req("two", None), false));
+    let s = state(&t);
+    assert!(s.can_undo && !s.can_redo && s.redo_description.is_none());
+}
