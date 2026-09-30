@@ -24,6 +24,10 @@
   --color-danger: var(--danger);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-danger-fg: var(--danger-fg);
+  --color-overlay: var(--overlay);
+  --color-focus-ring: var(--focus-ring);
+  --color-selection: var(--selection);
 
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
