@@ -2,7 +2,9 @@
 
 A fast, native desktop Git client. An alternative to GitKraken built with Tauri 2 (Rust + libgit2) and React.
 
-> Status: milestone M0 (scaffold). See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
+> Status: milestone M1 (read path: open repositories, commit graph, details). See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
+
+![gittrunk commit graph](docs/screenshots/graph.png)
 
 ## Features (planned)
 
