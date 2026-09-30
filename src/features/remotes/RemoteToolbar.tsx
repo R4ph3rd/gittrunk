@@ -14,6 +14,7 @@ import { formatShortcut } from "@/app/shortcuts";
 import { useRepoBusy } from "@/features/ops/store";
 import { useRefs } from "@/ipc/queries";
 import type { PullStrategy } from "@/ipc/bindings";
+import { updateSettings, useSettings } from "@/stores/settings";
 import { useRemotesUi } from "@/stores/remotes";
 import { fetchRemote, headBranch, pullCurrent, pushBranch, STRATEGY_LABEL } from "./actions";
 
@@ -33,8 +34,7 @@ export function RemoteToolbar({ repoId }: { repoId: string }) {
   const client = useQueryClient();
   const refs = useRefs(repoId);
   const busy = useRepoBusy(repoId);
-  const strategy = useRemotesUi((s) => s.pullStrategy);
-  const setStrategy = useRemotesUi((s) => s.setPullStrategy);
+  const strategy = useSettings().pullStrategy;
   const setForcePushFor = useRemotesUi((s) => s.setForcePushFor);
 
   const branch = headBranch(refs.data);
@@ -87,7 +87,7 @@ export function RemoteToolbar({ repoId }: { repoId: string }) {
                 key={s}
                 icon={s === strategy ? <Check /> : <span className="size-3.5" aria-hidden />}
                 onSelect={() => {
-                  setStrategy(s);
+                  void updateSettings({ pullStrategy: s });
                   void pullCurrent(client, repoId, s);
                 }}
               >

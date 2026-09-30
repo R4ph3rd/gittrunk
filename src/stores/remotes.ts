@@ -1,16 +1,5 @@
 import { create } from "zustand";
-import type { OpPreview, PullStrategy } from "@/ipc/bindings";
-
-const PULL_KEY = "gittrunk.pullStrategy";
-
-function readStrategy(): PullStrategy {
-  try {
-    const v = window.localStorage.getItem(PULL_KEY);
-    return v === "rebase" || v === "ffOnly" ? v : "merge";
-  } catch {
-    return "merge";
-  }
-}
+import type { OpPreview } from "@/ipc/bindings";
 
 export interface PushDialogState {
   repoId: string;
@@ -24,14 +13,11 @@ export interface UndoPreviewState {
 }
 
 interface RemotesUiState {
-  /** Default pull strategy; moves to backend settings later. */
-  pullStrategy: PullStrategy;
   cloneOpen: boolean;
   addRemoteFor: string | null;
   pushDialog: PushDialogState | null;
   forcePushFor: string | null;
   undoPreview: UndoPreviewState | null;
-  setPullStrategy: (s: PullStrategy) => void;
   setCloneOpen: (open: boolean) => void;
   setAddRemoteFor: (repoId: string | null) => void;
   setPushDialog: (state: PushDialogState | null) => void;
@@ -41,20 +27,11 @@ interface RemotesUiState {
 }
 
 export const useRemotesUi = create<RemotesUiState>((set) => ({
-  pullStrategy: readStrategy(),
   cloneOpen: false,
   addRemoteFor: null,
   pushDialog: null,
   forcePushFor: null,
   undoPreview: null,
-  setPullStrategy: (pullStrategy) => {
-    try {
-      window.localStorage.setItem(PULL_KEY, pullStrategy);
-    } catch {
-      /* storage unavailable */
-    }
-    set({ pullStrategy });
-  },
   setCloneOpen: (cloneOpen) => set({ cloneOpen }),
   setAddRemoteFor: (addRemoteFor) => set({ addRemoteFor }),
   setPushDialog: (pushDialog) => set({ pushDialog }),

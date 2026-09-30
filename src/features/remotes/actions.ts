@@ -11,6 +11,7 @@ import {
 import { unwrap } from "@/ipc/client";
 import { queryKeys } from "@/ipc/queries";
 import { useRemotesUi } from "@/stores/remotes";
+import { getPullStrategy } from "@/stores/settings";
 
 export const STRATEGY_LABEL: Record<PullStrategy, string> = {
   merge: "Merge",
@@ -60,7 +61,7 @@ export function fetchRemote(repoId: string, remote: string | null) {
 export async function pullCurrent(
   client: QueryClient,
   repoId: string,
-  strategy: PullStrategy = useRemotesUi.getState().pullStrategy,
+  strategy: PullStrategy = getPullStrategy(),
 ) {
   const [refs, remotes] = await Promise.all([
     loadRefs(client, repoId),

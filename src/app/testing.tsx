@@ -17,6 +17,7 @@ import { App } from "./App";
 
 import { TooltipProvider } from "@/design/components";
 import { useRemotesUi } from "@/stores/remotes";
+import { useSettingsStore } from "@/stores/settings";
 import { useOpsStore } from "@/features/ops/store";
 import {
   emitCredentialRequested,
@@ -327,6 +328,7 @@ export function resetStore() {
   });
   useOpsStore.getState().reset();
   useRemotesUi.getState().reset();
+  useSettingsStore.setState({ settings: null });
 }
 
 export function renderApp() {

@@ -100,6 +100,24 @@ describe("settings store", () => {
     expect(getConfirmDestructive()).toBe(false);
   });
 
+  it("migrates the legacy localStorage pull strategy once", async () => {
+    window.localStorage.setItem("gittrunk.pullStrategy", "rebase");
+    setup();
+    await waitFor(() => expect(getPullStrategy()).toBe("rebase"));
+    expect(commands.settingsSet).toHaveBeenCalledWith(
+      expect.objectContaining({ pullStrategy: "rebase" }),
+    );
+    expect(window.localStorage.getItem("gittrunk.pullStrategy")).toBeNull();
+  });
+
+  it("drops the legacy key without overriding a non-default backend value", async () => {
+    window.localStorage.setItem("gittrunk.pullStrategy", "ffOnly");
+    setup({ settings: { pullStrategy: "rebase" } });
+    await waitFor(() => expect(window.localStorage.getItem("gittrunk.pullStrategy")).toBeNull());
+    expect(getPullStrategy()).toBe("rebase");
+    expect(commands.settingsSet).not.toHaveBeenCalled();
+  });
+
   it("falls back to defaults before load", () => {
     expect(getPullStrategy()).toBe(DEFAULT_SETTINGS.pullStrategy);
     expect(getConfirmDestructive()).toBe(true);

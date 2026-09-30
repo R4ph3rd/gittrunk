@@ -45,6 +45,30 @@ export function fromOverrides(o: Overrides): Keybinding[] {
   return Object.entries(o).map(([action, keys]) => ({ action, keys: keys ?? "" }));
 }
 
+const LEGACY_PULL_KEY = "gittrunk.pullStrategy";
+
+/**
+ * The pull default used to live in localStorage. Carry it over once, and only when the
+ * backend still holds the default, then drop the old key.
+ */
+export async function migrateLegacyPullStrategy(
+  loaded: AppSettings,
+  update: (patch: Partial<AppSettings>) => Promise<UpdateResult>,
+): Promise<void> {
+  try {
+    const legacy = window.localStorage.getItem(LEGACY_PULL_KEY);
+    if (legacy === null) return;
+    const valid = legacy === "rebase" || legacy === "ffOnly";
+    if (valid && loaded.pullStrategy === DEFAULT_SETTINGS.pullStrategy) {
+      const result = await update({ pullStrategy: legacy });
+      if (!result.ok) return; // keep the key so the next launch retries
+    }
+    window.localStorage.removeItem(LEGACY_PULL_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   settings: null,
   overrides: {},
@@ -56,7 +80,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       unwrap(commands.settingsGet()),
       unwrap(commands.keybindingsGet()),
     ]);
-    if (s.status === "fulfilled") set({ settings: s.value });
+    if (s.status === "fulfilled") {
+      set({ settings: s.value });
+      await migrateLegacyPullStrategy(s.value, get().update);
+    }
     // Defaults stay in effect; a failed startup load is not worth interrupting the user.
     else console.warn(`Could not load settings, using defaults: ${message(s.reason)}`);
     if (k.status === "fulfilled") {

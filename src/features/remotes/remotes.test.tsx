@@ -21,6 +21,7 @@ import { useOpsStore } from "@/features/ops/store";
 import type { BranchInfo, RefsSnapshot } from "@/ipc/bindings";
 import { useRemotesUi } from "@/stores/remotes";
 import { useRepoStore } from "@/stores/repo";
+import { getPullStrategy } from "@/stores/settings";
 import { useCredentialQueue } from "./credentials";
 
 vi.mock("@/ipc/bindings", async () => (await import("@/app/mockBindings")).bindingsMock());
@@ -99,7 +100,6 @@ beforeEach(() => {
   resetStore();
   useCredentialQueue.getState().reset();
   useCommandStore.setState({ recent: [] });
-  useRemotesUi.setState({ pullStrategy: "merge" });
 });
 
 describe("operation tracker", () => {
@@ -223,7 +223,7 @@ describe("toolbar", () => {
         strategy: "rebase",
       }),
     );
-    expect(window.localStorage.getItem("gittrunk.pullStrategy")).toBe("rebase");
+    expect(getPullStrategy()).toBe("rebase");
   });
 
   it("pushes to the upstream", async () => {
