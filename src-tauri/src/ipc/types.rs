@@ -62,6 +62,36 @@ wire! {
     }
 }
 
+wire! {
+    /// Compile-time platform facts the UI uses to hide unsupported features.
+    pub struct PlatformInfo {
+        /// `std::env::consts::OS`: "android" | "windows" | "macos" | "linux".
+        pub os: String,
+        pub mobile: bool,
+        pub has_git_cli: bool,
+        pub can_pick_folder: bool,
+        pub supports_ssh: bool,
+        pub supports_external_editor: bool,
+        pub supports_rebase: bool,
+        pub supports_interactive_rebase: bool,
+        pub supports_worktrees: bool,
+        pub supports_submodules: bool,
+        pub supports_file_history: bool,
+        pub supports_hooks: bool,
+        /// "file" or "keychain".
+        pub secret_store: String,
+        /// Where clones land by default on mobile/embedded builds.
+        pub default_repos_dir: Option<String>,
+    }
+}
+
+wire! {
+    pub struct GitIdentity {
+        pub name: Option<String>,
+        pub email: Option<String>,
+    }
+}
+
 // ---------------------------------------------------------------- repo
 
 wire_enum! {

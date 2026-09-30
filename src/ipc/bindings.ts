@@ -9,12 +9,19 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 export const commands = {
 	/**  Version info; also proves the IPC pipeline end to end. */
 	appInfo: () => typedError<AppInfo, AppError>(__TAURI_INVOKE("app_info")),
+	platformInfo: () => typedError<PlatformInfo, AppError>(__TAURI_INVOKE("platform_info")),
+	/**  Lets the Android back handler close the app ("press back again to exit"). */
+	appExit: () => typedError<null, AppError>(__TAURI_INVOKE("app_exit")),
+	gitIdentityGet: () => typedError<GitIdentity, AppError>(__TAURI_INVOKE("git_identity_get")),
+	gitIdentitySet: (name: string, email: string) => typedError<GitIdentity, AppError>(__TAURI_INVOKE("git_identity_set", { name, email })),
 	repoOpen: (path: string) => typedError<RepoInfo, AppError>(__TAURI_INVOKE("repo_open", { path })),
 	repoInit: (request: InitRequest) => typedError<RepoInfo, AppError>(__TAURI_INVOKE("repo_init", { request })),
 	repoClone: (request: CloneRequest) => typedError<string, AppError>(__TAURI_INVOKE("repo_clone", { request })),
 	repoClose: (repo: string) => typedError<null, AppError>(__TAURI_INVOKE("repo_close", { repo })),
 	repoInfo: (repo: string) => typedError<RepoInfo, AppError>(__TAURI_INVOKE("repo_info", { repo })),
 	repoRecent: () => typedError<RecentRepo[], AppError>(__TAURI_INVOKE("repo_recent")),
+	/**  Deletes a repository folder under the default repos dir (mobile/embedded). */
+	repoDelete: (path: string) => typedError<null, AppError>(__TAURI_INVOKE("repo_delete", { path })),
 	graphLoad: (repo: string, filter: GraphFilter) => typedError<GraphMeta, AppError>(__TAURI_INVOKE("graph_load", { repo, filter })),
 	graphRows: (repo: string, start: number, len: number) => typedError<GraphRow[], AppError>(__TAURI_INVOKE("graph_rows", { repo, start, len })),
 	graphSearch: (repo: string, search: GraphSearch) => typedError<number[], AppError>(__TAURI_INVOKE("graph_search", { repo, search })),
@@ -304,7 +311,7 @@ export type EdgeKind =
 "branchOut";
 
 /**  Closed set of error categories the UI can branch on. */
-export type ErrorKind = "notARepo" | "conflict" | "dirtyWorktree" | "authRequired" | "authFailed" | "network" | "refNotFound" | "invalidInput" | "gitCli" | "aiDisabled" | "aiProvider" | "cancelled" | "io" | "notImplemented" | "internal";
+export type ErrorKind = "notARepo" | "conflict" | "dirtyWorktree" | "authRequired" | "authFailed" | "network" | "refNotFound" | "invalidInput" | "gitCli" | "aiDisabled" | "aiProvider" | "cancelled" | "io" | "notImplemented" | "unsupported" | "internal";
 
 export type FetchRequest = {
 	/**  `None` fetches all remotes. */
@@ -335,6 +342,11 @@ export type FileHistoryEntry = {
 	/**  Path of the file at this commit (follows renames). */
 	path: string,
 	status: ChangeStatus,
+};
+
+export type GitIdentity = {
+	name: string | null,
+	email: string | null,
 };
 
 /**  Edge drawn from this row down to the next row. */
@@ -491,6 +503,27 @@ export type PlannedCommand = { kind: "checkout"; target: CheckoutTarget } | { ki
 export type PlannedStep = {
 	description: string,
 	command: PlannedCommand,
+};
+
+/**  Compile-time platform facts the UI uses to hide unsupported features. */
+export type PlatformInfo = {
+	/**  `std::env::consts::OS`: "android" | "windows" | "macos" | "linux". */
+	os: string,
+	mobile: boolean,
+	hasGitCli: boolean,
+	canPickFolder: boolean,
+	supportsSsh: boolean,
+	supportsExternalEditor: boolean,
+	supportsRebase: boolean,
+	supportsInteractiveRebase: boolean,
+	supportsWorktrees: boolean,
+	supportsSubmodules: boolean,
+	supportsFileHistory: boolean,
+	supportsHooks: boolean,
+	/**  "file" or "keychain". */
+	secretStore: string,
+	/**  Where clones land by default on mobile/embedded builds. */
+	defaultReposDir: string | null,
 };
 
 export type PullRequest = {

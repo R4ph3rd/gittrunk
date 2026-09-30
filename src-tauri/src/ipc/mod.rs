@@ -20,12 +20,17 @@ pub fn builder() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new()
         .commands(collect_commands![
             commands::app::app_info,
+            commands::app::platform_info,
+            commands::app::app_exit,
+            commands::identity::git_identity_get,
+            commands::identity::git_identity_set,
             commands::repo::repo_open,
             commands::repo::repo_init,
             commands::repo::repo_clone,
             commands::repo::repo_close,
             commands::repo::repo_info,
             commands::repo::repo_recent,
+            commands::repo::repo_delete,
             commands::graph::graph_load,
             commands::graph::graph_rows,
             commands::graph::graph_search,

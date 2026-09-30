@@ -5,6 +5,7 @@ pub mod askpass;
 pub mod commands;
 pub mod git;
 pub mod ipc;
+pub mod platform;
 pub mod settings;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -13,7 +14,7 @@ pub fn run() {
 
     // Keep bindings fresh during `tauri dev`. Skipped when the source tree is
     // absent (e.g. a debug binary copied elsewhere) instead of panicking.
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(mobile)))]
     if std::path::Path::new(ipc::BINDINGS_PATH)
         .parent()
         .is_some_and(|dir| dir.exists())

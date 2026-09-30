@@ -19,6 +19,7 @@ pub enum ErrorKind {
     Cancelled,
     Io,
     NotImplemented,
+    Unsupported,
     Internal,
 }
 
@@ -44,6 +45,13 @@ impl AppError {
     pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
         self.detail = Some(detail.into());
         self
+    }
+
+    pub fn unsupported(what: &str) -> Self {
+        Self::new(
+            ErrorKind::Unsupported,
+            format!("{what} is not supported on this platform"),
+        )
     }
 
     pub fn not_implemented(command: &str) -> Self {

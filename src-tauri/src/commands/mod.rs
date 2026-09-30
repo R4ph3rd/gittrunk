@@ -6,6 +6,7 @@ pub mod app;
 pub mod conflicts;
 pub mod graph;
 pub mod history;
+pub mod identity;
 pub mod oplog;
 pub mod refs;
 pub mod remotes;

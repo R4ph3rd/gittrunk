@@ -251,6 +251,30 @@ impl GitState {
         Ok(())
     }
 
+    /// Closes every open repository whose git dir lives at or under `path`
+    /// (stops watchers). Returns how many were closed.
+    pub fn close_path(&self, path: &Path) -> usize {
+        let root = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        let mut repos = self.repos.write();
+        let ids: Vec<RepoId> = repos
+            .values()
+            .filter(|e| {
+                let dir = e
+                    .git_dir
+                    .canonicalize()
+                    .unwrap_or_else(|_| e.git_dir.clone());
+                dir.starts_with(&root)
+            })
+            .map(|e| e.id.clone())
+            .collect();
+        for id in &ids {
+            if let Some(entry) = repos.remove(id) {
+                entry.watcher.lock().take();
+            }
+        }
+        ids.len()
+    }
+
     /// Starts the file watcher for `entry` (no-op when already running).
     pub fn ensure_watcher(&self, entry: &Arc<RepoEntry>, app: tauri::AppHandle) {
         let mut slot = entry.watcher.lock();

@@ -53,6 +53,18 @@ impl RecentStore {
         Ok(list)
     }
 
+    /// Drops every entry at or under `path` (used when a repository is deleted).
+    pub fn remove_path(&self, path: &Path) -> AppResult<()> {
+        let _guard = WRITE_LOCK.lock();
+        let mut list = self.load();
+        let before = list.len();
+        list.retain(|r| !Path::new(&r.path).starts_with(path));
+        if list.len() != before {
+            self.save(&list)?;
+        }
+        Ok(())
+    }
+
     fn save(&self, list: &[RecentRepo]) -> AppResult<()> {
         fs::create_dir_all(&self.dir)?;
         let text = serde_json::to_string_pretty(list).map_err(|e| {
@@ -113,6 +125,17 @@ mod tests {
         assert_eq!(list.len(), MAX_RECENT);
         assert_eq!(list[0].path, "/r29");
         assert_eq!(list[19].path, "/r10");
+    }
+
+    #[test]
+    fn remove_path_drops_matching_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = RecentStore::new(dir.path());
+        store.record("/keep", "keep", 1.0).unwrap();
+        store.record("/gone", "gone", 2.0).unwrap();
+        store.remove_path(Path::new("/gone")).unwrap();
+        let paths: Vec<_> = store.load().into_iter().map(|r| r.path).collect();
+        assert_eq!(paths, ["/keep"]);
     }
 
     #[test]
