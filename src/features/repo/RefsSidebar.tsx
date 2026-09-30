@@ -1,5 +1,13 @@
-import { useState, type ReactNode } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { useState, type ComponentProps, type ReactNode } from "react";
+import { ArrowDownToLine, ChevronDown, ChevronRight, Trash2, Undo2 } from "lucide-react";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/design/components";
+import { stashLabel, useStashActions } from "@/features/stash/useStashActions";
 import { useRefs } from "@/ipc/queries";
 import { cn } from "@/lib/cn";
 import { useRepoStore } from "@/stores/repo";
@@ -37,15 +45,17 @@ function Item({
   active,
   hint,
   onClick,
+  ...rest
 }: {
   label: string;
   active?: boolean;
   hint?: string;
   onClick?: () => void;
-}) {
+} & Omit<ComponentProps<"button">, "children" | "className" | "type">) {
   return (
     <li>
       <button
+        {...rest}
         type="button"
         onClick={onClick}
         className={cn(
@@ -63,6 +73,7 @@ function Item({
 export function RefsSidebar({ repoId }: { repoId: string }) {
   const refs = useRefs(repoId);
   const select = useRepoStore((s) => s.selectCommit);
+  const stash = useStashActions(repoId);
   const data = refs.data;
 
   return (
@@ -93,15 +104,35 @@ export function RefsSidebar({ repoId }: { repoId: string }) {
           </Section>
           <Section title="Stashes" count={data.stashes.length}>
             {data.stashes.map((s) => (
-              <Item
-                key={s.index}
-                label={s.message || `stash@{${s.index}}`}
-                onClick={() => select(repoId, s.oid)}
-              />
+              <ContextMenu key={s.index}>
+                <ContextMenuTrigger asChild>
+                  <Item label={stashLabel(s)} onClick={() => select(repoId, s.oid)} />
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  <ContextMenuItem icon={<Undo2 />} onSelect={() => void stash.apply(s, false)}>
+                    Apply
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    icon={<ArrowDownToLine />}
+                    onSelect={() => void stash.apply(s, true)}
+                  >
+                    Pop
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem
+                    icon={<Trash2 />}
+                    destructive
+                    onSelect={() => void stash.drop(s)}
+                  >
+                    Drop
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
             ))}
           </Section>
         </>
       )}
+      {stash.dialog}
     </nav>
   );
 }
