@@ -29,11 +29,28 @@ impl TestRepo {
         let mut opts = RepositoryInitOptions::new();
         opts.initial_head("main");
         let repo = Repository::init_opts(dir.path(), &opts).unwrap();
+        {
+            // Deterministic regardless of the host's global/system config.
+            let mut cfg = repo.config().unwrap();
+            cfg.set_str("core.autocrlf", "false").unwrap();
+            cfg.set_str("core.eol", "lf").unwrap();
+        }
         Self {
             dir,
             repo,
             clock: BASE_TIME,
         }
+    }
+
+    /// Enables `core.autocrlf=true` in the repo's local config.
+    pub fn enable_autocrlf(&self) {
+        let mut cfg = self.repo.config().unwrap();
+        cfg.set_str("core.autocrlf", "true").unwrap();
+    }
+
+    /// Writes a `.gitattributes` forcing CRLF in the working tree.
+    pub fn write_crlf_attributes(&self) {
+        self.write(".gitattributes", "* text=auto eol=crlf\n");
     }
 
     pub fn root(&self) -> PathBuf {
