@@ -119,7 +119,7 @@ fn quoted(prompt: &str) -> Option<&str> {
     (end > start).then(|| &prompt[start..end])
 }
 
-fn user_of(url: &str) -> Option<String> {
+pub(super) fn user_of(url: &str) -> Option<String> {
     let rest = url.split_once("://").map_or(url, |(_, r)| r);
     let authority = rest.split('/').next()?;
     let (userinfo, _) = authority.rsplit_once('@')?;
@@ -127,7 +127,7 @@ fn user_of(url: &str) -> Option<String> {
     (!user.is_empty()).then(|| user.to_string())
 }
 
-fn host_port(url: &str) -> String {
+pub(super) fn host_port(url: &str) -> String {
     let rest = url.split_once("://").map_or(url, |(_, r)| r);
     let authority = rest.split('/').next().unwrap_or("");
     authority

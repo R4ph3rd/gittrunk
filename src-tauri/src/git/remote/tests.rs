@@ -616,6 +616,8 @@ fn real_keychain_round_trip_when_available() {
 // ------------------------------------------------------------- remote management
 
 #[test]
+// Adds an ssh-style remote, which embedded builds refuse (see native_tests).
+#[cfg(not(embedded_git))]
 fn remote_management() {
     let f = fixture();
     let svc = LibGit;
@@ -818,6 +820,9 @@ fn pull_fast_forward_and_records_oplog() {
     assert_eq!(log[0].head_after, Some(c.to_string()));
 }
 
+// R1b-2: these two loop over `Rebase`, which the embedded shim gains later;
+// the embedded equivalents are in `native_tests.rs`.
+#[cfg(not(embedded_git))]
 #[test]
 fn pull_merge_rebase_and_ff_only_on_diverged_history() {
     for strategy in [
@@ -857,6 +862,7 @@ fn pull_merge_rebase_and_ff_only_on_diverged_history() {
     }
 }
 
+#[cfg(not(embedded_git))]
 #[test]
 fn pull_stops_on_conflicts_and_reports_the_oplog_entry() {
     for strategy in [PullStrategy::Merge, PullStrategy::Rebase] {
@@ -1045,3 +1051,8 @@ fn cancelled_operation_reports_cancelled() {
     .unwrap_err();
     assert_eq!(err.kind, ErrorKind::Cancelled);
 }
+
+// ------------------------------------------------------------- libgit2 backend
+
+#[path = "native_tests.rs"]
+mod native_tests;

@@ -203,6 +203,9 @@ pub fn fetch_args(request: &FetchRequest) -> AppResult<Vec<String>> {
 }
 
 pub fn fetch(sess: &NetSession, dir: &Path, request: &FetchRequest) -> AppResult<()> {
+    if native::enabled() {
+        return native::fetch(sess, dir, request);
+    }
     let args = fetch_args(request)?;
     sess.run_ok(dir, &args).map(|_| ())
 }
@@ -254,7 +257,15 @@ pub fn pull(sess: &NetSession, repo: &Repository, request: &PullRequest) -> AppR
     }
     .to_string();
     let (conflicts, entry) = Oplog::record(repo, "pull", summary.clone(), false, |repo| {
-        let out = sess.run(&dir, &args)?;
+        let out = if native::enabled() {
+            // Native fetch first; only the merge/rebase step goes through git.
+            match native::pull_prepare(sess, repo, request)? {
+                None => return Ok(None),
+                Some(merge_args) => sess.run(&dir, &merge_args)?,
+            }
+        } else {
+            sess.run(&dir, &args)?
+        };
         if out.success() {
             return Ok(None);
         }
@@ -302,6 +313,9 @@ pub fn push_args(request: &PushRequest) -> AppResult<Vec<String>> {
 }
 
 pub fn push(sess: &NetSession, dir: &Path, request: &PushRequest) -> AppResult<()> {
+    if native::enabled() {
+        return native::push(sess, dir, request);
+    }
     let args = push_args(request)?;
     sess.run_ok(dir, &args).map(|_| ())
 }
@@ -355,8 +369,12 @@ pub fn clone(sess: &NetSession, request: &CloneRequest) -> AppResult<PathBuf> {
         .map(Path::to_path_buf)
         .ok_or_else(|| invalid("destination has no parent directory"))?;
     std::fs::create_dir_all(&parent)?;
-    let args = clone_args(request, &dest);
-    let result = sess.run_ok(&parent, &args);
+    let result = if native::enabled() {
+        native::clone_into(sess, request, &dest)
+    } else {
+        let args = clone_args(request, &dest);
+        sess.run_ok(&parent, &args).map(|_| ())
+    };
     if result.is_err() {
         if existed {
             // Empty directory the user provided: leave it, but empty.
@@ -374,7 +392,7 @@ pub fn clone(sess: &NetSession, request: &CloneRequest) -> AppResult<PathBuf> {
             let _ = std::fs::remove_dir_all(&dest);
         }
     }
-    result.map(|_| dest)
+    result.map(|()| dest)
 }
 
 // --------------------------------------------------------------- remote branch delete
@@ -443,7 +461,11 @@ pub fn delete_remote_branch(
         .chain([remote.clone(), branch.clone()])
         .collect();
     let ((), entry) = Oplog::record(repo, "branch_delete_remote", summary.clone(), false, |_| {
-        sess.run_ok(&dir, &args).map(|_| ())
+        if native::enabled() {
+            native::delete_remote_branch(sess, repo, &remote, &branch)
+        } else {
+            sess.run_ok(&dir, &args).map(|_| ())
+        }
     })?;
     Ok(OpOutcome::Applied {
         oplog_id: entry.id,

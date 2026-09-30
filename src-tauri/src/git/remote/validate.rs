@@ -44,7 +44,36 @@ pub fn url(url: &str) -> AppResult<()> {
             url.escape_debug()
         )));
     }
+    if cfg!(embedded_git) {
+        return embedded_url(url);
+    }
     Ok(())
+}
+
+const HTTPS_ONLY: &str =
+    "only HTTPS remotes are supported on this platform; use an HTTPS URL with a personal access token";
+
+/// Embedded builds have no ssh: HTTPS only (plus local transports in tests).
+fn embedded_url(url: &str) -> AppResult<()> {
+    let lower = url.trim().to_ascii_lowercase();
+    if lower.starts_with("https://") {
+        return Ok(());
+    }
+    if cfg!(test)
+        && (lower.starts_with("http://")
+            || lower.starts_with("file://")
+            || std::path::Path::new(url.trim()).is_absolute())
+    {
+        return Ok(());
+    }
+    let scp_like = !lower.contains("://")
+        && lower
+            .split_once(':')
+            .is_some_and(|(host, _)| host.contains('@') || host.contains('.'));
+    if lower.starts_with("ssh://") || lower.starts_with("git+ssh://") || scp_like {
+        return Err(AppError::new(ErrorKind::Unsupported, HTTPS_ONLY));
+    }
+    Err(invalid(HTTPS_ONLY))
 }
 
 /// Branch or short ref name (no leading `-`, valid per `git check-ref-format`).
