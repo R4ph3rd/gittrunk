@@ -24,5 +24,37 @@ export default defineConfig({
     target: process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari13",
     minify: !process.env.TAURI_ENV_DEBUG,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              name: "vendor-diff",
+              test: /node_modules[\\/](@git-diff-view|highlight\.js|lowlight)[\\/]/,
+              priority: 40,
+              maxSize: 350_000,
+            },
+            {
+              name: "vendor-codemirror",
+              test: /node_modules[\\/](@codemirror[\\/](state|view|language|commands|merge|search|autocomplete|lint)|@lezer[\\/](common|highlight|lr)|codemirror|crelt|style-mod|w3c-keyname|@marijn)[\\/]/,
+              priority: 30,
+              maxSize: 350_000,
+            },
+            { name: "vendor-dnd", test: /node_modules[\\/]@dnd-kit[\\/]/, priority: 20 },
+            { name: "vendor-query", test: /node_modules[\\/]@tanstack[\\/]/, priority: 20 },
+            {
+              name: "vendor-radix",
+              test: /node_modules[\\/](@radix-ui|radix-ui|cmdk|@floating-ui|react-remove-scroll|aria-hidden)[\\/]/,
+              priority: 20,
+            },
+            {
+              name: "vendor-react",
+              test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/,
+              priority: 20,
+            },
+          ],
+        },
+      },
+    },
   },
 });
