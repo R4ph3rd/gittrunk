@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { GraphFilter, RepoInfo } from "@/ipc/bindings";
+import { getGraphOrder } from "./settings";
 
 export const DEFAULT_FILTER: GraphFilter = {
   refs: null,
@@ -56,13 +57,18 @@ export const useRepoStore = create<RepoState>((set) => ({
   diffMode: readDiffMode(),
   stashDialog: {},
   addRepo: (repo) =>
-    set((s) => ({
-      repos: s.repos.some((r) => r.id === repo.id)
-        ? s.repos.map((r) => (r.id === repo.id ? repo : r))
-        : [...s.repos, repo],
-      activeId: repo.id,
-      openError: null,
-    })),
+    set((s) => {
+      const known = s.repos.some((r) => r.id === repo.id);
+      // Newly opened repositories start with the graph order from settings.
+      const order = getGraphOrder();
+      const seed = !known && !s.filters[repo.id] && order !== DEFAULT_FILTER.order;
+      return {
+        repos: known ? s.repos.map((r) => (r.id === repo.id ? repo : r)) : [...s.repos, repo],
+        activeId: repo.id,
+        openError: null,
+        filters: seed ? { ...s.filters, [repo.id]: { ...DEFAULT_FILTER, order } } : s.filters,
+      };
+    }),
   removeRepo: (id) =>
     set((s) => {
       const repos = s.repos.filter((r) => r.id !== id);

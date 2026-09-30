@@ -115,6 +115,25 @@ describe("graph view", () => {
     expect(await screen.findByText("Details for 5")).toBeInTheDocument();
   });
 
+  it("opens new repositories with the graph order from settings", async () => {
+    const { commands } = await import("@/ipc/bindings");
+    (commands.settingsGet as ReturnType<typeof vi.fn>).mockImplementation(() =>
+      ok({
+        theme: "dark",
+        gitPath: null,
+        pullStrategy: "merge",
+        confirmDestructive: true,
+        graphOrder: "date",
+        diffContextLines: 3,
+      }),
+    );
+    await openRepo();
+    expect(commands.graphLoad).toHaveBeenCalledWith(
+      "r1",
+      expect.objectContaining({ order: "date" }),
+    );
+  });
+
   it("reloads the graph when the filter changes", async () => {
     const { commands } = await import("@/ipc/bindings");
     const user = await openRepo();
