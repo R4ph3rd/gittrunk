@@ -1,4 +1,5 @@
 import { RemotesHost } from "@/features/remotes/RemotesHost";
+import { SettingsHost } from "@/features/settings";
 import { RepoTabs } from "@/features/repo/RepoTabs";
 import { RepoView } from "@/features/repo/RepoView";
 import { StatusBar } from "@/features/repo/StatusBar";
@@ -19,6 +20,7 @@ export function App() {
       <StatusBar />
       <CommandHost />
       <RemotesHost />
+      <SettingsHost />
     </div>
   );
 }
