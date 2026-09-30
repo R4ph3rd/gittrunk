@@ -13,8 +13,8 @@ use tauri_specta::{collect_commands, collect_events, Builder};
 use crate::commands;
 use types::{CredentialRequested, OpFinished, OpProgress, RepoChanged};
 
-/// Path of the generated bindings, relative to `src-tauri/`.
-pub const BINDINGS_PATH: &str = "../src/ipc/bindings.ts";
+/// Absolute path of the generated bindings in the source tree.
+pub const BINDINGS_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../src/ipc/bindings.ts");
 
 pub fn builder() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new()

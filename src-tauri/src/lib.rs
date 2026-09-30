@@ -8,8 +8,15 @@ pub mod ipc;
 pub fn run() {
     let builder = ipc::builder();
 
+    // Keep bindings fresh during `tauri dev`. Skipped when the source tree is
+    // absent (e.g. a debug binary copied elsewhere) instead of panicking.
     #[cfg(debug_assertions)]
-    ipc::export_bindings(&builder, ipc::BINDINGS_PATH);
+    if std::path::Path::new(ipc::BINDINGS_PATH)
+        .parent()
+        .is_some_and(|dir| dir.exists())
+    {
+        ipc::export_bindings(&builder, ipc::BINDINGS_PATH);
+    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
