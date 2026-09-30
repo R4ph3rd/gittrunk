@@ -34,8 +34,12 @@ notify = "8"
 parking_lot = "0.12.5"
 tauri-plugin-dialog = "2"
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+reqwest = { version = "0.13.3", default-features = false, features = ["json", "rustls-no-provider", "stream", "system-proxy", "http2"] }
+tokio = { version = "1.53.1", features = ["rt", "sync", "time", "macros"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 
 [dev-dependencies]
+mockito = "1.7.2"
 tempfile = "3"
 
 [profile.release]
