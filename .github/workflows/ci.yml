@@ -88,6 +88,15 @@ jobs:
       - name: cargo test
         working-directory: src-tauri
         run: cargo test
+      # Android builds use the embedded git backend; exercise it on the host.
+      - name: cargo clippy (embedded-git)
+        if: runner.os == 'Linux'
+        working-directory: src-tauri
+        run: cargo clippy --all-targets --features embedded-git -- -D warnings
+      - name: cargo test (embedded-git)
+        if: runner.os == 'Linux'
+        working-directory: src-tauri
+        run: cargo test --features embedded-git
       # Git for Windows enables core.autocrlf; exercise that on the fast runner too.
       - name: cargo test (global core.autocrlf=true)
         if: runner.os == 'Linux'
