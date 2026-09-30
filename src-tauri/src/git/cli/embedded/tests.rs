@@ -584,3 +584,516 @@ fn stash_store_restores_a_dropped_stash() {
     sh_ok(&t, &["stash", "pop", "stash@{0}"]);
     assert_eq!(read(&t, "s.txt"), "dirty\n");
 }
+
+// ---------------------------------------------------------------- merge
+
+fn state(t: &TestRepo) -> git2::RepositoryState {
+    git2::Repository::open(t.root()).unwrap().state()
+}
+
+fn subjects(t: &TestRepo) -> Vec<String> {
+    let repo = git2::Repository::open(t.root()).unwrap();
+    let mut walk = repo.revwalk().unwrap();
+    walk.push_head().unwrap();
+    walk.map(|o| {
+        repo.find_commit(o.unwrap())
+            .unwrap()
+            .summary()
+            .unwrap()
+            .unwrap()
+            .to_string()
+    })
+    .collect()
+}
+
+/// `main` at `base`, `topic` two commits ahead (fast-forwardable).
+fn ahead() -> (TestRepo, git2::Oid) {
+    let mut t = TestRepo::new();
+    t.write("base.txt", "base\n");
+    let base = t.commit_all("base");
+    t.checkout_branch("topic", base);
+    t.commit_on("topic", "t1.txt", "1\n", "topic 1");
+    let tip = t.commit_on("topic", "t2.txt", "2\n", "topic 2");
+    t.repo.set_head("refs/heads/main").unwrap();
+    t.repo
+        .checkout_head(Some(git2::build::CheckoutBuilder::new().force()))
+        .unwrap();
+    (t, tip)
+}
+
+#[test]
+fn merge_fast_forwards() {
+    let (t, tip) = ahead();
+    let out = sh_ok(
+        &t,
+        &["merge", "--no-edit", "--ff-only", "--", &tip.to_string()],
+    );
+    assert!(out.stdout_str().contains("Fast-forward"));
+    assert_eq!(t.branch_tip("main"), tip);
+    assert!(t.root().join("t2.txt").exists());
+    assert_eq!(state(&t), git2::RepositoryState::Clean);
+}
+
+#[test]
+fn merge_ff_only_refuses_diverged_branches() {
+    let (t, topic) = diverged();
+    let main = t.head();
+    let out = sh(&t, &["merge", "--no-edit", "--ff-only", &topic.to_string()]);
+    assert_eq!(out.code, 128);
+    assert!(out
+        .stderr
+        .contains("Not possible to fast-forward, aborting."));
+    assert_eq!(t.head(), main);
+}
+
+#[test]
+fn merge_creates_a_merge_commit_with_the_given_message() {
+    let (t, topic) = diverged();
+    let main = t.head();
+    let out = sh_ok(
+        &t,
+        &[
+            "merge",
+            "--no-edit",
+            "-m",
+            "Merge the topic",
+            &topic.to_string(),
+        ],
+    );
+    assert!(out.stdout_str().contains("Merge made by"));
+    let c = t.repo.find_commit(t.head()).unwrap();
+    assert_eq!(c.message().unwrap(), "Merge the topic\n");
+    assert_eq!(c.parent_id(0).unwrap(), main);
+    assert_eq!(c.parent_id(1).unwrap(), topic);
+    assert!(t.root().join("topic.txt").exists() && t.root().join("main.txt").exists());
+    assert_eq!(state(&t), git2::RepositoryState::Clean);
+}
+
+#[test]
+fn merge_default_message_names_the_branch() {
+    let (t, _) = diverged();
+    sh_ok(&t, &["merge", "--no-edit", "--", "topic"]);
+    assert_eq!(subjects(&t)[0], "Merge branch 'topic'");
+}
+
+#[test]
+fn merge_no_ff_forces_a_merge_commit() {
+    let (t, tip) = ahead();
+    sh_ok(
+        &t,
+        &[
+            "merge",
+            "--no-edit",
+            "--no-ff",
+            "-m",
+            "forced",
+            &tip.to_string(),
+        ],
+    );
+    let c = t.repo.find_commit(t.head()).unwrap();
+    assert_eq!(c.parent_count(), 2);
+    assert_eq!(c.message().unwrap(), "forced\n");
+}
+
+#[test]
+fn merge_up_to_date_and_bad_revision() {
+    let (t, _) = diverged();
+    let head = t.head().to_string();
+    let out = sh_ok(&t, &["merge", "--no-edit", &head]);
+    assert!(out.stdout_str().contains("Already up to date."));
+    let out = sh(&t, &["merge", "--no-edit", "nope"]);
+    assert_eq!(out.code, 1);
+    assert!(out.stderr.contains("not something we can merge"));
+}
+
+#[test]
+fn merge_conflict_leaves_state_then_abort_restores() {
+    let (t, other) = conflicting();
+    let main = t.head();
+    let out = sh(&t, &["merge", "--no-edit", &other.to_string()]);
+    assert_eq!(out.code, 1, "{}", out.stderr);
+    let text = out.stdout_str();
+    assert!(text.contains("CONFLICT (content): Merge conflict in conflict.txt"));
+    assert!(text.contains("Automatic merge failed; fix conflicts and then commit the result."));
+    assert_eq!(state(&t), git2::RepositoryState::Merge);
+    assert!(t.root().join(".git/MERGE_HEAD").exists());
+    assert!(t.root().join(".git/MERGE_MSG").exists());
+    assert!(idx(&t).has_conflicts());
+    assert!(read(&t, "conflict.txt").contains("<<<<<<<"));
+
+    sh_ok(&t, &["merge", "--abort"]);
+    assert_eq!(state(&t), git2::RepositoryState::Clean);
+    assert_eq!(read(&t, "conflict.txt"), "main side\n");
+    assert!(!idx(&t).has_conflicts());
+    assert_eq!(t.head(), main);
+    let out = sh(&t, &["merge", "--abort"]);
+    assert_eq!(out.code, 128);
+}
+
+#[test]
+fn merge_conflict_resolved_and_concluded() {
+    let (t, other) = conflicting();
+    sh(&t, &["merge", "--no-edit", &other.to_string()]);
+    // A second merge while one is unfinished is refused.
+    let out = sh(&t, &["merge", "--no-edit", &other.to_string()]);
+    assert_eq!(out.code, 128);
+    t.write("conflict.txt", "both\n");
+    sh_ok(&t, &["add", "--", "conflict.txt"]);
+    sh_ok(&t, &["commit", "--no-edit"]);
+    assert_eq!(state(&t), git2::RepositoryState::Clean);
+    assert_eq!(t.repo.find_commit(t.head()).unwrap().parent_count(), 2);
+}
+
+#[test]
+fn merge_refuses_to_overwrite_local_changes() {
+    let mut t = TestRepo::new();
+    t.write("f.txt", "base\n");
+    let base = t.commit_all("base");
+    t.checkout_branch("topic", base);
+    let topic = t.commit_on("topic", "f.txt", "topic\n", "topic edit");
+    t.commit_on("main", "other.txt", "o\n", "main change");
+    t.write("f.txt", "local\n");
+    let out = sh(&t, &["merge", "--no-edit", &topic.to_string()]);
+    assert_eq!(out.code, 1, "{}", out.stderr);
+    assert!(out.stderr.contains("would be overwritten"));
+    assert!(!t.root().join(".git/MERGE_HEAD").exists());
+    assert_eq!(read(&t, "f.txt"), "local\n");
+}
+
+#[test]
+fn merge_squash_stages_without_committing() {
+    let (t, topic) = diverged();
+    let main = t.head();
+    sh_ok(
+        &t,
+        &["merge", "--no-edit", "--squash", "--", &topic.to_string()],
+    );
+    assert_eq!(t.head(), main);
+    assert_eq!(state(&t), git2::RepositoryState::Clean);
+    assert!(t.root().join("topic.txt").exists());
+    assert!(!t.root().join(".git/MERGE_HEAD").exists());
+    assert!(t.root().join(".git/SQUASH_MSG").exists());
+    assert!(idx(&t)
+        .get_path(std::path::Path::new("topic.txt"), 0)
+        .is_some());
+}
+
+// ---------------------------------------------------------- cherry-pick
+
+/// `main` has edited `f.txt`; `other` has c1 (a.txt), c2 (f.txt, conflicts
+/// with main) and c3 (b.txt).
+fn pick_setup() -> (TestRepo, [git2::Oid; 3]) {
+    let mut t = TestRepo::new();
+    t.write("f.txt", "base\n");
+    let base = t.commit_all("base");
+    t.checkout_branch("other", base);
+    let c1 = t.commit_on("other", "a.txt", "a\n", "add a");
+    let c2 = t.commit_on("other", "f.txt", "other\n", "edit f on other");
+    let c3 = t.commit_on("other", "b.txt", "b\n", "add b");
+    t.commit_on("main", "f.txt", "main\n", "edit f on main");
+    (t, [c1, c2, c3])
+}
+
+#[test]
+fn cherry_pick_applies_and_keeps_the_author() {
+    let mut t = TestRepo::new();
+    t.write("f.txt", "base\n");
+    let base = t.commit_all("base");
+    t.checkout_branch("other", base);
+    t.write("a.txt", "a\n");
+    let c1 = t.commit_all_by("Picked Author", "pa@example.com", "add a\n\nbody");
+    t.repo.set_head("refs/heads/main").unwrap();
+    t.repo
+        .checkout_head(Some(git2::build::CheckoutBuilder::new().force()))
+        .unwrap();
+    let main = t.head();
+    sh_ok(&t, &["cherry-pick", &c1.to_string()]);
+    let c = t.repo.find_commit(t.head()).unwrap();
+    assert_eq!(c.parent_id(0).unwrap(), main);
+    assert_eq!(c.author().name().unwrap(), "Picked Author");
+    assert_eq!(c.committer().name().unwrap(), "Fixture");
+    assert_eq!(c.message().unwrap(), "add a\n\nbody");
+    assert_eq!(read(&t, "a.txt"), "a\n");
+    assert_eq!(state(&t), git2::RepositoryState::Clean);
+}
+
+#[test]
+fn cherry_pick_several_commits_in_order() {
+    let (t, [c1, _, c3]) = pick_setup();
+    sh_ok(&t, &["cherry-pick", &c1.to_string(), &c3.to_string()]);
+    assert_eq!(
+        subjects(&t)[..2],
+        ["add b".to_string(), "add a".to_string()]
+    );
+    assert_eq!(state(&t), git2::RepositoryState::Clean);
+    assert!(!t.root().join(".git/sequencer").exists());
+}
+
+#[test]
+fn cherry_pick_conflict_then_continue() {
+    let (t, [_, c2, _]) = pick_setup();
+    let out = sh(&t, &["cherry-pick", &c2.to_string()]);
+    assert_eq!(out.code, 1, "{}", out.stderr);
+    assert!(out
+        .stdout_str()
+        .contains("CONFLICT (content): Merge conflict in f.txt"));
+    assert!(out.stderr.contains("could not apply"));
+    assert_eq!(state(&t), git2::RepositoryState::CherryPick);
+    assert!(t.root().join(".git/CHERRY_PICK_HEAD").exists());
+
+    // Unresolved: refuse.
+    let out = sh(&t, &["cherry-pick", "--continue"]);
+    assert_eq!(out.code, 128);
+    t.write("f.txt", "resolved\n");
+    sh_ok(&t, &["add", "--", "f.txt"]);
+    sh_ok(&t, &["cherry-pick", "--continue"]);
+    assert_eq!(state(&t), git2::RepositoryState::Clean);
+    let c = t.repo.find_commit(t.head()).unwrap();
+    assert_eq!(c.summary().unwrap().unwrap(), "edit f on other");
+    assert_eq!(read(&t, "f.txt"), "resolved\n");
+}
+
+#[test]
+fn cherry_pick_conflict_then_abort() {
+    let (t, [_, c2, _]) = pick_setup();
+    let main = t.head();
+    sh(&t, &["cherry-pick", &c2.to_string()]);
+    sh_ok(&t, &["cherry-pick", "--abort"]);
+    assert_eq!(state(&t), git2::RepositoryState::Clean);
+    assert_eq!(t.head(), main);
+    assert_eq!(read(&t, "f.txt"), "main\n");
+    assert!(!idx(&t).has_conflicts());
+    let out = sh(&t, &["cherry-pick", "--abort"]);
+    assert_eq!(out.code, 128);
+}
+
+#[test]
+fn cherry_pick_conflict_then_skip() {
+    let (t, [_, c2, _]) = pick_setup();
+    let main = t.head();
+    sh(&t, &["cherry-pick", &c2.to_string()]);
+    sh_ok(&t, &["cherry-pick", "--skip"]);
+    assert_eq!(state(&t), git2::RepositoryState::Clean);
+    assert_eq!(t.head(), main);
+    assert_eq!(read(&t, "f.txt"), "main\n");
+}
+
+#[test]
+fn cherry_pick_sequence_reports_sequence_state() {
+    let (t, [c1, c2, c3]) = pick_setup();
+    let main = t.head();
+    let out = sh(
+        &t,
+        &[
+            "cherry-pick",
+            &c1.to_string(),
+            &c2.to_string(),
+            &c3.to_string(),
+        ],
+    );
+    assert_eq!(out.code, 1, "{}", out.stderr);
+    assert_eq!(state(&t), git2::RepositoryState::CherryPickSequence);
+    let todo = fs::read_to_string(t.root().join(".git/sequencer/todo")).unwrap();
+    assert_eq!(todo.lines().count(), 2);
+    assert!(todo.starts_with("pick "));
+    assert_eq!(subjects(&t)[0], "add a");
+
+    t.write("f.txt", "resolved\n");
+    sh_ok(&t, &["add", "--", "f.txt"]);
+    sh_ok(&t, &["cherry-pick", "--continue"]);
+    assert_eq!(state(&t), git2::RepositoryState::Clean);
+    assert_eq!(
+        subjects(&t)[..3],
+        [
+            "add b".to_string(),
+            "edit f on other".to_string(),
+            "add a".to_string()
+        ]
+    );
+    assert!(!t.root().join(".git/sequencer").exists());
+
+    // Same sequence again, aborted: HEAD returns to where it started.
+    sh_ok(&t, &["reset", "--hard", &main.to_string()]);
+    sh(
+        &t,
+        &[
+            "cherry-pick",
+            &c1.to_string(),
+            &c2.to_string(),
+            &c3.to_string(),
+        ],
+    );
+    assert_eq!(state(&t), git2::RepositoryState::CherryPickSequence);
+    sh_ok(&t, &["cherry-pick", "--abort"]);
+    assert_eq!(state(&t), git2::RepositoryState::Clean);
+    assert_eq!(t.head(), main);
+    assert!(!t.root().join("a.txt").exists());
+}
+
+#[test]
+fn cherry_pick_sequence_skip_continues_with_the_rest() {
+    let (t, [c1, c2, c3]) = pick_setup();
+    sh(
+        &t,
+        &[
+            "cherry-pick",
+            &c1.to_string(),
+            &c2.to_string(),
+            &c3.to_string(),
+        ],
+    );
+    sh_ok(&t, &["cherry-pick", "--skip"]);
+    assert_eq!(state(&t), git2::RepositoryState::Clean);
+    assert_eq!(
+        subjects(&t)[..2],
+        ["add b".to_string(), "add a".to_string()]
+    );
+    assert_eq!(read(&t, "f.txt"), "main\n");
+}
+
+#[test]
+fn cherry_pick_no_commit_stages_only() {
+    let (t, [c1, _, _]) = pick_setup();
+    let main = t.head();
+    sh_ok(&t, &["cherry-pick", "-n", &c1.to_string()]);
+    assert_eq!(t.head(), main);
+    assert_eq!(state(&t), git2::RepositoryState::Clean);
+    assert!(idx(&t).get_path(std::path::Path::new("a.txt"), 0).is_some());
+}
+
+#[test]
+fn cherry_pick_rejects_merge_commit_without_mainline_and_bad_revision() {
+    let (t, topic) = diverged();
+    sh_ok(&t, &["merge", "--no-edit", "-m", "m", &topic.to_string()]);
+    let merge = t.head().to_string();
+    sh_ok(&t, &["reset", "--hard", "HEAD~1"]);
+    let out = sh(&t, &["cherry-pick", &merge]);
+    assert_eq!(out.code, 128);
+    assert!(out.stderr.contains("is a merge but no -m option was given"));
+    assert_eq!(state(&t), git2::RepositoryState::Clean);
+    let out = sh(&t, &["cherry-pick", "-m", "1", &merge]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let out = sh(&t, &["cherry-pick", "nope"]);
+    assert_eq!(out.code, 128);
+}
+
+#[test]
+fn cherry_pick_already_applied_stops_as_empty() {
+    let (t, [c1, _, _]) = pick_setup();
+    sh_ok(&t, &["cherry-pick", &c1.to_string()]);
+    let out = sh(&t, &["cherry-pick", &c1.to_string()]);
+    assert_eq!(out.code, 1);
+    assert!(out.stderr.contains("now empty"));
+    assert_eq!(state(&t), git2::RepositoryState::CherryPick);
+    sh_ok(&t, &["cherry-pick", "--skip"]);
+    assert_eq!(state(&t), git2::RepositoryState::Clean);
+}
+
+#[test]
+fn cherry_pick_refuses_staged_changes_and_local_overlap() {
+    let (t, [c1, c2, _]) = pick_setup();
+    t.write("x.txt", "x\n");
+    sh_ok(&t, &["add", "--", "x.txt"]);
+    let out = sh(&t, &["cherry-pick", &c1.to_string()]);
+    assert_eq!(out.code, 128);
+    assert!(out.stderr.contains("would be overwritten"));
+    sh_ok(&t, &["reset", "--hard"]);
+    t.write("f.txt", "local\n");
+    let out = sh(&t, &["cherry-pick", &c2.to_string()]);
+    assert_eq!(out.code, 1, "{}", out.stderr);
+    assert!(out.stderr.contains("would be overwritten"));
+    assert_eq!(state(&t), git2::RepositoryState::Clean);
+    assert_eq!(read(&t, "f.txt"), "local\n");
+}
+
+// --------------------------------------------------------------- revert
+
+#[test]
+fn revert_creates_a_revert_commit() {
+    let mut t = TestRepo::new();
+    t.write("f.txt", "1\n");
+    t.commit_all("first");
+    t.write("g.txt", "g\n");
+    let second = t.commit_all("add g");
+    let out = sh_ok(&t, &["revert", "--no-edit", &second.to_string()]);
+    assert_eq!(out.code, 0);
+    let c = t.repo.find_commit(t.head()).unwrap();
+    assert_eq!(
+        c.message().unwrap(),
+        format!("Revert \"add g\"\n\nThis reverts commit {second}.\n")
+    );
+    assert!(!t.root().join("g.txt").exists());
+    assert_eq!(state(&t), git2::RepositoryState::Clean);
+}
+
+#[test]
+fn revert_conflict_continue_and_abort() {
+    let mut t = TestRepo::new();
+    t.write("f.txt", "1\n");
+    t.commit_all("first");
+    t.write("f.txt", "2\n");
+    let second = t.commit_all("second");
+    t.write("f.txt", "3\n");
+    let third = t.commit_all("third");
+    let out = sh(&t, &["revert", "--no-edit", &second.to_string()]);
+    assert_eq!(out.code, 1, "{}", out.stderr);
+    assert_eq!(state(&t), git2::RepositoryState::Revert);
+    sh_ok(&t, &["revert", "--abort"]);
+    assert_eq!(state(&t), git2::RepositoryState::Clean);
+    assert_eq!(t.head(), third);
+    assert_eq!(read(&t, "f.txt"), "3\n");
+
+    sh(&t, &["revert", "--no-edit", &second.to_string()]);
+    t.write("f.txt", "resolved\n");
+    sh_ok(&t, &["add", "--", "f.txt"]);
+    sh_ok(&t, &["revert", "--continue"]);
+    assert_eq!(state(&t), git2::RepositoryState::Clean);
+    let c = t.repo.find_commit(t.head()).unwrap();
+    assert!(c
+        .summary()
+        .unwrap()
+        .unwrap()
+        .starts_with("Revert \"second\""));
+    assert!(!c.message().unwrap().contains('#'));
+}
+
+#[test]
+fn revert_sequence_reports_sequence_state_and_skips() {
+    let mut t = TestRepo::new();
+    t.write("f.txt", "1\n");
+    t.commit_all("first");
+    t.write("f.txt", "2\n");
+    let second = t.commit_all("second");
+    t.write("g.txt", "g\n");
+    let third = t.commit_all("third");
+    t.write("f.txt", "4\n");
+    t.commit_all("fourth");
+    // Newest first: third reverts cleanly, second conflicts with fourth.
+    sh(
+        &t,
+        &[
+            "revert",
+            "--no-edit",
+            &third.to_string(),
+            &second.to_string(),
+        ],
+    );
+    assert_eq!(state(&t), git2::RepositoryState::RevertSequence);
+    sh_ok(&t, &["revert", "--skip"]);
+    assert_eq!(state(&t), git2::RepositoryState::Clean);
+    assert_eq!(subjects(&t)[0], "Revert \"third\"");
+}
+
+#[test]
+fn control_flags_without_operation_are_fatal() {
+    let (t, _) = diverged();
+    for args in [
+        &["cherry-pick", "--continue"][..],
+        &["revert", "--abort"],
+        &["cherry-pick", "--skip"],
+    ] {
+        let out = sh(&t, args);
+        assert_eq!(out.code, 128, "{args:?}");
+        assert!(out.stderr.contains("no cherry-pick or revert in progress"));
+    }
+}

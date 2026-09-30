@@ -164,7 +164,7 @@ pub fn run(ctx: &Ctx, args: &[String]) -> Res {
         None => tree.is_empty(),
     };
     if !a.allow_empty && !a.amend && !merging && same_as_head {
-        return Ok(nothing_to_commit(&repo, warnings)?);
+        return nothing_to_commit(&repo, warnings);
     }
 
     let new_id = if a.amend {

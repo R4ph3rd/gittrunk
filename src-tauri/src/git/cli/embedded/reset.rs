@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use git2::build::CheckoutBuilder;
-use git2::{Commit, Oid, Repository, ResetType};
+use git2::{Commit, Repository, ResetType};
 
 use super::{
     clear_pick_state, fail, move_head, ok, remove_state_file, split_dashdash, unsupported, Ctx, Res,
@@ -144,9 +144,4 @@ pub(super) fn reset_merge(repo: &Repository, target: &Commit<'_>) -> AppResult<(
         move_head(repo, target.id(), "reset: moving")?;
     }
     Ok(())
-}
-
-/// Parses `oid` for the callers that store hex ids.
-pub(super) fn parse_oid(s: &str) -> Option<Oid> {
-    Oid::from_str(s.trim()).ok()
 }
