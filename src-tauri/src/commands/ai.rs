@@ -73,9 +73,9 @@ pub async fn ai_run(
     service::run(state.inner(), &dir, &SystemKeys, &repo, &request).await
 }
 
-/// Runs a confirmed plan. Fetch/pull/push steps run synchronously through the
-/// same credential bridge as the toolbar; the command returns when the last
-/// step has finished.
+// Runs a confirmed plan. Fetch/pull/push steps run synchronously through the
+// same credential bridge as the toolbar; the command returns when the last
+// step has finished.
 #[tauri::command]
 #[specta::specta]
 pub async fn ai_plan_execute(
