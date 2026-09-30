@@ -11,6 +11,7 @@ pub mod oplog;
 pub mod preview;
 pub mod recent;
 pub mod refs_write;
+pub mod remote;
 pub mod service;
 pub mod watcher;
 
@@ -83,6 +84,7 @@ pub struct GitState {
     service: Arc<dyn GitService>,
     cli: cli::GitCli,
     ops: cli::OpRegistry,
+    credentials: remote::creds::PendingCredentials,
 }
 
 impl Default for GitState {
@@ -93,6 +95,7 @@ impl Default for GitState {
             service: Arc::new(libgit::LibGit),
             cli: cli::GitCli::new(),
             ops: cli::OpRegistry::default(),
+            credentials: remote::creds::PendingCredentials::default(),
         }
     }
 }
@@ -108,6 +111,11 @@ impl GitState {
 
     pub fn ops(&self) -> &cli::OpRegistry {
         &self.ops
+    }
+
+    /// Credential requests waiting for `credential_respond`.
+    pub fn credentials(&self) -> &remote::creds::PendingCredentials {
+        &self.credentials
     }
 
     /// Opens (or re-uses) the repository containing `path`.
