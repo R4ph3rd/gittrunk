@@ -228,3 +228,38 @@
     --swipe-duration: 1ms;
   }
 }
+
+/* ---- mobile additions (UI-D) ---- */
+:root {
+  --appbar-h-short: 40px; /* AppBar height in short (landscape) viewports */
+  --sheet-handle-h: 4px;
+  --sheet-max-h: 85dvh; /* Sheet snap "auto" */
+  --progress-h: 2px;
+}
+
+@keyframes ds-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes ds-sheet-out {
+  from {
+    transform: translateY(var(--sheet-drag, 0px));
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes ds-progress-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
