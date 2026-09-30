@@ -11,27 +11,50 @@ export const DEFAULT_FILTER: GraphFilter = {
   until: null,
 };
 
+/** What the right-hand panel shows: a commit's details or the working copy (WIP). */
+export type Selection = { kind: "commit"; oid: string } | { kind: "wip" };
+
+export type DiffMode = "split" | "unified";
+const DIFF_MODE_KEY = "gittrunk.diffMode";
+
+function readDiffMode(): DiffMode {
+  try {
+    return window.localStorage.getItem(DIFF_MODE_KEY) === "split" ? "split" : "unified";
+  } catch {
+    return "unified";
+  }
+}
+
 interface RepoState {
   /** Open repositories, in tab order. */
   repos: RepoInfo[];
   activeId: string | null;
-  selectedOid: Record<string, string | null>;
+  selection: Record<string, Selection | null>;
   filters: Record<string, GraphFilter>;
   openError: string | null;
+  diffMode: DiffMode;
+  /** Stash dialog visibility per repo (opened from the staging panel or the palette). */
+  stashDialog: Record<string, boolean>;
   addRepo: (repo: RepoInfo) => void;
   removeRepo: (id: string) => void;
   setActive: (id: string) => void;
+  select: (repoId: string, selection: Selection | null) => void;
   selectCommit: (repoId: string, oid: string | null) => void;
+  selectWip: (repoId: string) => void;
   setFilter: (repoId: string, filter: GraphFilter) => void;
   setOpenError: (message: string | null) => void;
+  setDiffMode: (mode: DiffMode) => void;
+  setStashDialog: (repoId: string, open: boolean) => void;
 }
 
 export const useRepoStore = create<RepoState>((set) => ({
   repos: [],
   activeId: null,
-  selectedOid: {},
+  selection: {},
   filters: {},
   openError: null,
+  diffMode: readDiffMode(),
+  stashDialog: {},
   addRepo: (repo) =>
     set((s) => ({
       repos: s.repos.some((r) => r.id === repo.id)
@@ -49,11 +72,32 @@ export const useRepoStore = create<RepoState>((set) => ({
       return { repos, activeId };
     }),
   setActive: (id) => set({ activeId: id }),
-  selectCommit: (repoId, oid) => set((s) => ({ selectedOid: { ...s.selectedOid, [repoId]: oid } })),
+  select: (repoId, selection) =>
+    set((s) => ({ selection: { ...s.selection, [repoId]: selection } })),
+  selectCommit: (repoId, oid) =>
+    set((s) => ({
+      selection: { ...s.selection, [repoId]: oid ? { kind: "commit", oid } : null },
+    })),
+  selectWip: (repoId) => set((s) => ({ selection: { ...s.selection, [repoId]: { kind: "wip" } } })),
   setFilter: (repoId, filter) => set((s) => ({ filters: { ...s.filters, [repoId]: filter } })),
   setOpenError: (openError) => set({ openError }),
+  setDiffMode: (diffMode) => {
+    try {
+      window.localStorage.setItem(DIFF_MODE_KEY, diffMode);
+    } catch {
+      /* storage unavailable */
+    }
+    set({ diffMode });
+  },
+  setStashDialog: (repoId, open) =>
+    set((s) => ({ stashDialog: { ...s.stashDialog, [repoId]: open } })),
 }));
 
 export function useActiveRepo(): RepoInfo | null {
   return useRepoStore((s) => s.repos.find((r) => r.id === s.activeId) ?? null);
+}
+
+/** The selected commit oid, or null when nothing or the WIP row is selected. */
+export function selectedOidOf(selection: Selection | null | undefined): string | null {
+  return selection?.kind === "commit" ? selection.oid : null;
 }

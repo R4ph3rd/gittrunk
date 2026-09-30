@@ -10,13 +10,15 @@ import {
   useGraphSearch,
   useRefs,
 } from "@/ipc/queries";
-import { DEFAULT_FILTER, useRepoStore } from "@/stores/repo";
+import { DEFAULT_FILTER, selectedOidOf, useRepoStore } from "@/stores/repo";
 import { onThemeChange, readPalette, type Palette } from "./colors";
 import { drawGraph } from "./draw";
 import { GraphRowView } from "./GraphRowView";
 import { GraphToolbar } from "./GraphToolbar";
 import { gutterWidth, ROW_HEIGHT } from "./layout";
 import { pageOf, pagesForRange } from "./pages";
+import { useWipCount } from "./useWipCount";
+import { WipRow } from "./WipRow";
 
 interface Props {
   repoId: string;
@@ -87,6 +89,7 @@ export function GraphView({ repoId, onOpenDetails }: Props) {
         refs={refs.data}
         onFilter={(f) => setFilter(repoId, f)}
       />
+      <WipRow repoId={repoId} gutter={gutterWidth(meta.data?.laneCount ?? 1)} />
       <div className="relative min-h-0 flex-1">
         {meta.isError ? (
           <p role="alert" className="p-4 text-sm text-danger">
@@ -131,8 +134,13 @@ function GraphList({
   onOpenDetails,
 }: ListProps) {
   const client = useQueryClient();
-  const selectedOid = useRepoStore((s) => s.selectedOid[repoId] ?? null);
+  const selection = useRepoStore((s) => s.selection[repoId]);
+  const selectedOid = selectedOidOf(selection);
+  const wipSelected = selection?.kind === "wip";
   const selectCommit = useRepoStore((s) => s.selectCommit);
+  const selectWip = useRepoStore((s) => s.selectWip);
+  const wip = useWipCount(repoId);
+  const hasWip = wip.staged + wip.unstaged > 0;
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const paletteRef = useRef<Palette | null>(null);
@@ -243,6 +251,11 @@ function GraphList({
     jumpRef.current = (i) => void selectIndex(i);
   }, [jumpRef, selectIndex]);
 
+  // Selecting the WIP row clears the highlighted commit row.
+  useEffect(() => {
+    if (wipSelected) setSelectedIndex(null);
+  }, [wipSelected]);
+
   // External selection (parent links, sidebar refs): locate the commit and scroll to it.
   useEffect(() => {
     if (!selectedOid) return;
@@ -266,6 +279,11 @@ function GraphList({
       Math.floor((listRef.current?.clientHeight || 560) / ROW_HEIGHT) - 1,
     );
     const cur = selectedIndex ?? -1;
+    if (e.key === "ArrowUp" && cur === 0 && hasWip) {
+      e.preventDefault();
+      selectWip(repoId);
+      return;
+    }
     const moves: Record<string, number | undefined> = {
       ArrowDown: cur + 1,
       ArrowUp: Math.max(0, cur - 1),

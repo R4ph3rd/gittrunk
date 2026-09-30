@@ -2,7 +2,15 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render } from "@testing-library/react";
 import { vi } from "vitest";
-import type { CommitDetails, GraphRow, RepoInfo } from "@/ipc/bindings";
+import type {
+  CommitDetails,
+  FileChange,
+  FileDiff,
+  GraphRow,
+  OpOutcome,
+  RepoInfo,
+  StatusSnapshot,
+} from "@/ipc/bindings";
 import { useRepoStore } from "@/stores/repo";
 import { App } from "./App";
 
@@ -64,6 +72,84 @@ export function makeDetails(id: string): CommitDetails {
       },
     ],
     refs: [],
+  };
+}
+
+export const applied = (message: string): OpOutcome => ({
+  kind: "applied",
+  oplogId: "op1",
+  head: { kind: "branch", name: "main", oid: oid(0) },
+  message,
+});
+
+export const previewOutcome = (summary: string, warnings: string[] = []): OpOutcome => ({
+  kind: "preview",
+  preview: {
+    summary,
+    refUpdates: [],
+    commitsCreated: 0,
+    commitsDropped: [],
+    predictedConflicts: [],
+    warnings,
+  },
+});
+
+export const change = (path: string, status: FileChange["status"] = "modified"): FileChange => ({
+  path,
+  oldPath: null,
+  status,
+  additions: 1,
+  deletions: 1,
+  binary: false,
+});
+
+export function makeStatus(parts: Partial<StatusSnapshot> = {}): StatusSnapshot {
+  return { state: "clean", staged: [], unstaged: [], conflicted: [], ...parts };
+}
+
+/** A two-hunk diff: hunk 0 has lines [ctx, -a, -b, +A, +B, +C, ctx], hunk 1 has [ctx, +z, ctx]. */
+export function makeWorktreeDiff(path = "src/lib.rs"): FileDiff {
+  const line = (
+    kind: "context" | "add" | "delete",
+    oldLineno: number | null,
+    newLineno: number | null,
+    content: string,
+  ) => ({ kind, oldLineno, newLineno, content });
+  return {
+    path,
+    oldPath: null,
+    status: "modified",
+    binary: false,
+    hunks: [
+      {
+        header: "@@ -1,4 +1,5 @@",
+        oldStart: 1,
+        oldLines: 4,
+        newStart: 1,
+        newLines: 5,
+        lines: [
+          line("context", 1, 1, "top"),
+          line("delete", 2, null, "old a"),
+          line("delete", 3, null, "old b"),
+          line("add", null, 2, "new A"),
+          line("add", null, 3, "new B"),
+          line("add", null, 4, "new C"),
+          line("context", 4, 5, "bottom"),
+        ],
+      },
+      {
+        header: "@@ -20,2 +21,3 @@",
+        oldStart: 20,
+        oldLines: 2,
+        newStart: 21,
+        newLines: 3,
+        lines: [
+          line("context", 20, 21, "before"),
+          line("add", null, 22, "added z"),
+          line("context", 21, 23, "after"),
+        ],
+      },
+    ],
   };
 }
 
@@ -132,9 +218,25 @@ export async function installBackend(rowCount = 1000, searchHits: number[] = [])
       stashes: [],
     }),
   );
-  commands.status.mockImplementation(() =>
-    ok({ state: "clean", staged: [], unstaged: [], conflicted: [] }),
+  commands.status.mockImplementation(() => ok(makeStatus()));
+  commands.worktreeFileDiff.mockImplementation((_r: string, path: string) =>
+    ok(makeWorktreeDiff(path)),
   );
+  for (const name of ["stagePaths", "unstagePaths", "stageLines", "unstageLines"] as const) {
+    commands[name].mockImplementation(() => ok(null));
+  }
+  const dryRunnable =
+    (message: string) =>
+    (...args: unknown[]) =>
+      ok(args[args.length - 1] === true ? previewOutcome(`Will ${message}`) : applied(message));
+  commands.discardPaths.mockImplementation(dryRunnable("discard changes"));
+  commands.discardLines.mockImplementation(dryRunnable("discard lines"));
+  commands.stashDrop.mockImplementation(dryRunnable("drop stash"));
+  commands.commitCreate.mockImplementation(() => ok(applied("Committed abc1234")));
+  commands.stashList.mockImplementation(() => ok([]));
+  commands.stashSave.mockImplementation(() => ok(applied("Changes stashed")));
+  commands.stashApply.mockImplementation(() => ok(applied("Stash applied")));
+  commands.undo.mockImplementation(() => ok(applied("Undone")));
   return commands;
 }
 
@@ -149,7 +251,7 @@ export function installDomShims() {
   Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, value: 900 });
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, value: 560 });
   const ctx = new Proxy({} as Record<string, unknown>, {
-    get: () => () => undefined,
+    get: (_t, key) => (key === "measureText" ? () => ({ width: 8 }) : () => undefined),
     set: () => true,
   });
   HTMLCanvasElement.prototype.getContext = (() =>
@@ -160,7 +262,8 @@ export function resetStore() {
   useRepoStore.setState({
     repos: [],
     activeId: null,
-    selectedOid: {},
+    selection: {},
+    stashDialog: {},
     filters: {},
     openError: null,
   });

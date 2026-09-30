@@ -20,6 +20,19 @@ export const names = [
   "commitFileDiff",
   "refsList",
   "status",
+  "worktreeFileDiff",
+  "stagePaths",
+  "unstagePaths",
+  "discardPaths",
+  "stageLines",
+  "unstageLines",
+  "discardLines",
+  "commitCreate",
+  "stashList",
+  "stashSave",
+  "stashApply",
+  "stashDrop",
+  "undo",
 ] as const;
 
 /** Factory for `vi.mock("@/ipc/bindings", ...)`. */

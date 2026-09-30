@@ -4,7 +4,7 @@ import { absoluteDate } from "@/features/graph/format";
 import type { Signature } from "@/ipc/bindings";
 import { useCommitDetails } from "@/ipc/queries";
 import { cn } from "@/lib/cn";
-import { useRepoStore } from "@/stores/repo";
+import { selectedOidOf, useRepoStore } from "@/stores/repo";
 import { FileDiffView } from "./FileDiffView";
 
 function Person({ label, sig }: { label: string; sig: Signature }) {
@@ -21,7 +21,7 @@ function Person({ label, sig }: { label: string; sig: Signature }) {
 }
 
 export function CommitDetailsPanel({ repoId }: { repoId: string }) {
-  const oid = useRepoStore((s) => s.selectedOid[repoId] ?? null);
+  const oid = useRepoStore((s) => selectedOidOf(s.selection[repoId]));
   const select = useRepoStore((s) => s.selectCommit);
   const details = useCommitDetails(repoId, oid);
   const [fileSel, setFileSel] = useState<{ oid: string; path: string } | null>(null);
