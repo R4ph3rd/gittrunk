@@ -1,8 +1,7 @@
-//! `graph` commands. Phase 0 stubs: typed signatures are the contract;
-//! bodies are filled in by the owning agent.
+//! `graph` commands.
 
 use crate::git::{blocking, GitState};
-use crate::ipc::error::AppResult;
+use crate::ipc::error::{AppError, AppResult};
 use crate::ipc::types::*;
 
 #[tauri::command]
@@ -66,4 +65,16 @@ pub async fn commit_file_diff(
         })
     })
     .await
+}
+
+/// Row index of `oid` in the currently loaded graph, `None` when it is filtered out.
+#[tauri::command]
+#[specta::specta]
+pub async fn graph_find(
+    state: tauri::State<'_, GitState>,
+    repo: RepoId,
+    oid: Oid,
+) -> AppResult<Option<u32>> {
+    let _ = (state, repo, oid);
+    Err(AppError::not_implemented("graph_find"))
 }

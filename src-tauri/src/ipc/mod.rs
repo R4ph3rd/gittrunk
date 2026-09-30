@@ -29,6 +29,7 @@ pub fn builder() -> Builder<tauri::Wry> {
             commands::graph::graph_load,
             commands::graph::graph_rows,
             commands::graph::graph_search,
+            commands::graph::graph_find,
             commands::graph::commit_details,
             commands::graph::commit_file_diff,
             commands::refs::refs_list,

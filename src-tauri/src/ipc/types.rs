@@ -140,11 +140,13 @@ wire_enum! {
     }
 
     pub enum EdgeKind {
-        /// Continues straight down in the same lane.
+        /// A lane continuing to the next row (`from_lane == to_lane`).
         Straight,
-        /// Joins a parent in a different lane (merge parent / lane collapse).
+        /// A line converging into an existing lane: joining a parent that is
+        /// already reserved elsewhere, or a lane collapsing into the lane of
+        /// the commit on the next row.
         MergeIn,
-        /// Leaves this lane to start a new one (branch point seen from above).
+        /// A non-first parent of this row's commit opening a new lane.
         BranchOut,
     }
 }
@@ -386,8 +388,12 @@ wire! {
         pub lines: Option<Vec<u32>>,
     }
 
+    /// `hunk_index`/`lines` refer to the diff produced with exactly `options`
+    /// (the backend re-diffs with them). Staging requires
+    /// `options.ignore_whitespace == false`.
     pub struct LineSelection {
         pub path: String,
+        pub options: DiffOptions,
         pub hunks: Vec<HunkSelection>,
     }
 

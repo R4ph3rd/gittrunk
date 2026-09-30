@@ -18,6 +18,8 @@ export const commands = {
 	graphLoad: (repo: string, filter: GraphFilter) => typedError<GraphMeta, AppError>(__TAURI_INVOKE("graph_load", { repo, filter })),
 	graphRows: (repo: string, start: number, len: number) => typedError<GraphRow[], AppError>(__TAURI_INVOKE("graph_rows", { repo, start, len })),
 	graphSearch: (repo: string, search: GraphSearch) => typedError<number[], AppError>(__TAURI_INVOKE("graph_search", { repo, search })),
+	/**  Row index of `oid` in the currently loaded graph, `None` when it is filtered out. */
+	graphFind: (repo: string, oid: string) => typedError<number | null, AppError>(__TAURI_INVOKE("graph_find", { repo, oid })),
 	commitDetails: (repo: string, oid: string) => typedError<CommitDetails, AppError>(__TAURI_INVOKE("commit_details", { repo, oid })),
 	commitFileDiff: (repo: string, oid: string, path: string, options: DiffOptions) => typedError<FileDiff, AppError>(__TAURI_INVOKE("commit_file_diff", { repo, oid, path, options })),
 	refsList: (repo: string) => typedError<RefsSnapshot, AppError>(__TAURI_INVOKE("refs_list", { repo })),
@@ -290,11 +292,15 @@ export type DiffOptions = {
 };
 
 export type EdgeKind = 
-/**  Continues straight down in the same lane. */
+/**  A lane continuing to the next row (`from_lane == to_lane`). */
 "straight" | 
-/**  Joins a parent in a different lane (merge parent / lane collapse). */
+/**
+ *  A line converging into an existing lane: joining a parent that is
+ *  already reserved elsewhere, or a lane collapsing into the lane of
+ *  the commit on the next row.
+ */
 "mergeIn" | 
-/**  Leaves this lane to start a new one (branch point seen from above). */
+/**  A non-first parent of this row's commit opening a new lane. */
 "branchOut";
 
 /**  Closed set of error categories the UI can branch on. */
@@ -418,8 +424,14 @@ export type LineKind = "context" | "add" | "delete" |
 /**  "\ No newline at end of file" marker. */
 "noNewline";
 
+/**
+ *  `hunk_index`/`lines` refer to the diff produced with exactly `options`
+ *  (the backend re-diffs with them). Staging requires
+ *  `options.ignore_whitespace == false`.
+ */
 export type LineSelection = {
 	path: string,
+	options: DiffOptions,
 	hunks: HunkSelection[],
 };
 
