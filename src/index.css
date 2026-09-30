@@ -47,6 +47,23 @@
   --ease-standard: var(--ease-standard);
 }
 
+/* Keep in sync with src/app/layout/queries.ts (asserted by layout.test.tsx). */
+@custom-variant compact {
+  @media (max-width: 767.98px), (max-height: 479.98px) and (max-width: 1023.98px) {
+    @slot;
+  }
+}
+@custom-variant coarse {
+  @media (pointer: coarse) {
+    @slot;
+  }
+}
+@custom-variant short {
+  @media (max-height: 479.98px) {
+    @slot;
+  }
+}
+
 @layer base {
   html,
   body,
@@ -65,6 +82,12 @@
   :focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 1px;
+  }
+  @media (max-width: 767.98px), (max-height: 479.98px) and (max-width: 1023.98px) {
+    html {
+      overscroll-behavior: none;
+      touch-action: manipulation;
+    }
   }
 }
 

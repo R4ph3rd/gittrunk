@@ -202,3 +202,29 @@
     transform: translateY(0) scale(1);
   }
 }
+
+/* ---- mobile (docs/MOBILE_DESIGN.md §1) ---- */
+:root {
+  --bp-compact: 768px; /* documentation only; media queries cannot read vars */
+  --touch-target: 44px;
+  --touch-target-row: 52px;
+  --appbar-h: 48px;
+  --bottomnav-h: 56px;
+  --navrail-w: 72px;
+  --sheet-radius: var(--radius-lg);
+  --sheet-handle: 32px;
+  --sheet-duration: var(--duration-base);
+  --swipe-duration: 150ms;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --kb-inset: 0px; /* written by useKeyboardInset() */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --sheet-duration: 1ms;
+    --swipe-duration: 1ms;
+  }
+}
