@@ -17,6 +17,12 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 name = "export-bindings"
 path = "examples/export_bindings.rs"
 
+[features]
+default = []
+# Host-testable stand-in for the Android backend: libgit2 for all git work,
+# file-backed secret store. Never enabled in desktop releases.
+embedded-git = []
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -29,15 +35,23 @@ specta-typescript = "0.0.12"
 tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
 thiserror = "2"
 # Network operations go through the git CLI, so libgit2 is built without
-# its HTTPS/SSH transports (avoids OpenSSL on Windows).
+# its HTTPS/SSH transports (avoids OpenSSL on Windows). The Android target
+# table below adds them back (Cargo unifies features per target).
 git2 = { version = "0.21", default-features = false, features = ["vendored-libgit2"] }
 notify = "8"
 parking_lot = "0.12.5"
 tauri-plugin-dialog = "2"
-keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 reqwest = { version = "0.13.3", default-features = false, features = ["json", "rustls-no-provider", "stream", "system-proxy", "http2"] }
 tokio = { version = "1.53.1", features = ["rt", "sync", "time", "macros"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+
+webpki-roots = "1"
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+git2 = { version = "0.21", default-features = false, features = ["vendored-libgit2", "https", "vendored-openssl"] }
 
 [dev-dependencies]
 mockito = "1.7.2"
