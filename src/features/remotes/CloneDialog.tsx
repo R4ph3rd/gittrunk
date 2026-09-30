@@ -13,6 +13,7 @@ import {
   Input,
   Label,
   toast,
+  Checkbox,
 } from "@/design/components";
 import { runOp } from "@/features/ops/ops";
 import { commands } from "@/ipc/bindings";
@@ -117,24 +118,8 @@ function Form({ onClose }: { onClose: () => void }) {
             </p>
           )}
         </div>
-        <label className="flex items-center gap-2 text-base">
-          <input
-            type="checkbox"
-            checked={bare}
-            onChange={(e) => setBare(e.target.checked)}
-            className="size-3.5 accent-[color:var(--accent)]"
-          />
-          Bare repository
-        </label>
-        <label className="flex items-center gap-2 text-base">
-          <input
-            type="checkbox"
-            checked={recurse}
-            onChange={(e) => setRecurse(e.target.checked)}
-            className="size-3.5 accent-[color:var(--accent)]"
-          />
-          Recurse submodules
-        </label>
+        <Checkbox label="Bare repository" checked={bare} onCheckedChange={setBare} />
+        <Checkbox label="Recurse submodules" checked={recurse} onCheckedChange={setRecurse} />
         <DialogFooter>
           <Button type="button" onClick={onClose}>
             Cancel

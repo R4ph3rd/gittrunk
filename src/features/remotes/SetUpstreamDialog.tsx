@@ -59,6 +59,8 @@ function Form({
       >
         <div className="flex flex-col gap-1">
           <Label htmlFor="upstream-branch">Upstream</Label>
+          {/* Native select on purpose: the list of remote branches is unbounded, which a
+              SegmentedControl cannot present; the native control gives search-by-typing. */}
           <NativeSelect
             id="upstream-branch"
             value={value}

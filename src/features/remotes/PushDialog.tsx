@@ -9,11 +9,11 @@ import {
   DialogTitle,
   Input,
   Label,
+  SegmentedControl,
 } from "@/design/components";
 import { useRemotes } from "@/ipc/queries";
 import { useRemotesUi } from "@/stores/remotes";
 import { pushTo } from "./actions";
-import { NativeSelect } from "./NativeSelect";
 
 function Form({
   repoId,
@@ -76,18 +76,14 @@ function Form({
           className="flex flex-col gap-3"
         >
           <div className="flex flex-col gap-1">
-            <Label htmlFor="push-remote">Remote</Label>
-            <NativeSelect
-              id="push-remote"
+            <Label>Remote</Label>
+            <SegmentedControl
+              aria-label="Remote"
+              className="flex-wrap self-start"
               value={chosen}
-              onChange={(e) => setRemote(e.target.value)}
-            >
-              {list.map((r) => (
-                <option key={r.name} value={r.name}>
-                  {r.name}
-                </option>
-              ))}
-            </NativeSelect>
+              onValueChange={setRemote}
+              options={list.map((r) => ({ value: r.name, label: r.name }))}
+            />
           </div>
           <div className="flex flex-col gap-1">
             <Label htmlFor="push-branch">Remote branch</Label>

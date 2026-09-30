@@ -19,7 +19,6 @@ import {
 import { fail } from "@/app/mockBindings";
 import { useOpsStore } from "@/features/ops/store";
 import type { BranchInfo, RefsSnapshot } from "@/ipc/bindings";
-import { useRemotesUi } from "@/stores/remotes";
 import { useRepoStore } from "@/stores/repo";
 import { getPullStrategy } from "@/stores/settings";
 import { useCredentialQueue } from "./credentials";
@@ -246,7 +245,7 @@ describe("toolbar", () => {
     await user.click(screen.getByRole("button", { name: PUSH }));
     expect(commands.push).not.toHaveBeenCalled();
     const dialog = await screen.findByRole("dialog", { name: "Push main" });
-    expect(within(dialog).getByLabelText("Remote")).toHaveValue("origin");
+    expect(within(dialog).getByRole("radio", { name: "origin" })).toBeChecked();
     await user.click(within(dialog).getByRole("button", { name: "Push and set upstream" }));
     await waitFor(() => expect(commands.push).toHaveBeenCalled());
     expect(commands.push).toHaveBeenCalledWith("r1", {
@@ -359,6 +358,22 @@ describe("remotes management", () => {
       url: "https://example.com/up.git",
       fetch: true,
     });
+  });
+
+  it("merges and rebases onto a remote branch from its context menu", async () => {
+    const commands = await backend(refs([branch({})], [remoteFeature]));
+    const { user } = await openRepo();
+    fireEvent.contextMenu(await screen.findByRole("button", { name: "feature" }));
+    expect(await screen.findByRole("menuitem", { name: "Rebase main onto this" })).toBeVisible();
+    await user.click(await screen.findByRole("menuitem", { name: "Merge into main" }));
+    await waitFor(() => expect(commands.merge).toHaveBeenCalled());
+    expect(commands.merge.mock.calls[0]![1]).toEqual(
+      expect.objectContaining({ source: "origin/feature" }),
+    );
+    expect(commands.merge.mock.calls[0]![2]).toBe(true); // dry run first
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
   });
 
   it("checks out and deletes a remote branch from its context menu", async () => {

@@ -10,6 +10,7 @@ import {
   Input,
   Label,
   toast,
+  Checkbox,
 } from "@/design/components";
 import { commands, type CredentialRequested } from "@/ipc/bindings";
 import { unwrap } from "@/ipc/client";
@@ -67,15 +68,11 @@ function CredentialForm({ request }: { request: CredentialRequested }) {
             onChange={(e) => setValue(e.target.value)}
           />
         </div>
-        <label className="flex items-center gap-2 text-base">
-          <input
-            type="checkbox"
-            checked={remember}
-            onChange={(e) => setRemember(e.target.checked)}
-            className="size-3.5 accent-[color:var(--accent)]"
-          />
-          Remember in system keychain
-        </label>
+        <Checkbox
+          label="Remember in system keychain"
+          checked={remember}
+          onCheckedChange={setRemember}
+        />
         <DialogFooter>
           <Button type="button" onClick={() => respond(null)}>
             Cancel

@@ -11,6 +11,7 @@ import {
   Input,
   Label,
   toast,
+  Checkbox,
 } from "@/design/components";
 import { commands } from "@/ipc/bindings";
 import { unwrap } from "@/ipc/client";
@@ -135,15 +136,11 @@ function Form({
           </div>
         )}
         {mode.kind === "add" && (
-          <label className="flex items-center gap-2 text-base">
-            <input
-              type="checkbox"
-              checked={fetchAfter}
-              onChange={(e) => setFetchAfter(e.target.checked)}
-              className="size-3.5 accent-[color:var(--accent)]"
-            />
-            Fetch after adding
-          </label>
+          <Checkbox
+            label="Fetch after adding"
+            checked={fetchAfter}
+            onCheckedChange={setFetchAfter}
+          />
         )}
         {serverError && (
           <p role="alert" className="text-sm text-danger">

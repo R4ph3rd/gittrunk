@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { ContextEntries } from "@/features/operations/actions/ActionMenu";
+import { buildActionEntries } from "@/features/operations/actions/entries";
+import { useActionContext } from "@/features/operations/actions/useActionContext";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
@@ -52,6 +55,23 @@ function groupRemotes(remotes: RemoteInfo[], branches: BranchInfo[]): RemoteGrou
 /** The short branch name on the remote: `origin/feature/x` becomes `feature/x`. */
 const localNameOf = (b: BranchInfo, remote: string) =>
   b.name.startsWith(`${remote}/`) ? b.name.slice(remote.length + 1) : b.name;
+
+/** Merge / Rebase for a remote branch, reusing the operations action entries. */
+function MergeRebaseEntries({ repoId, branch }: { repoId: string; branch: BranchInfo }) {
+  const makeContext = useActionContext(repoId);
+  const entries = buildActionEntries(
+    {
+      kind: "branch",
+      name: branch.name,
+      fullName: branch.fullName,
+      remote: true,
+      isHead: false,
+      oid: branch.oid,
+    },
+    makeContext(),
+  ).filter((e) => e.kind === "item" && (e.id === "merge" || e.id === "rebase"));
+  return <ContextEntries entries={entries} />;
+}
 
 /** Remotes with their branches nested underneath, plus remote and remote-branch menus. */
 export function RemotesSection({ repoId, branches }: { repoId: string; branches: BranchInfo[] }) {
@@ -215,6 +235,8 @@ export function RemotesSection({ repoId, branches }: { repoId: string; branches:
                         >
                           Checkout as local branch
                         </ContextMenuItem>
+                        <ContextMenuSeparator />
+                        <MergeRebaseEntries repoId={repoId} branch={b} />
                         <ContextMenuSeparator />
                         <ContextMenuItem
                           icon={<Trash2 />}
