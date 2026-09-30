@@ -30,6 +30,9 @@ thiserror = "2"
 # Network operations go through the git CLI, so libgit2 is built without
 # its HTTPS/SSH transports (avoids OpenSSL on Windows).
 git2 = { version = "0.21", default-features = false, features = ["vendored-libgit2"] }
+notify = "8"
+parking_lot = "0.12.5"
+tauri-plugin-dialog = "2"
 
 [dev-dependencies]
 tempfile = "3"

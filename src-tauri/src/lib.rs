@@ -12,6 +12,8 @@ pub fn run() {
     ipc::export_bindings(&builder, ipc::BINDINGS_PATH);
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .manage(git::GitState::default())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
