@@ -1,3 +1,4 @@
+import { AiHost } from "@/features/ai";
 import { OperationsProvider } from "@/features/operations/dnd/OperationsProvider";
 import { RemotesHost } from "@/features/remotes/RemotesHost";
 import { SettingsHost } from "@/features/settings";
@@ -28,6 +29,7 @@ export function App() {
       <CommandHost />
       <RemotesHost />
       <SettingsHost />
+      <AiHost />
     </div>
   );
 }

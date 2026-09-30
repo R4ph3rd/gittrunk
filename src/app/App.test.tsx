@@ -1,13 +1,14 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { emitRepoChanged, fail } from "./mockBindings";
+import { emitRepoChanged, fail, ok } from "./mockBindings";
 import { installBackend, installDomShims, oid, renderApp, resetStore } from "./testing";
 
 vi.mock("@/ipc/bindings", async () => (await import("./mockBindings")).bindingsMock());
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(() => Promise.resolve("/work/demo")) }));
 
 installDomShims();
+Element.prototype.scrollIntoView = vi.fn();
 
 async function openRepo() {
   const user = userEvent.setup();
@@ -163,5 +164,28 @@ describe("graph performance", () => {
     const rows = screen.getAllByRole("row");
     expect(rows.length).toBeGreaterThan(5);
     expect(rows.length).toBeLessThan(60);
+  });
+});
+
+describe("AI integration", () => {
+  it("mounts AiHost: the ai.settings palette command opens the AI dialog", async () => {
+    const { commands } = await import("@/ipc/bindings");
+    (commands.aiSettingsGet as ReturnType<typeof vi.fn>).mockImplementation(() =>
+      ok({
+        enabled: true,
+        provider: "anthropic",
+        model: "claude-haiku-4-5",
+        baseUrl: null,
+        maxDiffBytes: 60_000,
+        hasKey: false,
+      }),
+    );
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("heading", { name: "Open a repository" });
+    await user.keyboard("{Control>}k{/Control}");
+    await user.type(await screen.findByPlaceholderText(/type a command/i), "AI settings");
+    await user.keyboard("{Enter}");
+    expect(await screen.findByRole("dialog", { name: "AI settings" })).toBeInTheDocument();
   });
 });

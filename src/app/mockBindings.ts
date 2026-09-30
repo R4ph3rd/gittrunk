@@ -89,6 +89,13 @@ export const names = [
   "credentialRespond",
   "credentialStore",
   "credentialClear",
+  "aiSettingsGet",
+  "aiSettingsSet",
+  "aiKeySet",
+  "aiKeyClear",
+  "aiPayloadPreview",
+  "aiRun",
+  "aiPlanExecute",
 ] as const;
 
 /** Factory for `vi.mock("@/ipc/bindings", ...)`. */
