@@ -14,6 +14,7 @@ import {
 import type { ChangeStatus, FileChange, StatusSnapshot } from "@/ipc/bindings";
 import { useStagePaths, useUnstagePaths } from "@/ipc/queries";
 import { cn } from "@/lib/cn";
+import { useOperationsStore } from "@/stores/operations";
 import { errorMessage, useDiscard } from "./ops";
 
 export type Section = "conflicted" | "unstaged" | "staged";
@@ -70,6 +71,7 @@ export function FileList({ repoId, status, open, onOpen }: Props) {
   const stage = useStagePaths(repoId);
   const unstage = useUnstagePaths(repoId);
   const discard = useDiscard(repoId);
+  const openConflict = useOperationsStore((s) => s.openConflict);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const [anchorKey, setAnchorKey] = useState<string | null>(null);
@@ -160,11 +162,16 @@ export function FileList({ repoId, status, open, onOpen }: Props) {
     }
   };
 
+  /** Conflicted files open the 3-way resolver; everything else opens its diff. */
+  const openRow = (row: Row) => {
+    if (row.section === "conflicted") openConflict(repoId, row.file.path);
+    else onOpen({ path: row.file.path, staged: row.section === "staged" });
+  };
+
   const onRowClick = (row: Row, e: MouseEvent) => {
     const mods = { shift: e.shiftKey, toggle: e.ctrlKey || e.metaKey };
     focusOn(row, mods);
-    if (!mods.shift && !mods.toggle)
-      onOpen({ path: row.file.path, staged: row.section === "staged" });
+    if (!mods.shift && !mods.toggle) openRow(row);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -184,7 +191,7 @@ export function FileList({ repoId, status, open, onOpen }: Props) {
       toggleStage(focusRow);
     } else if (e.key === "Enter" && focusRow) {
       e.preventDefault();
-      onOpen({ path: focusRow.file.path, staged: focusRow.section === "staged" });
+      openRow(focusRow);
     } else if (e.key === "Delete" && focusRow) {
       e.preventDefault();
       requestDiscard(focusRow);

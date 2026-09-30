@@ -1,4 +1,6 @@
 import { Group, Panel, Separator } from "react-resizable-panels";
+import { OperationsHost } from "@/features/operations/OperationsHost";
+import { OperationBanner } from "@/features/operations/sequencer/OperationBanner";
 import { RemoteToolbar } from "@/features/remotes/RemoteToolbar";
 import { GraphView } from "@/features/graph/GraphView";
 import { StagingPanel } from "@/features/staging/StagingPanel";
@@ -16,6 +18,7 @@ export function RepoView({ repoId }: { repoId: string }) {
   const wip = useRepoStore((s) => s.selection[repoId]?.kind === "wip");
   return (
     <>
+      <OperationBanner repoId={repoId} />
       <RemoteToolbar repoId={repoId} />
       <Group orientation="horizontal" className="min-h-0 flex-1">
         <Panel defaultSize="18%" minSize="12%" maxSize="35%">
@@ -34,6 +37,7 @@ export function RepoView({ repoId }: { repoId: string }) {
         </Panel>
       </Group>
       <StashDialog repoId={repoId} />
+      <OperationsHost repoId={repoId} />
     </>
   );
 }
