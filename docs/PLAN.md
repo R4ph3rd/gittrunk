@@ -1,6 +1,6 @@
 # gittrunk — Implementation Plan
 
-Status: **approved** (§1 stack deviations and §2 environment adaptations approved; M0 in progress).
+Status: **M0–M7 complete.** All milestones merged on the integration branch; the full quality gate, the e2e suite and the Windows installer build pass. See §10.
 
 gittrunk is a cross-platform desktop Git client (alternative to GitKraken) built with Tauri 2. Windows (`.exe` + NSIS installer + MSI) is the release target; macOS and Linux build from the same codebase.
 
@@ -257,3 +257,22 @@ Plus: bindings drift check and the E2E drag-and-drop merge test from M5 onward.
 ## 9. Approval log
 
 - 2026-09-30: §1 stack deviations and §2 environment adaptations approved. `main` is reserved for clean code and releases.
+
+## 10. Milestone status
+
+| Milestone              | Status | Evidence                                                                                                      |
+| ---------------------- | ------ | ------------------------------------------------------------------------------------------------------------- |
+| M0 Scaffold + contract | Done   | CI and Windows installer build green on the empty shell                                                       |
+| M1 Read path           | Done   | 100k-commit graph: load ≈0.5 s, 200-row window ≈0.1 ms (release)                                              |
+| M2 Working copy        | Done   | Line staging byte-exact incl. CRLF and missing final newline; e2e stage → commit → push → undo                |
+| M3 Remotes             | Done   | Fetch/pull/push/clone against bare remotes; askpass bridge; keychain                                          |
+| M4 History operations  | Done   | Merge, rebase, interactive rebase, cherry-pick, revert, conflicts, one-step undo                              |
+| M5 Drag and drop       | Done   | e2e drags `feature` onto `main`, confirms the preview, verifies the merge commit's parents with git           |
+| M6 AI + advanced Git   | Done   | Providers tested against a mock server; AI off by default; blame, file history, reflog, submodules, worktrees |
+| M7 Hardening + release | Done   | Gate below; Windows `gittrunk.exe`, NSIS `*-setup.exe` and `*.msi` produced by the Build Windows workflow     |
+
+Quality gate at completion: `cargo fmt --check`, `cargo clippy -D warnings`, 257 Rust tests (also under a global `core.autocrlf=true`), frontend lint, format, typecheck, 251 component tests, `pnpm build`, `pnpm tauri build` (Linux bundles locally, Windows installers in CI) and 3 e2e specs.
+
+Issues found by integration and CI, and fixed: Windows `core.autocrlf` breaking working-tree safety checks, a case-only filename clash that broke the Windows build, fixtures depending on the host's git identity, toasts covering the commit button, and a bundle identifier ending in `.app`.
+
+Known limitations: installers are unsigned (SmartScreen warns); undoing a multi-step AI plan reverts one step at a time; the operation banner shows generic text for rebase progress; the interactive rebase squash affordance is a button rather than drop-onto-row.
