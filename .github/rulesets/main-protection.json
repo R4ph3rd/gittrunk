@@ -30,7 +30,8 @@
           { "context": "Checks (ubuntu-24.04)", "integration_id": 15368 },
           { "context": "Checks (windows-latest)", "integration_id": 15368 },
           { "context": "E2E tests", "integration_id": 15368 },
-          { "context": "build", "integration_id": 15368 }
+          { "context": "build", "integration_id": 15368 },
+          { "context": "Android APK", "integration_id": 15368 }
         ]
       }
     }
