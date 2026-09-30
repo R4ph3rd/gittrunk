@@ -1,6 +1,8 @@
-# Publishes a draft GitHub Release with installers for every platform when a
-# version tag (v*) is pushed. Tag releases from `main` only:
-#   git checkout main && git tag v0.1.0 && git push origin v0.1.0
+# Builds installers for Windows, macOS and Linux and publishes a GitHub Release.
+# Run it from Actions -> Release -> Run workflow on `main` with the version
+# (e.g. 0.1.0). A pushed v* tag is also accepted if it points at a commit on
+# main. The release is created as a draft, and published by the final job only
+# when every platform built. See docs/RELEASING.md.
 name: Release
 
 on:
@@ -8,32 +10,105 @@ on:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Existing tag to (re)build a draft release for, e.g. v0.1.0"
+      version:
+        description: "Version to release, semver without leading v (e.g. 0.1.0)"
         required: true
+        type: string
 
 permissions:
   contents: write
+  actions: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  guard:
-    name: Tag must point at main
+  verify:
+    name: Verify commit is releasable
     runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      sha: ${{ steps.meta.outputs.sha }}
     steps:
+      - name: Require main and a valid version
+        id: meta
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            if [ "$REF" != "refs/heads/main" ]; then
+              echo "::error::Releases can only be dispatched on main (got $REF)."
+              exit 1
+            fi
+            version="$INPUT_VERSION"
+          else
+            version="${REF_NAME#v}"
+          fi
+          semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+          if ! [[ "$version" =~ $semver ]]; then
+            echo "::error::Version '$version' is not valid semver without a leading v (e.g. 0.1.0)."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          ref: ${{ inputs.tag || github.ref }}
-      - name: Verify tag commit is on main
+          ref: ${{ github.sha }}
+
+      - name: Tag commit must be on main
+        if: github.event_name == 'push'
         run: |
           git fetch origin main
-          git merge-base --is-ancestor HEAD origin/main || {
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
             echo "::error::Release tags must point at a commit on main."
             exit 1
           }
 
-  publish:
-    needs: guard
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Version files match the release version
+        run: node scripts/check-version.mjs "${{ steps.meta.outputs.version }}"
+
+      - name: CI and Build Windows must have passed for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          failed=0
+          for wf in ci.yml build-windows.yml; do
+            runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" --commit "$SHA" \
+              --limit 50 --json conclusion,status)
+            ok=$(echo "$runs" | jq '[.[] | select(.status == "completed" and .conclusion == "success")] | length')
+            if [ "$ok" -eq 0 ]; then
+              echo "::error::Workflow $wf has no successful run for commit $SHA. Wait for it to pass (or fix it) before releasing."
+              failed=1
+            else
+              echo "$wf succeeded for $SHA"
+            fi
+          done
+          exit $failed
+
+      - name: Release must not already be published
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.meta.outputs.version }}
+        run: |
+          draft=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null || echo none)
+          if [ "$draft" = "false" ]; then
+            echo "::error::Release $TAG is already published."
+            exit 1
+          fi
+
+  build:
+    needs: verify
     strategy:
       fail-fast: false
       matrix:
@@ -43,12 +118,14 @@ jobs:
           - platform: macos-latest
             args: "--target universal-apple-darwin"
           - platform: ubuntu-24.04
-            args: ""
+            args: "--bundles deb,rpm,appimage"
     runs-on: ${{ matrix.platform }}
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ needs.verify.outputs.sha }}
 
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
@@ -71,16 +148,123 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Optional Windows code signing: add WINDOWS_CERTIFICATE (base64 .pfx) and
-      # WINDOWS_CERTIFICATE_PASSWORD secrets, then configure
-      # bundle.windows.certificateThumbprint. See docs/BUILD.md.
+      # Windows signing: import the PFX and hand its thumbprint to Tauri via a
+      # generated config override. Without secrets the build is unsigned.
+      - name: Configure Windows signing
+        id: winsign
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrEmpty($env:WINDOWS_CERTIFICATE) -or [string]::IsNullOrEmpty($env:WINDOWS_CERTIFICATE_PASSWORD)) {
+            Write-Output "::notice::Windows installers are unsigned (WINDOWS_CERTIFICATE / WINDOWS_CERTIFICATE_PASSWORD secrets not configured). Users will see a SmartScreen warning."
+            "signed=false" >> $env:GITHUB_OUTPUT
+            "args=--bundles nsis,msi" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          $password = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          Remove-Item $pfx -Force
+          $config = @{
+            bundle = @{
+              windows = @{
+                certificateThumbprint = $cert.Thumbprint
+                digestAlgorithm       = "sha256"
+                timestampUrl          = "http://timestamp.digicert.com"
+              }
+            }
+          } | ConvertTo-Json -Depth 5
+          $configPath = Join-Path $env:RUNNER_TEMP "tauri-sign.json"
+          Set-Content -Path $configPath -Value $config
+          "signed=true" >> $env:GITHUB_OUTPUT
+          "args=--bundles nsis,msi --config `"$configPath`"" >> $env:GITHUB_OUTPUT
+
+      # macOS signing/notarization: Tauri reads the APPLE_* variables natively,
+      # so export only those that are actually set.
+      - name: Configure macOS signing
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ] || [ -z "$APPLE_CERTIFICATE_PASSWORD" ] || [ -z "$APPLE_SIGNING_IDENTITY" ]; then
+            echo "::notice::macOS build is unsigned (APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY secrets not all configured). Gatekeeper will warn users."
+            exit 0
+          fi
+          {
+            echo "APPLE_CERTIFICATE=$APPLE_CERTIFICATE"
+            echo "APPLE_CERTIFICATE_PASSWORD=$APPLE_CERTIFICATE_PASSWORD"
+            echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY"
+          } >> "$GITHUB_ENV"
+          if [ -n "$APPLE_ID" ] && [ -n "$APPLE_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            {
+              echo "APPLE_ID=$APPLE_ID"
+              echo "APPLE_PASSWORD=$APPLE_PASSWORD"
+              echo "APPLE_TEAM_ID=$APPLE_TEAM_ID"
+            } >> "$GITHUB_ENV"
+          else
+            echo "::notice::macOS build is signed but not notarized (APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID not all configured)."
+          fi
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ inputs.tag || github.ref_name }}
-          releaseName: "gittrunk ${{ inputs.tag || github.ref_name }}"
+          tagName: v${{ needs.verify.outputs.version }}
+          releaseName: "gittrunk v${{ needs.verify.outputs.version }}"
           releaseBody: "See the assets below to download and install this version."
+          releaseCommitish: ${{ github.sha }}
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
+          args: ${{ runner.os == 'Windows' && steps.winsign.outputs.args || matrix.args }}
+
+      - name: Verify Windows signatures
+        if: runner.os == 'Windows' && steps.winsign.outputs.signed == 'true'
+        shell: pwsh
+        run: |
+          $files = @("src-tauri/target/release/gittrunk.exe") +
+            (Get-ChildItem "src-tauri/target/release/bundle" -Recurse -Include *.exe, *.msi | ForEach-Object FullName)
+          $bad = 0
+          foreach ($f in $files) {
+            $sig = Get-AuthenticodeSignature $f
+            if ($sig.Status -ne "Valid") {
+              Write-Output "::error::$f signature status is $($sig.Status), expected Valid."
+              $bad++
+            } else {
+              Write-Output "$f signature is Valid"
+            }
+          }
+          if ($bad -gt 0) { exit 1 }
+
+  publish:
+    name: Publish release
+    needs: [verify, build]
+    if: ${{ needs.build.result == 'success' }}
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: v${{ needs.verify.outputs.version }}
+    steps:
+      - name: Verify expected assets exist
+        run: |
+          names=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+          echo "$names"
+          missing=0
+          for pattern in '_x64-setup\.exe$' '_x64_en-US\.msi$' '(\.dmg|\.app\.tar\.gz)$' '\.deb$' '\.rpm$' '\.AppImage$'; do
+            if ! echo "$names" | grep -Eq "$pattern"; then
+              echo "::error::Release $TAG is missing an asset matching $pattern"
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: Publish release
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
