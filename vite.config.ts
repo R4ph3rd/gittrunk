@@ -41,6 +41,7 @@ export default defineConfig({
               maxSize: 350_000,
             },
             { name: "vendor-dnd", test: /node_modules[\\/]@dnd-kit[\\/]/, priority: 20 },
+            { name: "vendor-xterm", test: /node_modules[\\/]@xterm[\\/]/, priority: 20 },
             { name: "vendor-query", test: /node_modules[\\/]@tanstack[\\/]/, priority: 20 },
             {
               name: "vendor-radix",

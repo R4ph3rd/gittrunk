@@ -46,14 +46,19 @@ tokio = { version = "1.53.1", features = ["rt", "sync", "time", "macros"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 
 webpki-roots = "1"
+sha2 = "0.10"
+base64 = "0.22"
+time = { version = "0.3", default-features = false, features = ["std", "parsing"] }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+portable-pty = "0.9"
 
 [target.'cfg(target_os = "android")'.dependencies]
 git2 = { version = "0.21", default-features = false, features = ["vendored-libgit2", "https", "vendored-openssl"] }
 
 [dev-dependencies]
+tauri = { version = "2", features = ["test"] }
 mockito = "1.7.2"
 tempfile = "3"
 
