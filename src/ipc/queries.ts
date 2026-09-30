@@ -1,6 +1,15 @@
 import { useEffect } from "react";
-import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { commands, events, type DiffOptions, type GraphFilter, type RepoChanged } from "./bindings";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import {
+  commands,
+  events,
+  type CommitRequest,
+  type DiffOptions,
+  type GraphFilter,
+  type LineSelection,
+  type RepoChanged,
+  type StashSaveRequest,
+} from "./bindings";
 import { unwrap } from "./client";
 
 /** Query keys are scoped by repo id so `repo-changed` events can invalidate precisely. */
@@ -124,6 +133,125 @@ export function useFileDiff(repoId: string, oid: string, path: string | null) {
   });
 }
 
+/* ---- Working copy (staging) ---- */
+
+/** Diff options for staging views. Line selections must be built against exactly these. */
+export const STAGING_DIFF_OPTIONS: DiffOptions = { contextLines: 3, ignoreWhitespace: false };
+
+export const worktreeKeys = {
+  all: (id: string) => ["repo", id, "worktree"] as const,
+  diff: (id: string, path: string, staged: boolean, options: DiffOptions) =>
+    ["repo", id, "worktree", "diff", path, staged, options] as const,
+};
+
+export function useWorktreeDiff(repoId: string, path: string | null, staged: boolean) {
+  return useQuery({
+    queryKey: worktreeKeys.diff(repoId, path ?? "", staged, STAGING_DIFF_OPTIONS),
+    queryFn: () => unwrap(commands.worktreeFileDiff(repoId, path!, staged, STAGING_DIFF_OPTIONS)),
+    enabled: path !== null,
+  });
+}
+
+/** Refetches status and every worktree/index diff (the staged and unstaged views of one file). */
+export function invalidateWorkingCopy(client: QueryClient, repoId: string) {
+  return Promise.all([
+    client.invalidateQueries({ queryKey: queryKeys.status(repoId) }),
+    client.invalidateQueries({ queryKey: worktreeKeys.all(repoId) }),
+  ]);
+}
+
+/** After history-changing ops (commit, stash, undo): working copy plus refs, graph and info. */
+export function invalidateEverything(client: QueryClient, repoId: string) {
+  return Promise.all([
+    invalidateWorkingCopy(client, repoId),
+    client.invalidateQueries({ queryKey: queryKeys.refs(repoId) }),
+    client.invalidateQueries({ queryKey: queryKeys.graph(repoId) }),
+    client.invalidateQueries({ queryKey: queryKeys.info(repoId) }),
+  ]);
+}
+
+function useRepoMutation<V, R>(
+  repoId: string,
+  fn: (vars: V) => Promise<R>,
+  scope: "working" | "all" = "working",
+) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSettled: () =>
+      scope === "all"
+        ? invalidateEverything(client, repoId)
+        : invalidateWorkingCopy(client, repoId),
+  });
+}
+
+export function useStagePaths(repoId: string) {
+  return useRepoMutation(repoId, (paths: string[]) => unwrap(commands.stagePaths(repoId, paths)));
+}
+
+export function useUnstagePaths(repoId: string) {
+  return useRepoMutation(repoId, (paths: string[]) => unwrap(commands.unstagePaths(repoId, paths)));
+}
+
+export function useStageLines(repoId: string) {
+  return useRepoMutation(repoId, (sel: LineSelection) => unwrap(commands.stageLines(repoId, sel)));
+}
+
+export function useUnstageLines(repoId: string) {
+  return useRepoMutation(repoId, (sel: LineSelection) =>
+    unwrap(commands.unstageLines(repoId, sel)),
+  );
+}
+
+export function useDiscardPaths(repoId: string) {
+  return useRepoMutation(repoId, (v: { paths: string[]; dryRun: boolean }) =>
+    unwrap(commands.discardPaths(repoId, v.paths, v.dryRun)),
+  );
+}
+
+export function useDiscardLines(repoId: string) {
+  return useRepoMutation(repoId, (v: { selection: LineSelection; dryRun: boolean }) =>
+    unwrap(commands.discardLines(repoId, v.selection, v.dryRun)),
+  );
+}
+
+export function useCommitCreate(repoId: string) {
+  return useRepoMutation(
+    repoId,
+    (request: CommitRequest) => unwrap(commands.commitCreate(repoId, request)),
+    "all",
+  );
+}
+
+export function useStashSave(repoId: string) {
+  return useRepoMutation(
+    repoId,
+    (request: StashSaveRequest) => unwrap(commands.stashSave(repoId, request)),
+    "all",
+  );
+}
+
+export function useStashApply(repoId: string) {
+  return useRepoMutation(
+    repoId,
+    (v: { index: number; pop: boolean }) => unwrap(commands.stashApply(repoId, v.index, v.pop)),
+    "all",
+  );
+}
+
+export function useStashDrop(repoId: string) {
+  return useRepoMutation(
+    repoId,
+    (v: { index: number; dryRun: boolean }) =>
+      unwrap(commands.stashDrop(repoId, v.index, v.dryRun)),
+    "all",
+  );
+}
+
+export function useUndo(repoId: string) {
+  return useRepoMutation(repoId, () => unwrap(commands.undo(repoId, false)), "all");
+}
+
 /** Maps a repo-changed payload onto the queries it invalidates. */
 export function invalidateForChange(client: QueryClient, change: RepoChanged) {
   const id = change.repoId;
@@ -134,6 +262,7 @@ export function invalidateForChange(client: QueryClient, change: RepoChanged) {
       void client.invalidateQueries({ queryKey: queryKeys.info(id) });
     } else if (scope === "index" || scope === "worktree") {
       void client.invalidateQueries({ queryKey: queryKeys.status(id) });
+      void client.invalidateQueries({ queryKey: worktreeKeys.all(id) });
     } else if (scope === "config") {
       void client.invalidateQueries({ queryKey: queryKeys.info(id) });
     }
