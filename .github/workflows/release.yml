@@ -2,7 +2,9 @@
 # Run it from Actions -> Release -> Run workflow on `main` with the version
 # (e.g. 0.1.0). A pushed v* tag is also accepted if it points at a commit on
 # main. The release is created as a draft, and published by the final job only
-# when every platform built. See docs/RELEASING.md.
+# when every platform built (including the Android APK). The verify job also
+# requires successful CI, Build Windows and Build Android runs for the commit.
+# See docs/RELEASING.md.
 name: Release
 
 on:
@@ -77,13 +79,13 @@ jobs:
       - name: Version files match the release version
         run: node scripts/check-version.mjs "${{ steps.meta.outputs.version }}"
 
-      - name: CI and Build Windows must have passed for this commit
+      - name: CI, Build Windows and Build Android must have passed for this commit
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.sha }}
         run: |
           failed=0
-          for wf in ci.yml build-windows.yml; do
+          for wf in ci.yml build-windows.yml build-android.yml; do
             runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" --commit "$SHA" \
               --limit 50 --json conclusion,status)
             ok=$(echo "$runs" | jq '[.[] | select(.status == "completed" and .conclusion == "success")] | length')
@@ -267,10 +269,66 @@ jobs:
           }
           if ($bad -gt 0) { exit 1 }
 
-  publish:
-    name: Publish release
+  # Android leg. Uploads to the draft created by the tauri-action matrix, so it
+  # runs after `build`. Without the four ANDROID_* secrets the APK is signed with
+  # the action's throwaway dev key (same policy as unsigned Windows/macOS builds).
+  android:
+    name: Android release APK
     needs: [verify, build]
     if: ${{ needs.build.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+
+      - name: Choose Android signing mode
+        id: mode
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          present=()
+          missing=()
+          for name in ANDROID_KEYSTORE ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -n "${!name}" ]; then present+=("$name"); else missing+=("$name"); fi
+          done
+          if [ "${#missing[@]}" -eq 0 ]; then
+            echo "sign=release" >> "$GITHUB_OUTPUT"
+          elif [ "${#present[@]}" -eq 0 ]; then
+            echo "::notice::Android APK is signed with a throwaway key (ANDROID_* secrets not configured) and cannot be updated in place: users must uninstall before installing another build."
+            echo "sign=dev" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Android signing secrets are only partly configured; missing: ${missing[*]}. Set all four or none."
+            exit 1
+          fi
+
+      - name: Build Android APK
+        id: apk
+        uses: ./.github/actions/build-android
+        with:
+          abis: aarch64,armv7,x86_64
+          sign: ${{ steps.mode.outputs.sign }}
+          keystore-base64: ${{ secrets.ANDROID_KEYSTORE }}
+          keystore-password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          key-alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          key-password: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Upload APK to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APK: ${{ steps.apk.outputs.apk-path }}
+        run: gh release upload "v$VERSION" "$APK" --repo "$GITHUB_REPOSITORY" --clobber
+
+  publish:
+    name: Publish release
+    needs: [verify, build, android]
+    if: ${{ needs.build.result == 'success' && needs.android.result == 'success' }}
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
@@ -281,7 +339,7 @@ jobs:
           names=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
           echo "$names"
           missing=0
-          for pattern in '_x64-setup\.exe$' '_x64_en-US\.msi$' '(\.dmg|\.app\.tar\.gz)$' '\.deb$' '\.rpm$' '\.AppImage$'; do
+          for pattern in '_x64-setup\.exe$' '_x64_en-US\.msi$' '(\.dmg|\.app\.tar\.gz)$' '\.deb$' '\.rpm$' '\.AppImage$' '_android-universal\.apk$'; do
             if ! echo "$names" | grep -Eq "$pattern"; then
               echo "::error::Release $TAG is missing an asset matching $pattern"
               missing=1
