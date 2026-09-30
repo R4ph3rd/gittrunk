@@ -96,6 +96,8 @@ jobs:
           done
           exit $failed
 
+      # A draft left by an earlier failed run points at that run's commit and
+      # holds its assets, so it is removed and rebuilt from this commit.
       - name: Release must not already be published
         env:
           GH_TOKEN: ${{ github.token }}
@@ -105,6 +107,10 @@ jobs:
           if [ "$draft" = "false" ]; then
             echo "::error::Release $TAG is already published."
             exit 1
+          fi
+          if [ "$draft" = "true" ]; then
+            echo "Deleting stale draft release $TAG"
+            gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes
           fi
 
   build:

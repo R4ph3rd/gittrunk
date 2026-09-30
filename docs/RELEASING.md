@@ -19,7 +19,7 @@ Pushing a `v0.2.0` tag is also accepted, but only if the tagged commit is on `ma
 
 1. **verify**: refuses to run off `main`, validates the semver input, runs `node scripts/check-version.mjs <version>` (`package.json`, `tauri.conf.json` and `Cargo.toml` must all match), and requires a successful `CI` run and a successful `Build Windows` run for the exact commit (checked with `gh run list --commit`). It also refuses to touch an already published release.
 2. **build**: Windows (NSIS + MSI), macOS (universal DMG/app), Linux (deb, rpm, AppImage). Each leg uploads to a **draft** release `gittrunk v<version>` with tag `v<version>` at the released commit.
-3. **publish**: runs only if every build leg succeeded, checks that the expected assets exist (`*_x64-setup.exe`, `*_x64_en-US.msi`, `.dmg` or `.app.tar.gz`, `.deb`, `.rpm`, `.AppImage`) and then publishes the draft as the latest release. If any leg fails the draft stays unpublished; delete it or re-run the workflow.
+3. **publish**: runs only if every build leg succeeded, checks that the expected assets exist (`*_x64-setup.exe`, `*_x64_en-US.msi`, `.dmg` or `.app.tar.gz`, `.deb`, `.rpm`, `.AppImage`) and then publishes the draft as the latest release. If any leg fails the draft stays unpublished; running the workflow again deletes that stale draft and rebuilds every platform from the current commit.
 
 ## Code signing
 
