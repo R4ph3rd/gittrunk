@@ -1,5 +1,6 @@
 //! gittrunk backend.
 
+pub mod askpass;
 pub mod commands;
 pub mod git;
 pub mod ipc;
