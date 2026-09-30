@@ -1,8 +1,9 @@
-//! `worktree` commands. Phase 0 stubs: typed signatures are the contract;
-//! bodies are filled in by the owning agent.
-#![allow(unused_variables)]
+//! `worktree` commands: status, diffs, staging, discard and commit.
 
-use crate::ipc::error::{AppError, AppResult};
+use crate::git::libgit::LibGit;
+use crate::git::staging::StagingService;
+use crate::git::GitState;
+use crate::ipc::error::AppResult;
 use crate::ipc::types::*;
 
 #[tauri::command]
@@ -33,52 +34,83 @@ pub async fn worktree_file_diff(
     .await
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn stage_paths(repo: RepoId, paths: Vec<String>) -> AppResult<()> {
-    Err(AppError::not_implemented("stage_paths"))
+macro_rules! wc_write {
+    ($state:expr, $repo:expr, |$r:ident| $body:expr) => {{
+        let st = $state.inner().clone();
+        crate::git::blocking(move || st.write_repo(&$repo, |$r| $body)).await
+    }};
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn unstage_paths(repo: RepoId, paths: Vec<String>) -> AppResult<()> {
-    Err(AppError::not_implemented("unstage_paths"))
+pub async fn stage_paths(
+    state: tauri::State<'_, GitState>,
+    repo: RepoId,
+    paths: Vec<String>,
+) -> AppResult<()> {
+    wc_write!(state, repo, |r| LibGit.stage_paths(r, &paths))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn unstage_paths(
+    state: tauri::State<'_, GitState>,
+    repo: RepoId,
+    paths: Vec<String>,
+) -> AppResult<()> {
+    wc_write!(state, repo, |r| LibGit.unstage_paths(r, &paths))
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn discard_paths(
+    state: tauri::State<'_, GitState>,
     repo: RepoId,
     paths: Vec<String>,
     dry_run: bool,
 ) -> AppResult<OpOutcome> {
-    Err(AppError::not_implemented("discard_paths"))
+    wc_write!(state, repo, |r| LibGit.discard_paths(r, &paths, dry_run))
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn stage_lines(repo: RepoId, selection: LineSelection) -> AppResult<()> {
-    Err(AppError::not_implemented("stage_lines"))
+pub async fn stage_lines(
+    state: tauri::State<'_, GitState>,
+    repo: RepoId,
+    selection: LineSelection,
+) -> AppResult<()> {
+    wc_write!(state, repo, |r| LibGit.stage_lines(r, &selection))
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn unstage_lines(repo: RepoId, selection: LineSelection) -> AppResult<()> {
-    Err(AppError::not_implemented("unstage_lines"))
+pub async fn unstage_lines(
+    state: tauri::State<'_, GitState>,
+    repo: RepoId,
+    selection: LineSelection,
+) -> AppResult<()> {
+    wc_write!(state, repo, |r| LibGit.unstage_lines(r, &selection))
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn discard_lines(
+    state: tauri::State<'_, GitState>,
     repo: RepoId,
     selection: LineSelection,
     dry_run: bool,
 ) -> AppResult<OpOutcome> {
-    Err(AppError::not_implemented("discard_lines"))
+    wc_write!(state, repo, |r| LibGit
+        .discard_lines(r, &selection, dry_run))
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn commit_create(repo: RepoId, request: CommitRequest) -> AppResult<OpOutcome> {
-    Err(AppError::not_implemented("commit_create"))
+pub async fn commit_create(
+    state: tauri::State<'_, GitState>,
+    repo: RepoId,
+    request: CommitRequest,
+) -> AppResult<OpOutcome> {
+    let cli = state.cli().clone();
+    wc_write!(state, repo, |r| LibGit.commit_create(r, &cli, &request))
 }
