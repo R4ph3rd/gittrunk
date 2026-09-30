@@ -16,6 +16,7 @@ pub mod refs_write;
 pub mod remote;
 pub mod service;
 pub mod staging;
+pub mod stash_write;
 pub mod watcher;
 
 #[cfg(test)]
