@@ -3,12 +3,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Button,
   Checkbox,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
   Input,
   Label,
 } from "@/design/components";
@@ -52,12 +52,12 @@ function Form({ request, onClose }: { request: PromptRequest; onClose: () => voi
   const text = copy[request.kind];
   return (
     <form onSubmit={submit}>
-      <DialogHeader>
-        <DialogTitle>{text.title}</DialogTitle>
-        <DialogDescription>
+      <ResponsiveDialogHeader>
+        <ResponsiveDialogTitle>{text.title}</ResponsiveDialogTitle>
+        <ResponsiveDialogDescription>
           {request.kind === "rename" ? `Rename ${request.oldName}.` : `At ${request.label}.`}
-        </DialogDescription>
-      </DialogHeader>
+        </ResponsiveDialogDescription>
+      </ResponsiveDialogHeader>
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
           <Label htmlFor="ops-name">Name</Label>
@@ -84,14 +84,14 @@ function Form({ request, onClose }: { request: PromptRequest; onClose: () => voi
           </div>
         )}
       </div>
-      <DialogFooter>
+      <ResponsiveDialogFooter>
         <Button type="button" variant="secondary" onClick={onClose}>
           Cancel
         </Button>
         <Button type="submit" variant="primary" disabled={invalid}>
           {text.confirm}
         </Button>
-      </DialogFooter>
+      </ResponsiveDialogFooter>
     </form>
   );
 }
@@ -101,15 +101,15 @@ export function NamePromptHost() {
   const prompt = useDndStore((s) => s.prompt);
   const setPrompt = useDndStore((s) => s.setPrompt);
   return (
-    <Dialog
+    <ResponsiveDialog
       open={prompt !== null}
       onOpenChange={(open) => {
         if (!open) setPrompt(null);
       }}
     >
-      <DialogContent hideClose>
+      <ResponsiveDialogContent hideClose>
         {prompt && <Form request={prompt} onClose={() => setPrompt(null)} />}
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

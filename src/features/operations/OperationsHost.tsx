@@ -1,5 +1,8 @@
 import { lazy, Suspense, useEffect, useRef } from "react";
 import { GitPullRequestArrow, Play, SkipForward, Undo2 } from "lucide-react";
+import { useLayout } from "@/app/layout/useLayout";
+import { usePlatform } from "@/app/platform";
+import { HistoryViewsHost } from "@/features/history-views/HistoryViewsHost";
 import { useRegisterCommands, type Command, type CommandContext } from "@/app/commands";
 import {
   Dialog,
@@ -37,6 +40,8 @@ const stateOf = (ctx: CommandContext): RepoInfo["state"] | null =>
 
 /** Mounts the conflict resolver and rebase editor dialogs and registers the operation commands. */
 export function OperationsHost({ repoId }: { repoId: string }) {
+  const { isCompact } = useLayout();
+  const platform = usePlatform();
   const resolverPath = useOperationsStore((s) => s.resolver[repoId] ?? null);
   const rebaseBase = useOperationsStore((s) => s.rebase[repoId] ?? null);
   const closeConflict = useOperationsStore((s) => s.closeConflict);
@@ -107,28 +112,34 @@ export function OperationsHost({ repoId }: { repoId: string }) {
         if (ctx.repoId) useOperationsStore.getState().setAbortConfirm(ctx.repoId, true);
       },
     },
-    {
-      id: "rebase.interactive",
-      title: "Interactive rebase…",
-      group: "Operation",
-      icon: GitPullRequestArrow,
-      keywords: ["squash", "reword", "reorder", "history"],
-      when: (ctx) => ctx.repoId !== null && stateOf(ctx) === "clean",
-      run: (ctx) => {
-        if (!ctx.repoId) return;
-        const base = selectedOidOf(useRepoStore.getState().selection[ctx.repoId]);
-        if (!base) {
-          toast.error("Select the commit to rebase onto in the graph first");
-          return;
-        }
-        useOperationsStore.getState().openRebase(ctx.repoId, base);
-      },
-    },
+    ...(platform.supportsInteractiveRebase
+      ? ([
+          {
+            id: "rebase.interactive",
+            title: "Interactive rebase…",
+            group: "Operation",
+            icon: GitPullRequestArrow,
+            keywords: ["squash", "reword", "reorder", "history"],
+            when: (ctx) => ctx.repoId !== null && stateOf(ctx) === "clean",
+            run: (ctx) => {
+              if (!ctx.repoId) return;
+              const base = selectedOidOf(useRepoStore.getState().selection[ctx.repoId]);
+              if (!base) {
+                toast.error("Select the commit to rebase onto in the graph first");
+                return;
+              }
+              useOperationsStore.getState().openRebase(ctx.repoId, base);
+            },
+          },
+        ] satisfies Command[])
+      : []),
   ];
-  useRegisterCommands(commands, []);
+  useRegisterCommands(commands, [platform.supportsInteractiveRebase]);
 
   return (
     <>
+      {/* On regular layouts RefsSidebar mounts it; compact layouts have no sidebar. */}
+      {isCompact ? <HistoryViewsHost repoId={repoId} /> : null}
       <Dialog open={resolverPath !== null} onOpenChange={(open) => !open && closeConflict(repoId)}>
         <DialogContent className="flex h-[calc(100vh-48px)] w-[calc(100vw-48px)] max-w-none flex-col">
           <DialogHeader>

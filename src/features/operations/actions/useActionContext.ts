@@ -1,7 +1,8 @@
 import { useCallback } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "@/design/components";
-import type { RefsSnapshot } from "@/ipc/bindings";
+import type { PlatformInfo, RefsSnapshot } from "@/ipc/bindings";
+import { fallbackPlatform } from "@/app/platform";
 import { queryKeys } from "@/ipc/queries";
 import { useDndStore } from "@/stores/dnd";
 import { requestOperation } from "../preview/useConfirmedOperation";
@@ -26,6 +27,9 @@ export function makeActionContext(client: QueryClient, repoId: string): ActionCo
     prompt: (request) => useDndStore.getState().setPrompt(request),
     copy: (text) => void copyText(text),
     openRebaseEditor: (base) => openRebaseEditor(repoId, base),
+    platform:
+      client.getQueryData<PlatformInfo>(queryKeys.platformInfo) ??
+      fallbackPlatform(typeof navigator === "undefined" ? undefined : navigator.userAgent),
   };
 }
 

@@ -1,5 +1,6 @@
 import { useCallback, type HTMLAttributes } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { useLayout } from "@/app/layout/useLayout";
 import { useDndStore } from "@/stores/dnd";
 import { resolveDrop } from "./resolve";
 import type { DragData, DragSource, DropData, DropTarget } from "./types";
@@ -28,7 +29,11 @@ export const dndStateClass: Record<Exclude<DndState, null>, string> = {
  * Makes an element a draggable and/or droppable. Spread `dragProps` on the element and pass
  * `setNodeRef` as its ref. Subscribes to the drag store only, so a drag never re-renders the tree.
  */
-export function useDndNode(config: DndNodeConfig | undefined) {
+export function useDndNode(inputConfig: DndNodeConfig | undefined) {
+  // Drag and drop is not offered on compact layouts: the node stays a plain element and the
+  // action menus carry the same operations.
+  const { isCompact } = useLayout();
+  const config = isCompact ? undefined : inputConfig;
   const id = config?.id ?? "none";
   const repoId = config?.repoId ?? "";
   const drag = useDraggable({

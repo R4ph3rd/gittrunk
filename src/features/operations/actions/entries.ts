@@ -12,7 +12,7 @@ import {
   Trash2,
   Undo2,
 } from "lucide-react";
-import type { HeadState, ResetMode } from "@/ipc/bindings";
+import type { HeadState, PlatformInfo, ResetMode } from "@/ipc/bindings";
 import { ops } from "./ops";
 import type { ActionEntry, ActionTarget, OperationSpec, PromptRequest } from "./types";
 
@@ -24,6 +24,8 @@ export interface ActionContext {
   prompt: (request: PromptRequest) => void;
   copy: (text: string) => void;
   openRebaseEditor: (base: string) => void;
+  /** Capabilities of the platform; entries the platform cannot run are left out. */
+  platform?: Pick<PlatformInfo, "supportsRebase" | "supportsInteractiveRebase">;
 }
 
 type Item = Extract<ActionEntry, { kind: "item" }>;
@@ -265,13 +267,29 @@ function tagEntries(t: Extract<ActionTarget, { kind: "tag" }>, c: ActionContext)
   return entries;
 }
 
+/** Drops entries the platform cannot run (rebase without the git CLI) and tidies separators. */
+export function gateEntries(entries: ActionEntry[], platform: ActionContext["platform"]) {
+  if (!platform) return entries;
+  const hidden = new Set<string>();
+  if (!platform.supportsRebase) hidden.add("rebase");
+  if (!platform.supportsInteractiveRebase) hidden.add("interactiveRebase");
+  if (hidden.size === 0) return entries;
+  const kept = entries.filter((e) => e.kind !== "item" || !hidden.has(e.id));
+  return kept.filter((e, i) => {
+    if (e.kind !== "separator") return true;
+    const prev = kept[i - 1];
+    const next = kept[i + 1];
+    return prev !== undefined && prev.kind !== "separator" && next !== undefined;
+  });
+}
+
 /** The context menu (and palette) actions for a commit, branch or tag. */
 export function buildActionEntries(target: ActionTarget, ctx: ActionContext): ActionEntry[] {
   switch (target.kind) {
     case "commit":
-      return commitEntries(target, ctx);
+      return gateEntries(commitEntries(target, ctx), ctx.platform);
     case "branch":
-      return branchEntries(target, ctx);
+      return gateEntries(branchEntries(target, ctx), ctx.platform);
     case "tag":
       return tagEntries(target, ctx);
   }

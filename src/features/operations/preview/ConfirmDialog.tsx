@@ -1,5 +1,17 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertDialog, Badge } from "@/design/components";
+import { useLayout } from "@/app/layout/useLayout";
+import {
+  AlertDialog,
+  Badge,
+  Button,
+  ResponsiveDialog,
+  ResponsiveDialogClose,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/design/components";
 import type { OpPreview, RefUpdate } from "@/ipc/bindings";
 import { useDndStore } from "@/stores/dnd";
 import { MiniGraph } from "./MiniGraph";
@@ -83,31 +95,62 @@ export function OperationConfirmHost() {
     (pending.spec.destructive === true ||
       pending.preview.commitsDropped.length > 0 ||
       pending.preview.predictedConflicts.length > 0);
+  const { isCompact } = useLayout();
+  const description = preview ? (
+    <>
+      <span className="block whitespace-pre-wrap text-fg">{preview.summary}</span>
+      <MiniGraph
+        repoId={pending.spec.repoId}
+        updates={preview.refUpdates}
+        dropped={preview.commitsDropped}
+      />
+    </>
+  ) : null;
+  const confirm = () => {
+    if (pending) void executeOperation(client, pending.spec);
+  };
+  const close = (open: boolean) => {
+    if (!open) setConfirm(null);
+  };
+
+  // Compact layouts: a full-height sheet with the whole preview and the buttons at the bottom.
+  if (isCompact) {
+    return (
+      <ResponsiveDialog open={pending !== null} onOpenChange={close}>
+        <ResponsiveDialogContent data-testid="confirm-sheet">
+          <ResponsiveDialogHeader>
+            <ResponsiveDialogTitle>{pending?.spec.title ?? ""}</ResponsiveDialogTitle>
+            <ResponsiveDialogDescription asChild>
+              <div className="text-base text-fg-muted">{description}</div>
+            </ResponsiveDialogDescription>
+          </ResponsiveDialogHeader>
+          <div className="min-h-0 flex-1 overflow-auto px-4 pb-2 text-base">
+            {preview ? <PreviewDetails preview={preview} /> : null}
+          </div>
+          <ResponsiveDialogFooter>
+            <ResponsiveDialogClose asChild>
+              <Button variant="secondary">Cancel</Button>
+            </ResponsiveDialogClose>
+            <ResponsiveDialogClose asChild>
+              <Button variant={danger ? "danger" : "primary"} onClick={confirm}>
+                {pending?.spec.confirmLabel ?? "Confirm"}
+              </Button>
+            </ResponsiveDialogClose>
+          </ResponsiveDialogFooter>
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>
+    );
+  }
   return (
     <AlertDialog
       open={pending !== null}
-      onOpenChange={(open) => {
-        if (!open) setConfirm(null);
-      }}
+      onOpenChange={close}
       title={pending?.spec.title ?? ""}
-      description={
-        preview ? (
-          <>
-            <span className="block whitespace-pre-wrap text-fg">{preview.summary}</span>
-            <MiniGraph
-              repoId={pending.spec.repoId}
-              updates={preview.refUpdates}
-              dropped={preview.commitsDropped}
-            />
-          </>
-        ) : null
-      }
+      description={description}
       preview={preview ? <PreviewDetails preview={preview} /> : null}
       confirmLabel={pending?.spec.confirmLabel ?? "Confirm"}
       destructive={danger}
-      onConfirm={() => {
-        if (pending) void executeOperation(client, pending.spec);
-      }}
+      onConfirm={confirm}
     />
   );
 }

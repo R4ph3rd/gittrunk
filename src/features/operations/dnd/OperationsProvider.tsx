@@ -12,6 +12,8 @@ import {
 } from "@dnd-kit/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { GitBranch, GitCommitHorizontal, Tag } from "lucide-react";
+import { usePlatform } from "@/app/platform";
+import { useLayout } from "@/app/layout/useLayout";
 import { toast } from "@/design/components";
 import { useDndStore } from "@/stores/dnd";
 import { ActionMenuHost } from "../actions/ActionMenu";
@@ -89,13 +91,15 @@ export function OperationsProvider({ children }: { children: ReactNode }) {
   const drag = useDndStore((s) => s.drag);
   // Subscribing re-renders DndContext when the keyboard cursor moves, which re-runs collision detection.
   useDndStore((s) => s.cursor);
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: keyboardCoordinates,
-      keyboardCodes: KEYBOARD_CODES,
-    }),
-  );
+  const { isCompact } = useLayout();
+  const platform = usePlatform();
+  const pointer = useSensor(PointerSensor, { activationConstraint: { distance: 6 } });
+  const keyboard = useSensor(KeyboardSensor, {
+    coordinateGetter: keyboardCoordinates,
+    keyboardCodes: KEYBOARD_CODES,
+  });
+  // No sensors on compact layouts: drag and drop is replaced by the action sheets.
+  const sensors = useSensors(...(isCompact ? [] : [pointer, keyboard]));
 
   const onDragStart = (event: DragStartEvent) => {
     const data = event.active.data.current as Partial<DragData> | undefined;
@@ -117,7 +121,11 @@ export function OperationsProvider({ children }: { children: ReactNode }) {
     finish();
     const drop = event.over?.data.current as Partial<DropData> | undefined;
     if (!active || !drop?.target) return;
-    const options = resolveDrop(active.source, drop.target, active.ctx);
+    const options = resolveDrop(active.source, drop.target, active.ctx).filter(
+      (o) =>
+        !(o.id === "rebase" && !platform.supportsRebase) &&
+        !(o.id === "interactiveRebase" && !platform.supportsInteractiveRebase),
+    );
     if (options.length === 0) {
       toast.info("Nothing to do for that drop");
       return;

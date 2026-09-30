@@ -1,4 +1,5 @@
 import {
+  ActionSheet,
   ContextMenuItem,
   ContextMenuLabel,
   ContextMenuSeparator,
@@ -9,8 +10,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/design/components";
+import { useLayout } from "@/app/layout/useLayout";
 import { useDndStore } from "@/stores/dnd";
 import { buildActionEntries } from "./entries";
+import { entriesToSheetGroups } from "./sheetGroups";
 import { useActionContext } from "./useActionContext";
 import type { ActionEntry, ActionTarget } from "./types";
 
@@ -53,6 +56,20 @@ export function TargetEntries({ repoId, target }: { repoId: string; target: Acti
 export function ActionMenuHost() {
   const menu = useDndStore((s) => s.menu);
   const close = useDndStore((s) => s.closeMenu);
+  const { isCompact } = useLayout();
+  if (isCompact) {
+    return (
+      <ActionSheet
+        open={menu !== null}
+        onOpenChange={(open) => {
+          if (!open) close();
+        }}
+        title={menu?.title ?? ""}
+        items={[]}
+        groups={menu ? entriesToSheetGroups(menu.entries) : [[]]}
+      />
+    );
+  }
   return (
     <DropdownMenu
       open={menu !== null}
