@@ -211,7 +211,9 @@ runs:
         badging="$("${bt}aapt2" dump badging "$apk")"
         grep -q "package: name='dev.gittrunk.client'" <<< "$badging" \
           || { echo "::error::unexpected package name"; exit 1; }
-        grep -q "sdkVersion:'24'" <<< "$badging" \
+        # aapt2 prints `sdkVersion:` in older build-tools, `minSdkVersion:` in newer.
+        grep -iE "^(min)?sdkVersion:|^targetSdkVersion:" <<< "$badging" || true
+        grep -qE "^(min)?[sS]dkVersion:'24'" <<< "$badging" \
           || { echo "::error::expected minSdk 24"; exit 1; }
 
         libs="$(unzip -l "$apk" | grep 'libgittrunk_lib.so' || true)"

@@ -1,6 +1,6 @@
 # gittrunk — Implementation Plan
 
-Status: **M0–M7 complete; M8 (Android) planned.** M0–M7 are merged on the integration branch; the full quality gate, the e2e suite and the Windows installer build pass (see §10). M8 adds an Android build; its waves, packages and dispatches are in §11.
+Status: **M0–M7 complete; M8 (Android) merged, its CI build in flight; M9 (desktop redesign, forge integration, read-only mobile) planned.** M0–M7 are merged on the integration branch; the full quality gate, the e2e suite and the Windows installer build pass (see §10). M8 adds an Android build (§11). M9 is in §12.
 
 gittrunk is a cross-platform desktop Git client (alternative to GitKraken) built with Tauri 2. Windows (`.exe` + NSIS installer + MSI) is the release target; macOS and Linux build from the same codebase.
 
@@ -270,7 +270,8 @@ Plus: bindings drift check and the E2E drag-and-drop merge test from M5 onward.
 | M5 Drag and drop       | Done    | e2e drags `feature` onto `main`, confirms the preview, verifies the merge commit's parents with git           |
 | M6 AI + advanced Git   | Done    | Providers tested against a mock server; AI off by default; blame, file history, reflog, submodules, worktrees |
 | M7 Hardening + release | Done    | Gate below; Windows `gittrunk.exe`, NSIS `*-setup.exe` and `*.msi` produced by the Build Windows workflow     |
-| M8 Android             | Planned | See §11; dispatches in `docs/dispatch/android/`                                                               |
+| M8 Android             | Merged  | See §11; dispatches in `docs/dispatch/android/`; `Build Android` CI run in flight                             |
+| M9 Redesign + forge    | Planned | See §12; dispatches in `docs/dispatch/m9/`                                                                    |
 
 Quality gate at completion: `cargo fmt --check`, `cargo clippy -D warnings`, 257 Rust tests (also under a global `core.autocrlf=true`), frontend lint, format, typecheck, 251 component tests, `pnpm build`, `pnpm tauri build` (Linux bundles locally, Windows installers in CI) and 3 e2e specs.
 
