@@ -286,3 +286,301 @@ fn reset_hard_and_soft() {
     let out = sh(&t, &["reset", "--hard", "nope"]);
     assert_eq!(out.code, 128);
 }
+
+// --------------------------------------------------------------- commit
+
+#[test]
+fn commit_from_stdin_uses_index_and_head() {
+    let mut t = TestRepo::new();
+    t.write("f.txt", "1\n");
+    let first = t.commit_all("first");
+    t.write("f.txt", "2\n");
+    t.write("untracked.txt", "u\n");
+    sh_ok(&t, &["add", "--", "f.txt"]);
+    let out = sh_in(
+        &t,
+        &["commit", "-F", "-", "--no-verify"],
+        &stdin("second  \n\n\n\nbody line\n\n"),
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout_str().contains("] second"));
+    let c = t.repo.find_commit(t.head()).unwrap();
+    assert_eq!(c.message().unwrap(), "second\n\nbody line\n");
+    assert_eq!(c.parent_id(0).unwrap(), first);
+    assert_eq!(c.author().name().unwrap(), "Fixture");
+    // Only the staged file is in the tree.
+    let tree = c.tree().unwrap();
+    assert!(tree.get_name("untracked.txt").is_none());
+    assert!(tree.get_name("f.txt").is_some());
+}
+
+#[test]
+fn commit_root_commit_on_unborn_branch() {
+    let t = TestRepo::new();
+    t.write("f.txt", "1\n");
+    sh_ok(&t, &["add", "--", "f.txt"]);
+    let out = sh_in(&t, &["commit", "-F", "-"], &stdin("root\n"));
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout_str().contains("(root-commit)"));
+    assert_eq!(t.repo.find_commit(t.head()).unwrap().parent_count(), 0);
+}
+
+#[test]
+fn commit_with_nothing_staged_reports_nothing_to_commit() {
+    let mut t = TestRepo::new();
+    t.write("f.txt", "1\n");
+    t.commit_all("first");
+    let out = sh_in(&t, &["commit", "-F", "-"], &stdin("again\n"));
+    assert_eq!(out.code, 1);
+    assert!(out.stdout_str().contains("nothing to commit"));
+    t.write("f.txt", "unstaged\n");
+    let out = sh_in(&t, &["commit", "-F", "-"], &stdin("again\n"));
+    assert!(out.stdout_str().contains("no changes added to commit"));
+    let out = sh_in(
+        &t,
+        &["commit", "-F", "-", "--allow-empty"],
+        &stdin("empty\n"),
+    );
+    assert_eq!(out.code, 0);
+}
+
+#[test]
+fn commit_amend_keeps_author_and_parents() {
+    let mut t = TestRepo::new();
+    t.write("f.txt", "1\n");
+    let first = t.commit_all("first");
+    t.write("f.txt", "2\n");
+    let second = t.commit_all_by("Original Author", "orig@example.com", "second");
+    t.write("f.txt", "3\n");
+    sh_ok(&t, &["add", "--", "f.txt"]);
+    let out = sh_in(
+        &t,
+        &["commit", "-F", "-", "--amend"],
+        &stdin("second, fixed\n"),
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let c = t.repo.find_commit(t.head()).unwrap();
+    assert_ne!(c.id(), second);
+    assert_eq!(c.parent_id(0).unwrap(), first);
+    assert_eq!(c.author().name().unwrap(), "Original Author");
+    assert_eq!(c.committer().name().unwrap(), "Fixture");
+    assert_eq!(c.message().unwrap(), "second, fixed\n");
+    assert_eq!(read(&t, "f.txt"), "3\n");
+}
+
+#[test]
+fn commit_signoff_and_empty_message() {
+    let mut t = TestRepo::new();
+    t.write("f.txt", "1\n");
+    t.commit_all("first");
+    t.write("f.txt", "2\n");
+    sh_ok(&t, &["add", "--", "f.txt"]);
+    let out = sh_in(&t, &["commit", "-F", "-"], &stdin("  \n\n"));
+    assert_eq!(out.code, 1);
+    sh_in(&t, &["commit", "-F", "-", "--signoff"], &stdin("signed\n"));
+    let msg = t
+        .repo
+        .find_commit(t.head())
+        .unwrap()
+        .message()
+        .unwrap()
+        .to_string();
+    assert_eq!(
+        msg,
+        "signed\n\nSigned-off-by: Fixture <fixture@example.com>\n"
+    );
+}
+
+#[test]
+fn commit_gpgsign_warns_and_commits_unsigned() {
+    let mut t = TestRepo::new();
+    t.write("f.txt", "1\n");
+    t.commit_all("first");
+    t.write("f.txt", "2\n");
+    sh_ok(&t, &["add", "--", "f.txt"]);
+    t.repo
+        .config()
+        .unwrap()
+        .set_bool("commit.gpgsign", true)
+        .unwrap();
+    let out = sh_in(&t, &["commit", "-F", "-"], &stdin("x\n"));
+    assert_eq!(out.code, 0);
+    assert!(out.stderr.contains("commit.gpgsign"));
+    assert!(t.repo.extract_signature(&t.head(), None).is_err());
+}
+
+#[test]
+fn commit_without_identity_is_fatal() {
+    let mut t = TestRepo::new();
+    t.write("f.txt", "1\n");
+    t.commit_all("first");
+    t.write("f.txt", "2\n");
+    sh_ok(&t, &["add", "--", "f.txt"]);
+    // `-c` with an empty value hides any host-level identity.
+    let out = sh_in(
+        &t,
+        &["-c", "user.name=", "-c", "user.email=", "commit", "-F", "-"],
+        &stdin("x\n"),
+    );
+    assert_eq!(out.code, 128);
+    assert!(out.stderr.contains("Author identity unknown"));
+}
+
+#[test]
+fn commit_refuses_unmerged_files() {
+    let t = fixtures::conflicted_merge();
+    let out = sh_in(&t, &["commit", "-F", "-"], &stdin("m\n"));
+    assert_eq!(out.code, 128);
+    assert!(out.stderr.contains("unmerged files"));
+}
+
+#[test]
+fn commit_no_edit_concludes_a_merge() {
+    let t = fixtures::conflicted_merge();
+    let main = t.head();
+    t.write("conflict.txt", "resolved\n");
+    sh_ok(&t, &["add", "--", "conflict.txt"]);
+    sh_ok(&t, &["commit", "--no-edit"]);
+    let c = t.repo.find_commit(t.head()).unwrap();
+    assert_eq!(c.parent_count(), 2);
+    assert_eq!(c.parent_id(0).unwrap(), main);
+    assert!(c.message().unwrap().starts_with("Merge"));
+    assert!(!c.message().unwrap().contains("Conflicts"));
+    assert_eq!(t.repo.state(), git2::RepositoryState::Clean);
+}
+
+// ---------------------------------------------------------------- stash
+
+fn stash_list(t: &TestRepo) -> Vec<String> {
+    let mut repo = git2::Repository::open(t.root()).unwrap();
+    let mut v = Vec::new();
+    repo.stash_foreach(|_, m, _| {
+        v.push(m.to_string());
+        true
+    })
+    .unwrap();
+    v
+}
+
+#[test]
+fn stash_push_apply_pop_drop_roundtrip() {
+    let mut t = TestRepo::new();
+    t.write("s.txt", "clean\n");
+    t.commit_all("base");
+    t.write("s.txt", "dirty\n");
+    let out = sh_ok(&t, &["stash", "push", "-m", "my stash"]);
+    assert!(out.stdout_str().contains("Saved working directory"));
+    assert_eq!(read(&t, "s.txt"), "clean\n");
+    assert_eq!(stash_list(&t), vec!["On main: my stash".to_string()]);
+
+    sh_ok(&t, &["stash", "apply", "stash@{0}"]);
+    assert_eq!(read(&t, "s.txt"), "dirty\n");
+    assert_eq!(stash_list(&t).len(), 1);
+    t.write("s.txt", "clean\n");
+    let out = sh_ok(&t, &["stash", "pop", "stash@{0}"]);
+    assert!(out.stdout_str().contains("Dropped"));
+    assert_eq!(read(&t, "s.txt"), "dirty\n");
+    assert!(stash_list(&t).is_empty());
+
+    sh_ok(&t, &["stash", "push"]);
+    assert_eq!(stash_list(&t).len(), 1);
+    sh_ok(&t, &["stash", "drop", "stash@{0}"]);
+    assert!(stash_list(&t).is_empty());
+}
+
+#[test]
+fn stash_push_untracked_and_keep_index() {
+    let mut t = TestRepo::new();
+    t.write("a.txt", "a\n");
+    t.commit_all("base");
+    t.write("a.txt", "a2\n");
+    t.write("new.txt", "n\n");
+    sh_ok(&t, &["add", "--", "a.txt"]);
+    sh_ok(
+        &t,
+        &["stash", "push", "--include-untracked", "--keep-index"],
+    );
+    assert!(!t.root().join("new.txt").exists());
+    assert_eq!(read(&t, "a.txt"), "a2\n");
+    // libgit2 refuses to apply onto a dirty index, so clean up first.
+    sh_ok(&t, &["reset", "--hard"]);
+    sh_ok(&t, &["stash", "pop", "stash@{0}"]);
+    assert_eq!(read(&t, "new.txt"), "n\n");
+}
+
+#[test]
+fn stash_push_with_nothing_to_save_succeeds() {
+    let mut t = TestRepo::new();
+    t.write("a.txt", "a\n");
+    t.commit_all("base");
+    let out = sh_ok(&t, &["stash", "push"]);
+    assert!(out.stdout_str().contains("No local changes to save"));
+    assert!(stash_list(&t).is_empty());
+}
+
+#[test]
+fn stash_apply_conflict_exits_1_and_keeps_the_stash() {
+    let mut t = TestRepo::new();
+    t.write("s.txt", "base\n");
+    t.commit_all("base");
+    t.write("s.txt", "stashed\n");
+    sh_ok(&t, &["stash", "push"]);
+    t.write("s.txt", "committed\n");
+    t.commit_all("diverge");
+    let out = sh(&t, &["stash", "pop", "stash@{0}"]);
+    assert_eq!(out.code, 1, "{}", out.stderr);
+    assert!(out
+        .stderr
+        .contains("CONFLICT (content): Merge conflict in s.txt"));
+    assert!(out.stderr.contains("stash entry is kept"));
+    assert_eq!(stash_list(&t).len(), 1);
+    assert!(idx(&t).has_conflicts());
+}
+
+#[test]
+fn stash_apply_over_dirty_worktree_is_refused() {
+    let mut t = TestRepo::new();
+    t.write("s.txt", "base\n");
+    t.commit_all("base");
+    t.write("s.txt", "stashed\n");
+    sh_ok(&t, &["stash", "push"]);
+    t.write("s.txt", "local edit\n");
+    let out = sh(&t, &["stash", "apply", "stash@{0}"]);
+    assert_eq!(out.code, 1, "{}", out.stderr);
+    assert!(out.stderr.contains("would be overwritten"));
+    assert_eq!(read(&t, "s.txt"), "local edit\n");
+    assert_eq!(stash_list(&t).len(), 1);
+}
+
+#[test]
+fn stash_bad_index_and_unsupported_subcommand() {
+    let t = TestRepo::new();
+    let out = sh(&t, &["stash", "drop", "stash@{3}"]);
+    assert_eq!(out.code, 1);
+    assert!(out.stderr.contains("not a valid reference"));
+    let out = sh(&t, &["stash", "show"]);
+    assert_eq!(out.into_result().unwrap_err().kind, ErrorKind::Unsupported);
+}
+
+#[test]
+fn stash_store_restores_a_dropped_stash() {
+    let mut t = TestRepo::new();
+    t.write("s.txt", "clean\n");
+    t.commit_all("base");
+    t.write("s.txt", "dirty\n");
+    sh_ok(&t, &["stash", "push", "-m", "keep me"]);
+    let oid = git2::Repository::open(t.root())
+        .unwrap()
+        .revparse_single("refs/stash")
+        .unwrap()
+        .id();
+    sh_ok(&t, &["stash", "drop", "stash@{0}"]);
+    assert!(stash_list(&t).is_empty());
+    sh_ok(
+        &t,
+        &["stash", "store", "-m", "On main: keep me", &oid.to_string()],
+    );
+    assert_eq!(stash_list(&t), vec!["On main: keep me".to_string()]);
+    sh_ok(&t, &["stash", "pop", "stash@{0}"]);
+    assert_eq!(read(&t, "s.txt"), "dirty\n");
+}
