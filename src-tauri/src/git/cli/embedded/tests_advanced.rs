@@ -258,3 +258,131 @@ fn rebase_refuses_a_dirty_tree_and_bad_input() {
         );
     }
 }
+
+// --------------------------------------------------------------- worktrees
+
+fn real_git_available() -> bool {
+    std::process::Command::new("git")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+fn real_porcelain(t: &TestRepo) -> String {
+    let out = std::process::Command::new("git")
+        .args(["worktree", "list", "--porcelain"])
+        .current_dir(t.root())
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n")
+}
+
+fn fwd(p: &std::path::Path) -> String {
+    p.to_string_lossy().replace('\\', "/")
+}
+
+#[test]
+fn worktree_list_porcelain_matches_git() {
+    let (t, oids) = crate::git::fixtures::linear(2);
+    let outside = tempfile::tempdir().unwrap();
+    let a = fwd(&outside.path().join("wt-a"));
+    let b = fwd(&outside.path().join("wt-b"));
+    sh_ok(&t, &["worktree", "add", "-b", "feat/a", "--", &a]);
+    sh_ok(
+        &t,
+        &[
+            "worktree",
+            "add",
+            "-b",
+            "feat/b",
+            "--",
+            &b,
+            &oids[0].to_string(),
+        ],
+    );
+    let out = sh_ok(&t, &["worktree", "list", "--porcelain"]).stdout_str();
+    let root = fwd(&t.root());
+    let head = oids[1];
+    let expected = format!(
+        "worktree {root}\nHEAD {head}\nbranch refs/heads/main\n\n\
+         worktree {a}\nHEAD {head}\nbranch refs/heads/feat/a\n\n\
+         worktree {b}\nHEAD {}\nbranch refs/heads/feat/b\n\n",
+        oids[0]
+    );
+    assert_eq!(out, expected);
+    if real_git_available() {
+        assert_eq!(out, real_porcelain(&t));
+    }
+    // The human format lists the same worktrees.
+    let plain = sh_ok(&t, &["worktree", "list"]).stdout_str();
+    assert_eq!(plain.lines().count(), 3);
+    assert!(plain.contains("[feat/a]"));
+}
+
+#[test]
+fn worktree_add_variants_and_refusals() {
+    let (t, _) = crate::git::fixtures::linear(1);
+    let outside = tempfile::tempdir().unwrap();
+    let p = |n: &str| fwd(&outside.path().join(n));
+    // No -b and no commit-ish: a branch named after the directory.
+    sh_ok(&t, &["worktree", "add", &p("auto")]);
+    assert!(t.repo.find_branch("auto", git2::BranchType::Local).is_ok());
+    // A branch that is already checked out elsewhere is refused.
+    let out = sh(&t, &["worktree", "add", &p("dup"), "auto"]);
+    assert_eq!(out.code, 128);
+    assert!(out.stderr.contains("already checked out"), "{}", out.stderr);
+    // -b on an existing branch is refused and creates nothing.
+    let out = sh(&t, &["worktree", "add", "-b", "auto", &p("x")]);
+    assert_eq!(out.code, 128);
+    assert!(!outside.path().join("x").exists());
+    // Non-empty target.
+    std::fs::create_dir_all(outside.path().join("full")).unwrap();
+    std::fs::write(outside.path().join("full/f"), "x").unwrap();
+    assert_eq!(
+        sh(&t, &["worktree", "add", "-b", "n", &p("full")]).code,
+        128
+    );
+    assert!(t.repo.find_branch("n", git2::BranchType::Local).is_err());
+    // Detached and other unsupported forms.
+    for args in [
+        &["worktree", "add", "--detach", &p("d")][..],
+        &["worktree", "prune"],
+        &["worktree", "lock", "x"],
+    ] {
+        assert_eq!(
+            sh(&t, args).into_result().unwrap_err().kind,
+            ErrorKind::Unsupported,
+            "{args:?}"
+        );
+    }
+}
+
+#[test]
+fn worktree_remove_rules_and_prunable_reporting() {
+    let (t, _) = crate::git::fixtures::linear(1);
+    let outside = tempfile::tempdir().unwrap();
+    let wt = outside.path().join("wt");
+    let path = fwd(&wt);
+    sh_ok(&t, &["worktree", "add", "-b", "w", "--", &path]);
+    // Main worktree and unknown paths are refused.
+    assert_eq!(sh(&t, &["worktree", "remove", &fwd(&t.root())]).code, 128);
+    assert_eq!(sh(&t, &["worktree", "remove", "nowhere"]).code, 128);
+    // An untracked file blocks removal until --force.
+    std::fs::write(wt.join("new.txt"), "x").unwrap();
+    let out = sh(&t, &["worktree", "remove", "--", &path]);
+    assert_eq!(out.code, 128);
+    assert!(out.stderr.contains("--force"));
+    assert!(wt.exists());
+    // Deleting the directory makes it prunable in the listing.
+    std::fs::remove_dir_all(&wt).unwrap();
+    let listing = sh_ok(&t, &["worktree", "list", "--porcelain"]).stdout_str();
+    assert!(listing.contains("prunable gitdir file points to non-existent location"));
+    sh_ok(&t, &["worktree", "remove", "--force", "--", &path]);
+    let listing = sh_ok(&t, &["worktree", "list", "--porcelain"]).stdout_str();
+    assert_eq!(listing.matches("worktree ").count(), 1);
+    // A clean worktree is removed without --force.
+    sh_ok(&t, &["worktree", "add", "-b", "w2", "--", &path]);
+    sh_ok(&t, &["worktree", "remove", "--", &path]);
+    assert!(!wt.exists());
+}
