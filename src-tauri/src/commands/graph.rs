@@ -1,7 +1,7 @@
 //! `graph` commands.
 
 use crate::git::{blocking, GitState};
-use crate::ipc::error::{AppError, AppResult};
+use crate::ipc::error::AppResult;
 use crate::ipc::types::*;
 
 #[tauri::command]
@@ -75,6 +75,6 @@ pub async fn graph_find(
     repo: RepoId,
     oid: Oid,
 ) -> AppResult<Option<u32>> {
-    let _ = (state, repo, oid);
-    Err(AppError::not_implemented("graph_find"))
+    let st = state.inner().clone();
+    blocking(move || st.graph_find(&repo, &oid)).await
 }
