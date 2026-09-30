@@ -13,13 +13,7 @@ This produces:
 Workflows in `.github/workflows/`:
 
 - **Build Windows** (`build-windows.yml`) runs on pushes to `main`, `develop`, `claude/**`, `feat/**`, on pull requests into `main`, and on demand (Actions tab → Build Windows → Run workflow). It uploads an artifact named `gittrunk-windows-<sha>` with the `.exe`, the NSIS installer and the MSI.
-- **Release** (`release.yml`) runs when a `v*` tag is pushed. The tag must point at a commit on `main`. It builds Windows, macOS (universal) and Linux installers and attaches them to a **draft** GitHub Release. Review the draft, then publish it.
-
-```sh
-git checkout main && git pull
-git tag v0.1.0
-git push origin v0.1.0
-```
+- **Release** (`release.yml`) is run manually on `main` with a version (or by pushing a `v*` tag on `main`). It requires green `CI` and `Build Windows` runs for the commit, builds Windows, macOS (universal) and Linux installers, and publishes them. See [RELEASING.md](RELEASING.md).
 
 Repository settings needed once:
 
@@ -53,9 +47,7 @@ Tauri downloads NSIS and WiX Toolset automatically on the first build. The MSI s
 ## Installer behavior
 
 - The NSIS installer installs per user (no admin prompt) and downloads WebView2 if it is missing.
-- Installers are **unsigned**, so Windows SmartScreen shows a warning on first run. To sign:
-  1. Add repository secrets `WINDOWS_CERTIFICATE` (base64-encoded `.pfx`) and `WINDOWS_CERTIFICATE_PASSWORD`.
-  2. Import the certificate in the workflow before `tauri-action` and set `bundle.windows.certificateThumbprint`, `digestAlgorithm: "sha256"` and `timestampUrl` in `src-tauri/tauri.conf.json`. See the [Tauri Windows signing guide](https://v2.tauri.app/distribute/sign/windows/).
+- Installers are **unsigned** unless signing secrets are configured, so Windows SmartScreen shows a warning on first run. Release signing (Windows and macOS) is described in [RELEASING.md](RELEASING.md).
 
 ## End-to-end tests
 
