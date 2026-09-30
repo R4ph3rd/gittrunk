@@ -1,0 +1,118 @@
+# Regenerates src-tauri/gen/android (for example after a Tauri upgrade) and
+# re-applies scripts/android/customize.mjs. Manual only; refuses to run on main.
+name: Android init
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: "Commit the regenerated project to this branch (otherwise upload it as an artifact)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  init:
+    name: Regenerate Android project
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Refuse to run on main
+        if: github.ref_name == 'main'
+        run: |
+          echo "::error::Run this workflow on a feature branch, not main."
+          exit 1
+
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Enable pnpm via Corepack
+        shell: bash
+        env:
+          COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+        run: |
+          corepack enable
+          pnpm --version
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+      - uses: actions/cache@v6
+        name: Setup pnpm cache
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Configure Android NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${ANDROID_NDK_LATEST_HOME:-}" ]; then
+            echo "::error::ANDROID_NDK_LATEST_HOME is empty"
+            exit 1
+          fi
+          {
+            echo "NDK_HOME=$ANDROID_NDK_LATEST_HOME"
+            echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME"
+            echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME"
+          } >> "$GITHUB_ENV"
+          echo "$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" >> "$GITHUB_PATH"
+
+      - name: Regenerate and customize
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf src-tauri/gen/android
+          pnpm tauri android init --ci
+          node scripts/android/customize.mjs
+          node scripts/android/customize.mjs --check
+
+      - name: Commit regenerated project
+        if: inputs.commit
+        shell: bash
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git add -A src-tauri/gen/android
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git -c user.name=R4ph3rd -c user.email=43202876+R4ph3rd@users.noreply.github.com \
+            commit -F - <<'EOF'
+          chore(android): regenerate Android project
+
+          Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+          Claude-Session: https://claude.ai/code/session_01FzHMmoKCskK5U6Gdp6AZmv
+          EOF
+          git push origin "HEAD:refs/heads/$BRANCH"
+          echo "::notice::Pushed with GITHUB_TOKEN, which does not trigger other workflows. Dispatch 'Build Android' manually on this branch."
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !inputs.commit }}
+        with:
+          name: gen-android
+          path: src-tauri/gen/android
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
