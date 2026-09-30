@@ -77,12 +77,17 @@ fn validation() {
 
 #[test]
 fn real_git_path_is_accepted() {
-    let out = Command::new("which").arg("git").output();
-    let Ok(out) = out else { return };
-    let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if path.is_empty() {
+    // Search PATH natively: `which` on Windows runners is MSYS and returns
+    // MSYS-style paths such as `/cmd/git` that native code cannot open.
+    let exe = if cfg!(windows) { "git.exe" } else { "git" };
+    let Some(found) = std::env::var_os("PATH").and_then(|paths| {
+        std::env::split_paths(&paths)
+            .map(|dir| dir.join(exe))
+            .find(|candidate| candidate.is_file())
+    }) else {
         return;
-    }
+    };
+    let path = found.to_string_lossy().into_owned();
     let d = tempfile::tempdir().unwrap();
     let mut s = defaults();
     s.git_path = Some(path.clone());
