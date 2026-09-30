@@ -34,6 +34,11 @@ impl TestRepo {
             let mut cfg = repo.config().unwrap();
             cfg.set_str("core.autocrlf", "false").unwrap();
             cfg.set_str("core.eol", "lf").unwrap();
+            // CLI-backed operations (merge, commit, rebase) need an identity;
+            // CI runners have none configured globally.
+            cfg.set_str("user.name", "Fixture").unwrap();
+            cfg.set_str("user.email", "fixture@example.com").unwrap();
+            cfg.set_bool("commit.gpgsign", false).unwrap();
         }
         Self {
             dir,
