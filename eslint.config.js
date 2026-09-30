@@ -6,7 +6,14 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist", "src-tauri/target", "src-tauri/gen", "src/ipc/bindings.ts", "node_modules"],
+    ignores: [
+      ".claude/worktrees",
+      "dist",
+      "src-tauri/target",
+      "src-tauri/gen",
+      "src/ipc/bindings.ts",
+      "node_modules",
+    ],
   },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
