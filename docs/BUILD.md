@@ -57,6 +57,29 @@ Tauri downloads NSIS and WiX Toolset automatically on the first build. The MSI s
   1. Add repository secrets `WINDOWS_CERTIFICATE` (base64-encoded `.pfx`) and `WINDOWS_CERTIFICATE_PASSWORD`.
   2. Import the certificate in the workflow before `tauri-action` and set `bundle.windows.certificateThumbprint`, `digestAlgorithm: "sha256"` and `timestampUrl` in `src-tauri/tauri.conf.json`. See the [Tauri Windows signing guide](https://v2.tauri.app/distribute/sign/windows/).
 
+## End-to-end tests
+
+The `e2e/` directory contains integration tests that drive the real app through its WebDriver interface using `tauri-driver`.
+
+Prerequisites:
+
+- `tauri-driver` (install with `cargo install tauri-driver --locked`)
+- WebDriver for the platform:
+  - **Linux**: `webkit2gtk-driver` (install from package manager)
+  - **Windows**: `msedgedriver` (download from Microsoft Edge WebDriver, or included in Chromium-based testing tools)
+- A debug build: `pnpm tauri build --debug --no-bundle`
+- On **headless Linux**: `xvfb` (virtual display)
+
+Run the e2e tests:
+
+```sh
+pnpm tauri build --debug --no-bundle
+pnpm e2e                                      # on a display with WebDriver
+xvfb-run -a pnpm e2e                         # on headless Linux
+```
+
+Failed test screenshots are saved to `e2e/artifacts/`.
+
 ## Troubleshooting
 
 | Symptom                                             | Fix                                                                                          |

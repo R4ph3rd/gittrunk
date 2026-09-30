@@ -41,6 +41,7 @@ pnpm tauri dev        # runs Vite and the Tauri app with hot reload
 ```sh
 pnpm lint && pnpm format:check && pnpm typecheck && pnpm test
 cd src-tauri && cargo fmt --all --check && cargo clippy --all-targets -- -D warnings && cargo test
+pnpm e2e                      # integration tests (requires tauri-driver and a WebDriver)
 ```
 
 ## Build
