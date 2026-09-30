@@ -5,7 +5,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useRepoStore } from "@/stores/repo";
 import { installDomShims } from "./testing";
 import { CommandHost } from "./commands/CommandHost";
-import { useCommandStore, useRegisterCommands, type Command } from "./commands/registry";
+import {
+  effectiveShortcut,
+  setShortcutOverrides,
+  useCommandStore,
+  useRegisterCommands,
+  type Command,
+} from "./commands/registry";
 
 vi.mock("@/ipc/bindings", async () => (await import("./mockBindings")).bindingsMock());
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(() => Promise.resolve(null)) }));
@@ -34,7 +40,13 @@ const PLACEHOLDER = /type a command/i;
 
 beforeEach(() => {
   window.localStorage.clear();
-  useCommandStore.setState({ commands: {}, paletteOpen: false, helpOpen: false, recent: [] });
+  useCommandStore.setState({
+    commands: {},
+    paletteOpen: false,
+    helpOpen: false,
+    recent: [],
+    shortcutOverrides: {},
+  });
   useRepoStore.setState({ repos: [], activeId: null });
 });
 
@@ -152,5 +164,33 @@ describe("shortcuts", () => {
     expect(press()).toBe(false);
     act(() => useRepoStore.setState({ activeId: "r1" }));
     expect(press()).toBe(true);
+  });
+});
+
+describe("shortcut overrides", () => {
+  it("resolves overrides, with null unbinding", () => {
+    const c = { id: "t.a", shortcut: "mod+j" };
+    expect(effectiveShortcut(c, {})).toBe("mod+j");
+    expect(effectiveShortcut(c, { "t.a": "mod+u" })).toBe("mod+u");
+    expect(effectiveShortcut(c, { "t.a": null })).toBeUndefined();
+    expect(effectiveShortcut({ id: "t.b" }, { "t.b": "mod+u" })).toBe("mod+u");
+  });
+
+  it("applies overrides to the matcher and the help display live", async () => {
+    const user = userEvent.setup();
+    const run = vi.fn();
+    setup([{ id: "t.a", title: "Alpha", group: "Test", shortcut: "mod+j", run }]);
+    act(() => setShortcutOverrides({ "t.a": "mod+u" }));
+    await user.keyboard(ctrl("j"));
+    expect(run).not.toHaveBeenCalled();
+    await user.keyboard(ctrl("u"));
+    expect(run).toHaveBeenCalledTimes(1);
+    await user.keyboard("?");
+    expect(await screen.findByText("Ctrl+U")).toBeInTheDocument();
+    expect(screen.queryByText("Ctrl+J")).not.toBeInTheDocument();
+    act(() => setShortcutOverrides({ "t.a": null }));
+    await user.keyboard("{Escape}");
+    await user.keyboard(ctrl("u"));
+    expect(run).toHaveBeenCalledTimes(1);
   });
 });

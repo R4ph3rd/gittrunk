@@ -21,6 +21,7 @@ import {
 } from "../shortcuts";
 import { useBuiltinCommands } from "./builtin";
 import {
+  effectiveShortcut,
   useCommandStore,
   useRegisterCommands,
   type Command,
@@ -31,7 +32,10 @@ const platform = detectPlatform();
 /** Delay before a palette-run command executes, so the dialog's focus restore cannot steal focus. */
 const RUN_DELAY_MS = 60;
 
-const firstShortcut = (c: Command) => (Array.isArray(c.shortcut) ? c.shortcut[0] : c.shortcut);
+const firstShortcut = (shortcut: string | string[] | undefined) =>
+  Array.isArray(shortcut) ? shortcut[0] : shortcut;
+const listOf = (shortcut: string | string[] | undefined) =>
+  Array.isArray(shortcut) ? shortcut : shortcut ? [shortcut] : [];
 
 const PALETTE_COMMANDS: Command[] = [
   {
@@ -55,6 +59,7 @@ export function CommandHost() {
   const paletteOpen = useCommandStore((s) => s.paletteOpen);
   const helpOpen = useCommandStore((s) => s.helpOpen);
   const recent = useCommandStore((s) => s.recent);
+  const overrides = useCommandStore((s) => s.shortcutOverrides);
   const { setPaletteOpen, setHelpOpen, markUsed } = useCommandStore.getState();
 
   const ctx = useMemo<CommandContext>(
@@ -92,17 +97,14 @@ export function CommandHost() {
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     const owners = all.flatMap((c) =>
-      (Array.isArray(c.shortcut) ? c.shortcut : c.shortcut ? [c.shortcut] : []).map((s) => ({
-        id: c.id,
-        shortcut: s,
-      })),
+      listOf(effectiveShortcut(c, overrides)).map((s) => ({ id: c.id, shortcut: s })),
     );
     for (const conflict of findConflicts(owners, platform)) {
       console.warn(
         `[shortcuts] ${conflict.kind} conflict on "${conflict.shortcut}": ${conflict.ids.join(", ")}`,
       );
     }
-  }, [all]);
+  }, [all, overrides]);
 
   const matcher = useMemo(() => createMatcher(platform), []);
 
@@ -113,9 +115,12 @@ export function CommandHost() {
       const list = Object.values(useCommandStore.getState().commands).filter(
         (x) => !x.when || x.when(c),
       );
-      const bindings: Binding[] = list
-        .filter((c) => c.shortcut)
-        .map((c) => ({ id: c.id, shortcut: c.shortcut!, allowInInput: c.allowInInput }));
+      const overrides = useCommandStore.getState().shortcutOverrides;
+      const bindings: Binding[] = [];
+      for (const c of list) {
+        const shortcut = effectiveShortcut(c, overrides);
+        if (shortcut) bindings.push({ id: c.id, shortcut, allowInInput: c.allowInInput });
+      }
       const id = matcher.handle(
         {
           key: e.key,
@@ -139,7 +144,7 @@ export function CommandHost() {
   const groups = useMemo<CommandGroupDef[]>(() => {
     if (!paletteOpen) return [];
     const toItem = (c: Command) => {
-      const sc = firstShortcut(c);
+      const sc = firstShortcut(effectiveShortcut(c, overrides));
       return {
         id: c.id,
         label: c.title,
@@ -163,15 +168,15 @@ export function CommandHost() {
     for (const [heading, items] of byGroup) out.push({ heading, items: items.map(toItem) });
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `available` derives from `commands`/`ctx`
-  }, [paletteOpen, commands, ctx, recent, execute]);
+  }, [paletteOpen, commands, ctx, recent, execute, overrides]);
 
   const helpGroups = useMemo(() => {
     const byGroup = new Map<string, Command[]>();
-    for (const c of all.filter((c) => c.shortcut)) {
+    for (const c of all.filter((c) => effectiveShortcut(c, overrides))) {
       byGroup.set(c.group, [...(byGroup.get(c.group) ?? []), c]);
     }
     return [...byGroup];
-  }, [all]);
+  }, [all, overrides]);
 
   return (
     <>
@@ -193,7 +198,7 @@ export function CommandHost() {
                     <li key={c.id} className="flex items-center justify-between gap-3 text-base">
                       <span>{c.title}</span>
                       <span className="flex gap-1">
-                        {(Array.isArray(c.shortcut) ? c.shortcut : [c.shortcut!]).map((s) => (
+                        {listOf(effectiveShortcut(c, overrides)).map((s) => (
                           <Kbd key={s}>{formatShortcut(s, platform)}</Kbd>
                         ))}
                       </span>

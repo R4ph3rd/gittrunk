@@ -31,13 +31,32 @@ export interface Command {
   run: (ctx: CommandContext) => void | Promise<void>;
 }
 
+/** The shortcut(s) a command responds to once user overrides are applied. */
+export function effectiveShortcut(
+  command: Pick<Command, "id" | "shortcut">,
+  overrides: Record<string, string | null>,
+): string | string[] | undefined {
+  if (Object.prototype.hasOwnProperty.call(overrides, command.id)) {
+    return overrides[command.id] ?? undefined;
+  }
+  return command.shortcut;
+}
+
+/** Replaces all user keybinding overrides (`null` unbinds). The matcher and displays follow live. */
+export function setShortcutOverrides(overrides: Record<string, string | null>) {
+  useCommandStore.getState().setShortcutOverrides(overrides);
+}
+
 interface CommandStore {
   commands: Record<string, Command>;
   paletteOpen: boolean;
   helpOpen: boolean;
   /** Most recently run command ids, newest first. */
   recent: string[];
+  /** User keybinding overrides by command id: a shortcut string replaces the default, null unbinds. */
+  shortcutOverrides: Record<string, string | null>;
   register: (commands: Command[]) => () => void;
+  setShortcutOverrides: (overrides: Record<string, string | null>) => void;
   setPaletteOpen: (open: boolean) => void;
   setHelpOpen: (open: boolean) => void;
   markUsed: (id: string) => void;
@@ -68,6 +87,8 @@ export const useCommandStore = create<CommandStore>((set) => ({
   paletteOpen: false,
   helpOpen: false,
   recent: loadRecent(),
+  shortcutOverrides: {},
+  setShortcutOverrides: (shortcutOverrides) => set({ shortcutOverrides }),
   register: (list) => {
     set((s) => {
       const commands = { ...s.commands };
