@@ -386,3 +386,123 @@ fn worktree_remove_rules_and_prunable_reporting() {
     sh_ok(&t, &["worktree", "remove", "--", &path]);
     assert!(!wt.exists());
 }
+
+// ------------------------------------------------------------ log --follow
+
+const RS: &str = "\u{1e}";
+const US: &str = "\u{1f}";
+
+fn follow_args(path: &str, limit: usize) -> Vec<String> {
+    vec![
+        "log".into(),
+        "--follow".into(),
+        "--no-color".into(),
+        format!("-n{limit}"),
+        "--name-status".into(),
+        format!("--format={RS}%H{US}%an{US}%at{US}%s"),
+        "--".into(),
+        path.into(),
+    ]
+}
+
+fn shim_log(t: &TestRepo, path: &str, limit: usize) -> String {
+    let a = follow_args(path, limit);
+    let refs: Vec<&str> = a.iter().map(String::as_str).collect();
+    sh_ok(t, &refs).stdout_str()
+}
+
+fn real_log(t: &TestRepo, path: &str, limit: usize) -> String {
+    let out = std::process::Command::new("git")
+        .args(follow_args(path, limit))
+        .current_dir(t.root())
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n")
+}
+
+/// Records of a log as `(oid, name-status line)`; whitespace between the
+/// records differs between git versions and is not part of the contract.
+fn records(text: &str) -> Vec<(String, String)> {
+    text.split(RS)
+        .filter(|r| !r.trim().is_empty())
+        .map(|r| {
+            let mut lines = r.lines();
+            let head = lines.next().unwrap();
+            let status = lines.find(|l| !l.trim().is_empty()).unwrap_or("");
+            (head.to_string(), status.to_string())
+        })
+        .collect()
+}
+
+#[test]
+fn log_follow_renames_deletes_and_limit() {
+    let mut t = TestRepo::new();
+    let body: String = (0..20).map(|i| format!("line number {i}\n")).collect();
+    t.write("a.txt", &body);
+    let c1 = t.commit_all("add a");
+    t.remove("a.txt");
+    t.write("dir/b.txt", body.replace("number 3", "three"));
+    let c2 = t.commit_all("move a");
+    t.write(
+        "dir/b.txt",
+        body.replace("number 3", "3!").replace("number 5", "5!"),
+    );
+    let c3 = t.commit_all("edit b");
+    t.remove("dir/b.txt");
+    t.commit_all("delete b");
+
+    let got = records(&shim_log(&t, "dir/b.txt", 50));
+    let statuses: Vec<&str> = got.iter().map(|(_, s)| s.as_str()).collect();
+    assert_eq!(statuses[0], "D\tdir/b.txt");
+    assert_eq!(statuses[1], "M\tdir/b.txt");
+    assert!(statuses[2].starts_with("R") && statuses[2].ends_with("a.txt\tdir/b.txt"));
+    assert_eq!(statuses[3], "A\ta.txt");
+    assert!(got[1].0.starts_with(&c3.to_string()));
+    assert!(got[2].0.starts_with(&c2.to_string()));
+    assert!(got[3].0.starts_with(&c1.to_string()));
+    assert!(got[3].0.contains(&format!("{US}Test User{US}")));
+    assert!(got[3].0.ends_with(&format!("{US}add a")));
+    assert_eq!(records(&shim_log(&t, "dir/b.txt", 2)).len(), 2);
+    assert_eq!(records(&shim_log(&t, "nothing.txt", 5)).len(), 0);
+    if real_git_available() {
+        assert_eq!(got, records(&real_log(&t, "dir/b.txt", 50)));
+    }
+}
+
+#[test]
+fn log_follow_skips_merges_that_are_treesame_and_ignores_untouched_branches() {
+    let mut t = TestRepo::new();
+    t.write("f.txt", "one\n");
+    let base = t.commit_all("add f");
+    t.checkout_branch("side", base);
+    t.commit_on("side", "other.txt", "x\n", "side work");
+    t.commit_on("main", "f.txt", "two\n", "edit f");
+    let out = sh_ok(&t, &["merge", "--no-edit", "side"]);
+    assert_eq!(out.code, 0);
+    let got = records(&shim_log(&t, "f.txt", 10));
+    let subjects: Vec<String> = got
+        .iter()
+        .map(|(h, _)| h.rsplit(US).next().unwrap().to_string())
+        .collect();
+    assert_eq!(subjects, ["edit f", "add f"]);
+    if real_git_available() {
+        assert_eq!(got, records(&real_log(&t, "f.txt", 10)));
+    }
+}
+
+#[test]
+fn log_other_forms_are_unsupported() {
+    let t = TestRepo::new();
+    for args in [
+        &["log", "--oneline"][..],
+        &["log", "--", "a.txt"],
+        &["log", "--follow", "--", "a", "b"],
+        &["log", "--follow"],
+    ] {
+        assert_eq!(
+            sh(&t, args).into_result().unwrap_err().kind,
+            ErrorKind::Unsupported,
+            "{args:?}"
+        );
+    }
+}
