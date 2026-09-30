@@ -1,0 +1,43 @@
+@import "@git-diff-view/react/styles/diff-view-pure.css";
+
+/* Maps the viewer's own variables onto gittrunk tokens so it follows the design system. */
+.gt-diff .diff-tailwindcss-wrapper[data-theme] .diff-style-root {
+  --diff-border--: var(--border);
+  --diff-add-content--: var(--diff-add-bg);
+  --diff-del-content--: var(--diff-del-bg);
+  --diff-add-lineNumber--: var(--diff-add-bg);
+  --diff-del-lineNumber--: var(--diff-del-bg);
+  --diff-plain-content--: var(--surface);
+  --diff-expand-content--: var(--bg-subtle);
+  --diff-plain-lineNumber--: var(--bg-subtle);
+  --diff-expand-lineNumber--: var(--bg-subtle);
+  --diff-plain-lineNumber-color--: var(--fg-subtle);
+  --diff-expand-lineNumber-color--: var(--fg-subtle);
+  --diff-hunk-content--: var(--bg-subtle);
+  --diff-hunk-lineNumber--: var(--bg-subtle);
+  --diff-hunk-lineNumber-hover--: var(--accent);
+  --diff-add-content-highlight--: color-mix(in srgb, var(--success) 32%, transparent);
+  --diff-del-content-highlight--: color-mix(in srgb, var(--danger) 32%, transparent);
+  --diff-empty-content--: var(--bg-subtle);
+  --diff-hunk-content-color--: var(--fg-subtle);
+  font-family: var(--font-mono);
+}
+
+.gt-diff .diff-tailwindcss-wrapper[data-theme] [data-state="diff"],
+.gt-diff .diff-tailwindcss-wrapper[data-theme] [data-state="plain"] {
+  color: var(--fg);
+}
+
+/* The hunk header and its actions are rendered by gittrunk above each viewer. */
+.gt-diff [data-state="hunk"] {
+  display: none;
+}
+
+/* Changed rows are clickable line-selection targets. */
+.gt-diff tr[data-state="diff"]:has([data-operator]) {
+  cursor: pointer;
+}
+
+.gt-diff tr[data-selected] td {
+  box-shadow: inset 0 0 0 9999px var(--selection);
+}
