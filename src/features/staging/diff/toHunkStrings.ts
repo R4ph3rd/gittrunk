@@ -53,12 +53,16 @@ export function toHunkStrings(diff: FileDiff): string[] {
 export const MAX_RENDERED_LINES = 4000;
 
 /** Hunks to render: whole hunks up to the line cap (always at least one). */
-export function visibleHunkCount(diff: FileDiff, showAll: boolean): number {
+export function visibleHunkCount(
+  diff: FileDiff,
+  showAll: boolean,
+  limit: number = MAX_RENDERED_LINES,
+): number {
   if (showAll) return diff.hunks.length;
   let lines = 0;
   for (let i = 0; i < diff.hunks.length; i++) {
     lines += diff.hunks[i]?.lines.length ?? 0;
-    if (lines > MAX_RENDERED_LINES) return Math.max(1, i);
+    if (lines > limit) return Math.max(1, i);
   }
   return diff.hunks.length;
 }

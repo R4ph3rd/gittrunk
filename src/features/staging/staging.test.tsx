@@ -17,6 +17,15 @@ import { fail } from "@/app/mockBindings";
 import { useRepoStore } from "@/stores/repo";
 
 vi.mock("@/ipc/bindings", async () => (await import("@/app/mockBindings")).bindingsMock());
+// Render-heavy jsdom tests stay fast with a small line cap; the real cap is unit-tested.
+vi.mock("./diff/toHunkStrings", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("./diff/toHunkStrings")>();
+  return {
+    ...mod,
+    visibleHunkCount: (diff: Parameters<typeof mod.visibleHunkCount>[0], showAll: boolean) =>
+      mod.visibleHunkCount(diff, showAll, 40),
+  };
+});
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(() => Promise.resolve("/work/demo")) }));
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), warning: vi.fn() }),
@@ -416,12 +425,12 @@ describe("diff viewer", () => {
         oldPath: null,
         status: "modified",
         binary: false,
-        hunks: [big(1, 3990), big(5000, 30)],
+        hunks: [big(1, 39), big(100, 3)],
       }),
     );
     const user = await openStaging();
     await user.click(rowFor("src/a.ts"));
-    expect(await screen.findByText(/Large diff: 30 of 4020 lines not shown/)).toBeInTheDocument();
+    expect(await screen.findByText(/Large diff: 3 of 42 lines not shown/)).toBeInTheDocument();
     expect(screen.getAllByTestId("diff-hunk")).toHaveLength(1);
     await user.click(screen.getByRole("button", { name: "Show full diff" }));
     await waitFor(() => expect(screen.getAllByTestId("diff-hunk")).toHaveLength(2));
