@@ -1,0 +1,126 @@
+/*
+ * gittrunk design tokens. Single source of truth for color, spacing, radius,
+ * typography, elevation, motion and gradients. Tailwind maps to these in
+ * `src/index.css`, so changing a value here updates the whole app.
+ * Owned by design-system-agent. Full documentation: docs/DESIGN.md.
+ */
+
+:root {
+  /* typography */
+  --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono:
+    "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-lg: 15px;
+  --text-xl: 18px;
+  --text-2xl: 24px;
+
+  /* spacing (4px scale) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  /* motion */
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* palette primitives: deep indigo -> teal, warm accent glow */
+  --indigo-950: #0b0a24;
+  --indigo-900: #1a1848;
+  --indigo-700: #3730a3;
+  --teal-900: #0b3b3c;
+  --teal-500: #14b8a6;
+  --teal-400: #2dd4bf;
+  --amber-400: #fbbf24;
+  --rose-500: #f43f5e;
+  --green-500: #22c55e;
+}
+
+/* dark (default) */
+:root,
+[data-theme="dark"] {
+  --bg: #0b0c14;
+  --bg-subtle: #10121c;
+  --surface: #13151f;
+  --surface-raised: #181b27;
+  --surface-hover: #1e2230;
+  --border: #242838;
+  --border-strong: #323750;
+  --fg: #e6e8f0;
+  --fg-muted: #9096ad;
+  --fg-subtle: #626881;
+  --accent: var(--teal-400);
+  --accent-fg: #04201d;
+  --accent-muted: rgb(45 212 191 / 0.14);
+  --focus-ring: rgb(45 212 191 / 0.55);
+  --danger: var(--rose-500);
+  --success: var(--green-500);
+  --warning: var(--amber-400);
+  --diff-add-bg: rgb(34 197 94 / 0.12);
+  --diff-del-bg: rgb(244 63 94 / 0.12);
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 16px rgb(0 0 0 / 0.35), 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 12px 40px rgb(0 0 0 / 0.5);
+
+  /* chrome gradient: indigo -> teal with a faint warm glow top-right */
+  --gradient-chrome:
+    radial-gradient(60% 80% at 100% 0%, rgb(251 191 36 / 0.08) 0%, transparent 60%),
+    radial-gradient(80% 120% at 0% 0%, rgb(55 48 163 / 0.35) 0%, transparent 60%),
+    radial-gradient(90% 120% at 50% 100%, rgb(11 59 60 / 0.55) 0%, transparent 70%),
+    linear-gradient(180deg, #0d0e1c 0%, #0b0c14 100%);
+
+  /* graph lane palette (index = GraphRow.color % 8) */
+  --lane-0: #2dd4bf;
+  --lane-1: #818cf8;
+  --lane-2: #fbbf24;
+  --lane-3: #f472b6;
+  --lane-4: #38bdf8;
+  --lane-5: #a3e635;
+  --lane-6: #fb923c;
+  --lane-7: #c084fc;
+
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --bg: #fbfbfd;
+  --bg-subtle: #f4f5f9;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-hover: #f1f2f7;
+  --border: #e3e5ee;
+  --border-strong: #cfd2df;
+  --fg: #151827;
+  --fg-muted: #5b6078;
+  --fg-subtle: #8a8fa6;
+  --accent: #0d9488;
+  --accent-fg: #ffffff;
+  --accent-muted: rgb(13 148 136 / 0.1);
+  --focus-ring: rgb(13 148 136 / 0.45);
+  --diff-add-bg: rgb(34 197 94 / 0.14);
+  --diff-del-bg: rgb(244 63 94 / 0.12);
+
+  --shadow-sm: 0 1px 2px rgb(16 24 40 / 0.06);
+  --shadow-md: 0 4px 16px rgb(16 24 40 / 0.08), 0 1px 2px rgb(16 24 40 / 0.06);
+  --shadow-lg: 0 12px 40px rgb(16 24 40 / 0.14);
+
+  --gradient-chrome:
+    radial-gradient(60% 80% at 100% 0%, rgb(251 191 36 / 0.12) 0%, transparent 60%),
+    radial-gradient(80% 120% at 0% 0%, rgb(99 102 241 / 0.14) 0%, transparent 60%),
+    radial-gradient(90% 120% at 50% 100%, rgb(20 184 166 / 0.12) 0%, transparent 70%),
+    linear-gradient(180deg, #f7f7fc 0%, #fbfbfd 100%);
+
+  color-scheme: light;
+}
