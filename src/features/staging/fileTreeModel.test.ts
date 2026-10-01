@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { change } from "@/app/testing";
-import { buildTree, filesUnder, flattenVisible } from "./fileTree";
+import { buildTree, filesUnder, flattenVisible } from "./fileTreeModel";
 
 describe("buildTree", () => {
   it("sorts folders first, then files, case-insensitively", () => {

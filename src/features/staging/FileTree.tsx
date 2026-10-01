@@ -2,7 +2,7 @@ import type { MouseEvent } from "react";
 import { ChevronDown, ChevronRight, Folder, FolderOpen, Minus, Plus } from "lucide-react";
 import { IconButton } from "@/design/components";
 import { cn } from "@/lib/cn";
-import { rowClass, STATUS_LETTER, STATUS_TONE, type TreeItem } from "./fileTree";
+import { rowClass, STATUS_LETTER, STATUS_TONE, type TreeItem } from "./fileTreeModel";
 
 interface Props {
   item: TreeItem;

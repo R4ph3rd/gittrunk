@@ -25,7 +25,7 @@ import {
   STATUS_LETTER,
   STATUS_TONE,
   type TreeItem,
-} from "./fileTree";
+} from "./fileTreeModel";
 import { TreeRow } from "./FileTree";
 import { errorMessage, useDiscard } from "./ops";
 
