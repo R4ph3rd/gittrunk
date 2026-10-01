@@ -90,13 +90,16 @@ describe("RefsSidebar on a read-only platform", () => {
   it("hides branch creation, push, remote edits and stash actions", async () => {
     const commands = await installBackend();
     commands.platformInfo.mockImplementation(() => ok(ANDROID_PLATFORM));
-    const refs = await commands.refsList();
-    commands.refsList.mockImplementation(() =>
-      ok({
-        ...refs.data,
+    const original = commands.refsList.getMockImplementation() as (
+      ...a: unknown[]
+    ) => Promise<{ status: "ok"; data: Record<string, unknown> }>;
+    commands.refsList.mockImplementation(async (...args: unknown[]) => {
+      const res = await original(...args);
+      return ok({
+        ...res.data,
         stashes: [{ index: 0, oid: oid(9), message: "wip on main", branch: "main", time: 1 }],
-      }),
-    );
+      });
+    });
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     renderApp();
     await user.click(await screen.findByRole("button", { name: /demo/ }));
