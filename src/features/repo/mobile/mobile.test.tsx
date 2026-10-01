@@ -179,7 +179,7 @@ describe("Branches screen (390x844)", () => {
 
 describe("drag and drop", () => {
   function Probe() {
-    // Without sensors dnd-kit hands out no activator listeners.
+    // A bare draggable wired to the provider's sensors: Space starts a drag only when they are on.
     const raw = useDraggable({ id: "raw" });
     const node = useDndNode({
       id: "x",
@@ -188,15 +188,34 @@ describe("drag and drop", () => {
       keyboard: true,
     });
     return (
-      <div
-        data-testid="probe"
-        data-listeners={Object.keys(raw.listeners ?? {}).length > 0 ? "yes" : "no"}
-        {...node.dragProps}
-      >
-        x
-      </div>
+      <>
+        <div data-testid="probe" {...node.dragProps}>
+          x
+        </div>
+        <div
+          data-testid="raw"
+          ref={raw.setNodeRef}
+          data-dragging={raw.isDragging ? "yes" : "no"}
+          {...raw.attributes}
+          {...raw.listeners}
+        />
+      </>
     );
   }
+  /** Tries to start a keyboard drag on the bare draggable; returns whether it started. */
+  const startsDrag = async () => {
+    const raw = screen.getByTestId("raw");
+    await act(async () => {
+      fireEvent.keyDown(raw, { code: "Space", key: " " });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    const started = raw.getAttribute("data-dragging") === "yes";
+    await act(async () => {
+      fireEvent.keyDown(raw, { code: "Escape", key: "Escape" });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    return started;
+  };
   const mount = () =>
     render(
       <QueryClientProvider client={new QueryClient()}>
@@ -208,17 +227,17 @@ describe("drag and drop", () => {
       </QueryClientProvider>,
     );
 
-  it("registers no sensors and inert props on compact layouts", () => {
+  it("turns the sensors off and keeps props inert on compact layouts", async () => {
     setViewport(390, 844);
     mount();
-    expect(screen.getByTestId("probe")).toHaveAttribute("data-listeners", "no");
+    expect(await startsDrag()).toBe(false);
     expect(screen.getByTestId("probe")).not.toHaveAttribute("aria-roledescription");
   });
 
-  it("keeps the sensors on regular layouts", () => {
+  it("keeps the sensors on regular layouts", async () => {
     setViewport(1400, 900);
     mount();
-    expect(screen.getByTestId("probe")).toHaveAttribute("data-listeners", "yes");
+    expect(await startsDrag()).toBe(true);
     expect(screen.getByTestId("probe")).toHaveAttribute("aria-roledescription", "draggable");
   });
 });

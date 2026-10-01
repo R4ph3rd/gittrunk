@@ -1,6 +1,6 @@
 import { useDraggable } from "@dnd-kit/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ok } from "@/app/mockBindings";
@@ -9,6 +9,7 @@ import { installBackend, installDomShims, oid, renderAppAt, resetStore } from "@
 import { TooltipProvider } from "@/design/components";
 import { buildActionEntries, type ActionContext } from "@/features/operations/actions/entries";
 import { OperationsProvider } from "@/features/operations/dnd/OperationsProvider";
+import { useDndNode } from "@/features/operations/dnd/useDndNode";
 import { queryKeys } from "@/ipc/queries";
 import { useDndStore } from "@/stores/dnd";
 import { useNavStore } from "@/stores/nav";
@@ -251,19 +252,38 @@ describe("entries and drag and drop", () => {
   });
 
   function Probe() {
-    // Without sensors dnd-kit hands out no activator listeners.
-    const raw = useDraggable({ id: "raw" });
+    // A bare draggable wired to the provider's sensors, plus a real branch node.
+    const { setNodeRef, isDragging, attributes, listeners } = useDraggable({ id: "raw" });
+    const node = useDndNode({
+      id: "b",
+      repoId: "r1",
+      source: {
+        kind: "branch",
+        name: "main",
+        fullName: "refs/heads/main",
+        remote: false,
+        isHead: true,
+        oid: oid(0),
+      },
+      keyboard: true,
+    });
     return (
-      <div
-        data-testid="probe"
-        data-listeners={Object.keys(raw.listeners ?? {}).length > 0 ? "yes" : "no"}
-      >
-        x
-      </div>
+      <>
+        <div data-testid="probe" {...node.dragProps}>
+          x
+        </div>
+        <div
+          data-testid="raw"
+          ref={setNodeRef}
+          data-dragging={isDragging ? "yes" : "no"}
+          {...attributes}
+          {...listeners}
+        />
+      </>
     );
   }
 
-  it("registers no drag sensors on a read-only regular layout", () => {
+  it("cannot start a drag on a read-only regular layout", async () => {
     setViewport(1400, 900);
     const client = new QueryClient();
     client.setQueryData(queryKeys.platformInfo, ANDROID_PLATFORM);
@@ -276,6 +296,12 @@ describe("entries and drag and drop", () => {
         </TooltipProvider>
       </QueryClientProvider>,
     );
-    expect(screen.getByTestId("probe")).toHaveAttribute("data-listeners", "no");
+    await act(async () => {
+      fireEvent.keyDown(screen.getByTestId("raw"), { code: "Space", key: " " });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(screen.getByTestId("raw")).toHaveAttribute("data-dragging", "no");
+    // Graph and sidebar nodes stay plain elements.
+    expect(screen.getByTestId("probe")).not.toHaveAttribute("aria-roledescription");
   });
 });
