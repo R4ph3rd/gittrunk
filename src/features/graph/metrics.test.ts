@@ -57,6 +57,9 @@ const palette = {
   lanes: Array.from({ length: 8 }, (_, i) => `lane${i}`),
   accent: "a",
   surface: "s",
+  laneFg: "fg",
+  avatarRing: "ring",
+  fontSans: "sans",
 };
 
 describe("GraphMetrics", () => {
@@ -69,8 +72,9 @@ describe("GraphMetrics", () => {
       maxGutter: MAX_GUTTER,
     });
     expect(ROW_HEIGHT).toBe(28);
-    expect(LANE_WIDTH).toBe(14);
-    expect(NODE_RADIUS).toBe(4);
+    expect(LANE_WIDTH).toBe(24);
+    expect(NODE_RADIUS).toBe(9);
+    expect(MAX_GUTTER).toBe(320);
     expect(DESKTOP_METRICS.overscan).toBe(6);
   });
 
@@ -88,12 +92,13 @@ describe("GraphMetrics", () => {
 
   it("caps the compact gutter at 40% of the list width", () => {
     expect(gutterWidth(500, COMPACT_METRICS, 390)).toBe(Math.floor(390 * 0.4));
-    expect(gutterWidth(2, COMPACT_METRICS, 390)).toBe(gutterWidth(2));
+    expect(gutterWidth(2, COMPACT_METRICS, 390)).toBe(10 * 2 + 2 * 14);
+    expect(COMPACT_METRICS.maxGutter).toBe(260);
     expect(gutterWidth(500)).toBe(MAX_GUTTER);
   });
 
   it("scales lane geometry and the visible range with the row height", () => {
-    expect(laneX(1, COMPACT_METRICS)).toBe(laneX(1));
+    expect(laneX(1, COMPACT_METRICS) - laneX(0, COMPACT_METRICS)).toBe(14);
     const g = edgeGeometry(
       { fromLane: 0, toLane: 0, kind: "straight", color: 0 },
       0,

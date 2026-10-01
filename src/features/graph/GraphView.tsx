@@ -7,6 +7,7 @@ import { DEFAULT_FILTER, selectedOidOf, useRepoStore } from "@/stores/repo";
 import { openActionMenu } from "@/features/operations/actions/openMenu";
 import { useActionContext } from "@/features/operations/actions/useActionContext";
 import { onThemeChange, readPalette, type Palette } from "./colors";
+import { peekAvatarImage, requestAvatarImages } from "./avatarImages";
 import { drawGraph } from "./draw";
 import { GraphRowView, type OpenMenu } from "./GraphRowView";
 import { GraphToolbar } from "./GraphToolbar";
@@ -15,6 +16,7 @@ import {
   DESKTOP_METRICS,
   effectiveDpr,
   gutterWidth,
+  REFS_COLUMN_WIDTH,
   type GraphMetrics,
 } from "./layout";
 import { pageOf, pagesForRange } from "./pages";
@@ -81,7 +83,11 @@ export function GraphView({ repoId, onOpenDetails }: Props) {
         refs={refs.data}
         onFilter={(f) => setFilter(repoId, f)}
       />
-      <WipRow repoId={repoId} gutter={gutterWidth(meta.data?.laneCount ?? 1)} />
+      <WipRow
+        repoId={repoId}
+        gutter={gutterWidth(meta.data?.laneCount ?? 1)}
+        offset={REFS_COLUMN_WIDTH}
+      />
       <div className="relative min-h-0 flex-1">
         {meta.isError ? (
           <p role="alert" className="p-4 text-sm text-danger">
@@ -146,6 +152,13 @@ export function GraphList({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const paletteRef = useRef<Palette | null>(null);
   const frameRef = useRef(0);
+  const [cardIndex, setCardIndex] = useState<number | null>(null);
+  const onCardOpenChange = useCallback(
+    (index: number, open: boolean) =>
+      setCardIndex((cur) => (open ? index : cur === index ? null : cur)),
+    [],
+  );
+  const refsOffset = compact ? 0 : REFS_COLUMN_WIDTH;
   const gutter = gutterWidth(meta.laneCount, metrics, compact ? listWidth : undefined);
   const actionContext = useActionContext(repoId);
   const openMenu: OpenMenu = useCallback(
@@ -205,6 +218,7 @@ export function GraphList({
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     paletteRef.current ??= readPalette();
+    const wanted = new Set<string>();
     drawGraph({
       ctx,
       width: gutter,
@@ -215,12 +229,24 @@ export function GraphList({
       palette: paletteRef.current,
       getRow: (i) => getRowRef.current(i),
       metrics,
+      getAvatar: metrics.avatarNodes
+        ? (email) => {
+            const img = peekAvatarImage(email);
+            if (img === undefined) wanted.add(email);
+            return img;
+          }
+        : undefined,
     });
-  }, [gutter, listRef, meta.rowCount, meta.headRow, metrics]);
+    if (wanted.size > 0) requestAvatarImages(client, wanted, () => requestDrawRef.current());
+  }, [client, gutter, listRef, meta.rowCount, meta.headRow, metrics]);
 
   const requestDraw = useCallback(() => {
     if (!frameRef.current) frameRef.current = requestAnimationFrame(draw);
   }, [draw]);
+  const requestDrawRef = useRef(requestDraw);
+  useEffect(() => {
+    requestDrawRef.current = requestDraw;
+  });
 
   useEffect(() => {
     const scroller = listRef.current;
@@ -313,11 +339,20 @@ export function GraphList({
     );
     const cur = selectedIndex ?? -1;
     const selectedRow = cur >= 0 ? getRow(cur) : undefined;
+    if (e.key === "Escape" && cardIndex !== null) {
+      setCardIndex(null);
+      return;
+    }
+    if (e.altKey && e.key === "Enter" && !compact && selectedRow) {
+      e.preventDefault();
+      setCardIndex(cur);
+      return;
+    }
     if ((e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) && selectedRow) {
       e.preventDefault();
       const rect = document.getElementById(`graph-row-${cur}`)?.getBoundingClientRect();
       openActionMenu(
-        (rect?.left ?? 0) + gutter,
+        (rect?.left ?? 0) + refsOffset + gutter,
         rect?.bottom ?? 0,
         { kind: "commit", oid: selectedRow.oid, shortOid: selectedRow.shortOid },
         actionContext(),
@@ -374,6 +409,8 @@ export function GraphList({
               compact={compact}
               rowHeight={metrics.rowHeight}
               onCompactMenu={compact ? openCompactMenu : undefined}
+              cardOpen={item.index === cardIndex}
+              onCardOpenChange={compact ? undefined : onCardOpenChange}
             />
           ))}
         </div>
@@ -382,7 +419,8 @@ export function GraphList({
         ref={canvasRef}
         aria-hidden
         data-testid="graph-canvas"
-        className="pointer-events-none absolute left-0 top-0"
+        className="pointer-events-none absolute top-0"
+        style={{ left: refsOffset }}
       />
     </>
   );

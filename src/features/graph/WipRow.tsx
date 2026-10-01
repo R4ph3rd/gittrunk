@@ -10,11 +10,14 @@ import { useWipCount } from "./useWipCount";
 export function WipRow({
   repoId,
   gutter,
+  offset = 0,
   compact,
   onOpen,
 }: {
   repoId: string;
   gutter: number;
+  /** Extra left spacer (the desktop refs column). */
+  offset?: number;
   /** Touch height (`--touch-target-row`). */
   compact?: boolean;
   /** Called after the row is selected; the mobile History screen switches to Changes. */
@@ -40,7 +43,11 @@ export function WipRow({
         compact && "min-h-[var(--touch-target-row)] text-base",
         selected ? "bg-accent-muted" : "hover:bg-surface-hover",
       )}
-      style={compact ? { paddingLeft: gutter } : { height: ROW_HEIGHT, paddingLeft: gutter }}
+      style={
+        compact
+          ? { paddingLeft: gutter + offset }
+          : { height: ROW_HEIGHT, paddingLeft: gutter + offset }
+      }
     >
       <span className="font-mono font-semibold text-accent">{"// WIP"}</span>
       <span className="text-fg-muted">

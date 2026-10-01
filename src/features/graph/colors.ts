@@ -4,6 +4,11 @@ export interface Palette {
   lanes: string[];
   accent: string;
   surface: string;
+  /** Text color on lane-colored fills. */
+  laneFg: string;
+  /** Separation ring between an avatar and its lane ring. */
+  avatarRing: string;
+  fontSans: string;
 }
 
 /** Reads the lane colours (and accent/surface) from CSS variables once; call again on theme change. */
@@ -16,6 +21,9 @@ export function readPalette(el: Element = document.documentElement): Palette {
     lanes,
     accent: get("--accent", "currentColor"),
     surface: get("--surface", "transparent"),
+    laneFg: get("--lane-fg", "currentColor"),
+    avatarRing: get("--avatar-ring", "transparent"),
+    fontSans: get("--font-sans", "sans-serif"),
   };
 }
 

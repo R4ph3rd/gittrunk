@@ -1,4 +1,4 @@
-import { memo, useRef, type HTMLAttributes, type MouseEvent, type Ref } from "react";
+import { memo, useMemo, useRef, type MouseEvent } from "react";
 import { EllipsisVertical } from "lucide-react";
 import { IconButton } from "@/design/components";
 import { useLongPress } from "@/design/hooks";
@@ -7,45 +7,26 @@ import { cn } from "@/lib/cn";
 import type { ActionTarget } from "@/features/operations/actions/types";
 import { dndStateClass, useDndNode } from "@/features/operations/dnd/useDndNode";
 import type { DragSource, DropTarget } from "@/features/operations/dnd/types";
+import { CommitHoverCard } from "./CommitHoverCard";
 import { absoluteDate, relativeDate } from "./format";
-import { ROW_HEIGHT } from "./layout";
+import { REFS_COLUMN_WIDTH, ROW_HEIGHT } from "./layout";
+import { RefBadge } from "./RefBadge";
 
-const MAX_BADGES = 3;
+const MAX_DESKTOP_BADGES = 2;
 
-export function RefBadge({
-  label,
-  className,
-  ref,
-  ...rest
-}: {
-  label: RefLabel;
-  ref?: Ref<HTMLSpanElement>;
-} & HTMLAttributes<HTMLSpanElement>) {
-  const tone =
-    label.kind === "tag"
-      ? "border-warning/40 text-warning"
-      : label.kind === "remoteBranch"
-        ? "border-border-strong text-fg-muted"
-        : label.kind === "stash"
-          ? "border-border-strong text-fg-subtle"
-          : "border-accent/40 bg-accent-muted text-accent";
-  return (
-    <span
-      {...rest}
-      ref={ref}
-      data-kind={label.kind}
-      data-head={label.isHead || undefined}
-      title={label.fullName}
-      className={cn(
-        "inline-flex h-[18px] shrink-0 items-center rounded-sm border px-1.5 font-mono text-xs leading-none",
-        tone,
-        label.isHead && "border-accent bg-accent font-semibold text-accent-fg",
-        className,
-      )}
-    >
-      {label.name}
-    </span>
-  );
+export { RefBadge };
+
+const KIND_RANK: Record<RefLabel["kind"], number> = {
+  localBranch: 1,
+  remoteBranch: 2,
+  tag: 3,
+  stash: 4,
+};
+
+/** HEAD's branch first, then local branches, remote branches and tags. */
+function sortRefs(refs: readonly RefLabel[]): RefLabel[] {
+  const rank = (l: RefLabel) => (l.isHead && l.kind === "localBranch" ? 0 : KIND_RANK[l.kind]);
+  return [...refs].sort((x, y) => rank(x) - rank(y));
 }
 
 export type OpenMenu = (e: MouseEvent, target: ActionTarget) => void;
@@ -93,6 +74,7 @@ function GraphRefBadge({
       label={label}
       ref={setNodeRef}
       {...dragProps}
+      color={row.color}
       className={cn(
         source && "cursor-grab",
         dndState && dndStateClass[dndState],
@@ -130,6 +112,9 @@ interface Props {
   rowHeight?: number;
   /** Compact only: long-press and the overflow button open the commit action sheet. */
   onCompactMenu?: (row: GraphRow) => void;
+  /** Desktop only: the hover card of this row is open. */
+  cardOpen?: boolean;
+  onCardOpenChange?: (index: number, open: boolean) => void;
 }
 
 const MAX_COMPACT_BADGES = 2;
@@ -225,9 +210,12 @@ function DesktopRow({
   onSelect,
   onMenu,
   rowHeight,
+  cardOpen = false,
+  onCardOpenChange,
 }: Props & { rowHeight: number }) {
-  const badges = row?.refs.slice(0, MAX_BADGES) ?? [];
-  const extra = row ? row.refs.length - badges.length : 0;
+  const sorted = useMemo(() => (row ? sortRefs(row.refs) : []), [row]);
+  const badges = sorted.slice(0, MAX_DESKTOP_BADGES);
+  const hidden = sorted.slice(MAX_DESKTOP_BADGES);
   const commit = row
     ? ({ kind: "commit", oid: row.oid, shortOid: row.shortOid, index: row.index } as const)
     : undefined;
@@ -236,7 +224,7 @@ function DesktopRow({
     dragProps,
     state: dndState,
   } = useDndNode({ id: `row:${index}`, repoId, source: commit, target: commit });
-  return (
+  const el = (
     <div
       {...dragProps}
       ref={setNodeRef}
@@ -250,37 +238,53 @@ function DesktopRow({
         row ? (e) => onMenu(e, { kind: "commit", oid: row.oid, shortOid: row.shortOid }) : undefined
       }
       className={cn(
-        "absolute left-0 flex w-full items-center gap-3 pr-3 text-sm",
+        "absolute left-0 flex w-full items-center pr-3 text-sm",
         selected ? "bg-accent-muted" : "hover:bg-surface-hover",
         dndState && dndStateClass[dndState],
       )}
-      style={{ top, height: rowHeight, paddingLeft: gutter }}
+      style={{ top, height: rowHeight }}
     >
       {row && (
         <>
-          <div role="gridcell" className="flex min-w-0 flex-1 items-center gap-1.5">
+          <div
+            role="gridcell"
+            data-testid="refs-cell"
+            className="flex shrink-0 items-center justify-end gap-1 overflow-hidden pr-1"
+            style={{ width: REFS_COLUMN_WIDTH }}
+          >
             {badges.map((l) => (
               <GraphRefBadge key={l.fullName} repoId={repoId} row={row} label={l} onMenu={onMenu} />
             ))}
-            {extra > 0 && <span className="shrink-0 text-xs text-fg-subtle">+{extra}</span>}
-            <span className="truncate">{row.summary}</span>
+            {hidden.length > 0 && (
+              <span
+                className="shrink-0 text-xs text-fg-subtle"
+                title={hidden.map((l) => l.name).join("\n")}
+              >
+                +{hidden.length}
+              </span>
+            )}
           </div>
-          <div role="gridcell" className="w-32 shrink-0 truncate text-fg-muted">
-            {row.authorName}
+          <div aria-hidden className="shrink-0" style={{ width: gutter }} />
+          <div role="gridcell" className="min-w-0 flex-1 truncate pl-2">
+            {row.summary}
           </div>
-          <div
-            role="gridcell"
-            className="w-16 shrink-0 text-right text-fg-muted"
-            title={absoluteDate(row.authorTime)}
-          >
-            {relativeDate(row.authorTime)}
-          </div>
-          <div role="gridcell" className="w-16 shrink-0 font-mono text-xs text-fg-subtle">
-            {row.shortOid}
+          <div role="gridcell" className="sr-only">
+            {row.authorName}, {relativeDate(row.authorTime)}, {row.shortOid}
           </div>
         </>
       )}
     </div>
+  );
+  if (!row || !onCardOpenChange) return el;
+  return (
+    <CommitHoverCard
+      repoId={repoId}
+      row={row}
+      open={cardOpen}
+      onOpenChange={(o) => onCardOpenChange(index, o)}
+    >
+      {el}
+    </CommitHoverCard>
   );
 }
 

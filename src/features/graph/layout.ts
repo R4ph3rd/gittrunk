@@ -1,11 +1,20 @@
 import type { GraphEdge } from "@/ipc/bindings";
 
 export const ROW_HEIGHT = 28;
-export const LANE_WIDTH = 14;
-export const NODE_RADIUS = 4;
+export const LANE_WIDTH = 24;
+export const NODE_RADIUS = 9;
 export const LANE_PADDING = 10;
 export const LANE_COLORS = 8;
-export const MAX_GUTTER = 260;
+export const MAX_GUTTER = 320;
+/** Width of the refs column left of the lanes on desktop rows. */
+export const REFS_COLUMN_WIDTH = 176;
+/** Largest chip width in the refs column. */
+export const REF_CHIP_MAX_WIDTH = 150;
+/** Radius of the small hollow node of merge commits on the desktop graph. */
+export const MERGE_NODE_RADIUS = 5;
+const COMPACT_LANE_WIDTH = 14;
+const COMPACT_NODE_RADIUS = 4;
+const COMPACT_MAX_GUTTER = 260;
 /** Row height of the two-line history list on compact layouts. */
 export const ROW_HEIGHT_COMPACT = 56;
 export const MAX_DPR_COMPACT = 2.5;
@@ -26,6 +35,8 @@ export interface GraphMetrics {
   overscan: number;
   /** Cap for the gutter as a fraction of the list width; null for no relative cap. */
   gutterFraction: number | null;
+  /** Desktop style: avatar nodes and connectors from the refs column to the node. */
+  avatarNodes: boolean;
 }
 
 export const DESKTOP_METRICS: GraphMetrics = {
@@ -37,17 +48,19 @@ export const DESKTOP_METRICS: GraphMetrics = {
   dprCap: Number.POSITIVE_INFINITY,
   overscan: OVERSCAN,
   gutterFraction: null,
+  avatarNodes: true,
 };
 
 export const COMPACT_METRICS: GraphMetrics = {
   rowHeight: ROW_HEIGHT_COMPACT,
-  lanePitch: 14,
-  nodeRadius: 4,
+  lanePitch: COMPACT_LANE_WIDTH,
+  nodeRadius: COMPACT_NODE_RADIUS,
   lanePadding: LANE_PADDING,
-  maxGutter: MAX_GUTTER,
+  maxGutter: COMPACT_MAX_GUTTER,
   dprCap: MAX_DPR_COMPACT,
   overscan: OVERSCAN_COMPACT,
   gutterFraction: GUTTER_FRACTION_COMPACT,
+  avatarNodes: false,
 };
 
 /** Device pixel ratio the canvas is rendered at. */
