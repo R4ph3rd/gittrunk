@@ -1,5 +1,9 @@
-//! `forge` commands. Stubs until M9 Wave 1.
-use crate::ipc::error::{AppError, AppResult};
+//! `forge` commands: GitHub issues, comments and the forge token.
+use crate::forge::tokens::{self, ForgeTokens, SystemTokens};
+use crate::forge::{self, remote, Forge};
+use crate::git::blocking;
+use crate::git::remote::keychain::Keychain;
+use crate::ipc::error::AppResult;
 use crate::ipc::types::*;
 
 #[tauri::command]
@@ -8,29 +12,39 @@ pub async fn forge_status(
     state: tauri::State<'_, crate::git::GitState>,
     repo: RepoId,
 ) -> AppResult<ForgeStatus> {
-    let _ = (&state, &repo);
-    Err(AppError::not_implemented("forge_status"))
+    let st = state.inner().clone();
+    blocking(move || {
+        let found = st.with_repo(&repo, |_, r| Ok(remote::detect(&remote::read_remotes(r))))?;
+        let token_source = match &found {
+            Some(fr) => tokens::resolve(&SystemTokens, &Keychain, &fr.host).1,
+            None => ForgeTokenSource::None,
+        };
+        let supported = found.as_ref().is_some_and(|r| r.kind == ForgeKind::Github);
+        Ok(ForgeStatus {
+            repo: found,
+            supported,
+            token_source,
+        })
+    })
+    .await
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn forge_token_source(host: String) -> AppResult<ForgeTokenSource> {
-    let _ = &host;
-    Err(AppError::not_implemented("forge_token_source"))
+    blocking(move || Ok(tokens::resolve(&SystemTokens, &Keychain, &host).1)).await
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn forge_token_set(host: String, token: String) -> AppResult<ForgeUser> {
-    let _ = (&host, &token);
-    Err(AppError::not_implemented("forge_token_set"))
+    forge::set_token(forge::github::API_BASE, &SystemTokens, &host, &token).await
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn forge_token_clear(host: String) -> AppResult<()> {
-    let _ = &host;
-    Err(AppError::not_implemented("forge_token_clear"))
+    blocking(move || SystemTokens.clear(&host)).await
 }
 
 #[tauri::command]
@@ -40,8 +54,10 @@ pub async fn forge_issues(
     repo: RepoId,
     query: IssueQuery,
 ) -> AppResult<IssuePage> {
-    let _ = (&state, &repo, &query);
-    Err(AppError::not_implemented("forge_issues"))
+    forge::github_for(&state, &repo)
+        .await?
+        .list_issues(&query)
+        .await
 }
 
 #[tauri::command]
@@ -51,8 +67,7 @@ pub async fn forge_issue(
     repo: RepoId,
     number: u32,
 ) -> AppResult<IssueDetail> {
-    let _ = (&state, &repo, &number);
-    Err(AppError::not_implemented("forge_issue"))
+    forge::github_for(&state, &repo).await?.issue(number).await
 }
 
 #[tauri::command]
@@ -62,8 +77,10 @@ pub async fn forge_issue_create(
     repo: RepoId,
     request: IssueCreateRequest,
 ) -> AppResult<Issue> {
-    let _ = (&state, &repo, &request);
-    Err(AppError::not_implemented("forge_issue_create"))
+    forge::github_for(&state, &repo)
+        .await?
+        .create_issue(&request)
+        .await
 }
 
 #[tauri::command]
@@ -74,8 +91,10 @@ pub async fn forge_issue_comment(
     number: u32,
     body: String,
 ) -> AppResult<ForgeComment> {
-    let _ = (&state, &repo, &number, &body);
-    Err(AppError::not_implemented("forge_issue_comment"))
+    forge::github_for(&state, &repo)
+        .await?
+        .comment_issue(number, &body)
+        .await
 }
 
 #[tauri::command]
@@ -85,8 +104,10 @@ pub async fn forge_commit_comments(
     repo: RepoId,
     oid: Oid,
 ) -> AppResult<Vec<ForgeComment>> {
-    let _ = (&state, &repo, &oid);
-    Err(AppError::not_implemented("forge_commit_comments"))
+    forge::github_for(&state, &repo)
+        .await?
+        .commit_comments(&oid)
+        .await
 }
 
 #[tauri::command]
@@ -97,75 +118,8 @@ pub async fn forge_commit_comment(
     oid: Oid,
     body: String,
 ) -> AppResult<ForgeComment> {
-    let _ = (&state, &repo, &oid, &body);
-    Err(AppError::not_implemented("forge_commit_comment"))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::ipc::error::ErrorKind;
-    use tauri::Manager;
-
-    #[test]
-    fn stubs_are_not_implemented() {
-        let app = tauri::test::mock_app();
-        app.manage(crate::git::GitState::default());
-        let st = || app.state::<crate::git::GitState>();
-        let repo = || "r".to_string();
-        let oid = || "0".repeat(40);
-        let kind = |e: AppError| e.kind;
-        tauri::async_runtime::block_on(async {
-            let nie = ErrorKind::NotImplemented;
-            assert_eq!(kind(forge_status(st(), repo()).await.unwrap_err()), nie);
-            assert_eq!(kind(forge_token_source("h".into()).await.unwrap_err()), nie);
-            assert_eq!(
-                kind(forge_token_set("h".into(), "t".into()).await.unwrap_err()),
-                nie
-            );
-            assert_eq!(kind(forge_token_clear("h".into()).await.unwrap_err()), nie);
-            let query = IssueQuery {
-                state: IssueStateFilter::All,
-                page: 1,
-                per_page: 30,
-            };
-            assert_eq!(
-                kind(forge_issues(st(), repo(), query).await.unwrap_err()),
-                nie
-            );
-            assert_eq!(kind(forge_issue(st(), repo(), 1).await.unwrap_err()), nie);
-            let req = IssueCreateRequest {
-                title: "t".into(),
-                body: "b".into(),
-            };
-            assert_eq!(
-                kind(forge_issue_create(st(), repo(), req).await.unwrap_err()),
-                nie
-            );
-            assert_eq!(
-                kind(
-                    forge_issue_comment(st(), repo(), 1, "b".into())
-                        .await
-                        .unwrap_err()
-                ),
-                nie
-            );
-            assert_eq!(
-                kind(
-                    forge_commit_comments(st(), repo(), oid())
-                        .await
-                        .unwrap_err()
-                ),
-                nie
-            );
-            assert_eq!(
-                kind(
-                    forge_commit_comment(st(), repo(), oid(), "b".into())
-                        .await
-                        .unwrap_err()
-                ),
-                nie
-            );
-        });
-    }
+    forge::github_for(&state, &repo)
+        .await?
+        .comment_commit(&oid, &body)
+        .await
 }
