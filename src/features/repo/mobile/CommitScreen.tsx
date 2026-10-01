@@ -154,12 +154,8 @@ export function CommitScreen({ repoId, route }: RouteScreenProps<"commit">) {
                 </li>
               ))}
             </ul>
-            <section aria-label="Comments" className="border-t border-border p-3">
-              <h3 className="pb-2 text-xs font-medium uppercase tracking-wide text-fg-subtle">
-                Comments
-              </h3>
-              <CommitComments repoId={repoId} oid={route.oid} />
-            </section>
+            {/* Brings its own collapsible "Comments (n)" header; renders nothing without a forge. */}
+            <CommitComments repoId={repoId} oid={route.oid} />
           </>
         )}
       </div>
