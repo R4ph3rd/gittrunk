@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDownToLine,
@@ -108,7 +108,7 @@ export function RefsSidebar({ repoId }: { repoId: string }) {
                           className="size-3.5 shrink-0"
                           aria-hidden
                           style={{
-                            color: color !== undefined ? laneVar(color) : "var(--text-fg-subtle)",
+                            color: color !== undefined ? laneVar(color) : "var(--fg-subtle)",
                           }}
                         />
                       }
@@ -119,16 +119,20 @@ export function RefsSidebar({ repoId }: { repoId: string }) {
                   <ContextMenuContent>
                     <TargetEntries repoId={repoId} target={branchActionTarget(b, false)} />
                     <ContextMenuSeparator />
-                    <ContextMenuItem
-                      icon={<ArrowUp />}
-                      onSelect={() => void pushBranch(client, repoId, { branch: b.name })}
-                    >
-                      Push
-                    </ContextMenuItem>
-                    <ContextMenuItem icon={<GitBranch />} onSelect={() => setUpstreamFor(b)}>
-                      Set upstream…
-                    </ContextMenuItem>
-                    <ContextMenuSeparator />
+                    {!platform.readOnly && (
+                      <>
+                        <ContextMenuItem
+                          icon={<ArrowUp />}
+                          onSelect={() => void pushBranch(client, repoId, { branch: b.name })}
+                        >
+                          Push
+                        </ContextMenuItem>
+                        <ContextMenuItem icon={<GitBranch />} onSelect={() => setUpstreamFor(b)}>
+                          Set upstream…
+                        </ContextMenuItem>
+                        <ContextMenuSeparator />
+                      </>
+                    )}
                     <ContextMenuItem
                       icon={<History />}
                       onSelect={() => openReflog(repoId, b.fullName)}
@@ -168,7 +172,7 @@ export function RefsSidebar({ repoId }: { repoId: string }) {
                           className="size-3.5 shrink-0"
                           aria-hidden
                           style={{
-                            color: color !== undefined ? laneVar(color) : "var(--text-fg-subtle)",
+                            color: color !== undefined ? laneVar(color) : "var(--fg-subtle)",
                           }}
                         />
                       }
@@ -187,42 +191,43 @@ export function RefsSidebar({ repoId }: { repoId: string }) {
             })}
           </Section>
           <Section title="Stashes" count={data.stashes.length}>
-            {data.stashes.map((s) => (
-              <ContextMenu key={s.index}>
-                <ContextMenuTrigger asChild>
-                  <Item
-                    label={stashLabel(s)}
-                    leading={
-                      <div
-                        className="size-3.5 shrink-0 rounded-full"
-                        aria-hidden
-                        style={{ backgroundColor: "var(--text-fg-subtle)" }}
-                      />
-                    }
-                    onClick={() => selectAndShowGraph(repoId, s.oid)}
-                  />
-                </ContextMenuTrigger>
-                <ContextMenuContent>
-                  <ContextMenuItem icon={<Undo2 />} onSelect={() => void stash.apply(s, false)}>
-                    Apply
-                  </ContextMenuItem>
-                  <ContextMenuItem
-                    icon={<ArrowDownToLine />}
-                    onSelect={() => void stash.apply(s, true)}
-                  >
-                    Pop
-                  </ContextMenuItem>
-                  <ContextMenuSeparator />
-                  <ContextMenuItem
-                    icon={<Trash2 />}
-                    destructive
-                    onSelect={() => void stash.drop(s)}
-                  >
-                    Drop
-                  </ContextMenuItem>
-                </ContextMenuContent>
-              </ContextMenu>
-            ))}
+            {data.stashes.map((s) => {
+              const item = (
+                <Item
+                  label={stashLabel(s)}
+                  leading={
+                    <div className="size-2.5 shrink-0 rounded-full bg-fg-subtle" aria-hidden />
+                  }
+                  onClick={() => selectAndShowGraph(repoId, s.oid)}
+                />
+              );
+              // Read-only platforms browse stashes but cannot apply or drop them.
+              if (platform.readOnly) return <Fragment key={s.index}>{item}</Fragment>;
+              return (
+                <ContextMenu key={s.index}>
+                  <ContextMenuTrigger asChild>{item}</ContextMenuTrigger>
+                  <ContextMenuContent>
+                    <ContextMenuItem icon={<Undo2 />} onSelect={() => void stash.apply(s, false)}>
+                      Apply
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      icon={<ArrowDownToLine />}
+                      onSelect={() => void stash.apply(s, true)}
+                    >
+                      Pop
+                    </ContextMenuItem>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem
+                      icon={<Trash2 />}
+                      destructive
+                      onSelect={() => void stash.drop(s)}
+                    >
+                      Drop
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
+              );
+            })}
           </Section>
         </>
       )}

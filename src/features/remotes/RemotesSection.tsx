@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { usePlatform } from "@/app/platform";
 import { ContextEntries } from "@/features/operations/actions/ActionMenu";
 import { buildActionEntries } from "@/features/operations/actions/entries";
 import { useActionContext } from "@/features/operations/actions/useActionContext";
@@ -79,6 +80,8 @@ function MergeRebaseEntries({ repoId, branch }: { repoId: string; branch: Branch
 /** Remotes with their branches nested underneath, plus remote and remote-branch menus. */
 export function RemotesSection({ repoId, branches }: { repoId: string; branches: BranchInfo[] }) {
   const client = useQueryClient();
+  // Read-only platforms fetch, copy and check out; remote and branch edits are hidden.
+  const { readOnly } = usePlatform();
   const remotes = useRemotes(repoId);
   const select = useRepoStore((s) => s.selectCommit);
   const setAddRemoteFor = useRemotesUi((s) => s.setAddRemoteFor);
@@ -198,31 +201,39 @@ export function RemotesSection({ repoId, branches }: { repoId: string; branches:
                   >
                     Fetch
                   </ContextMenuItem>
-                  <ContextMenuItem
-                    icon={<Pencil />}
-                    onSelect={() =>
-                      setForm({ kind: "url", name: remote.name, url: remote.fetchUrl })
-                    }
-                  >
-                    Edit URL
-                  </ContextMenuItem>
-                  <ContextMenuItem
-                    icon={<Pencil />}
-                    onSelect={() => setForm({ kind: "rename", name: remote.name })}
-                  >
-                    Rename
-                  </ContextMenuItem>
+                  {!readOnly && (
+                    <>
+                      <ContextMenuItem
+                        icon={<Pencil />}
+                        onSelect={() =>
+                          setForm({ kind: "url", name: remote.name, url: remote.fetchUrl })
+                        }
+                      >
+                        Edit URL
+                      </ContextMenuItem>
+                      <ContextMenuItem
+                        icon={<Pencil />}
+                        onSelect={() => setForm({ kind: "rename", name: remote.name })}
+                      >
+                        Rename
+                      </ContextMenuItem>
+                    </>
+                  )}
                   <ContextMenuItem icon={<Copy />} onSelect={() => void copy(remote.fetchUrl)}>
                     Copy URL
                   </ContextMenuItem>
-                  <ContextMenuSeparator />
-                  <ContextMenuItem
-                    icon={<Trash2 />}
-                    destructive
-                    onSelect={() => setRemoving(remote.name)}
-                  >
-                    Remove
-                  </ContextMenuItem>
+                  {!readOnly && (
+                    <>
+                      <ContextMenuSeparator />
+                      <ContextMenuItem
+                        icon={<Trash2 />}
+                        destructive
+                        onSelect={() => setRemoving(remote.name)}
+                      >
+                        Remove
+                      </ContextMenuItem>
+                    </>
+                  )}
                 </ContextMenuContent>
               </ContextMenu>
               {expanded && (
@@ -239,8 +250,7 @@ export function RemotesSection({ repoId, branches }: { repoId: string; branches:
                                 className="size-3.5 shrink-0"
                                 aria-hidden
                                 style={{
-                                  color:
-                                    color !== undefined ? laneVar(color) : "var(--text-fg-subtle)",
+                                  color: color !== undefined ? laneVar(color) : "var(--fg-subtle)",
                                 }}
                               />
                             }
@@ -256,16 +266,20 @@ export function RemotesSection({ repoId, branches }: { repoId: string; branches:
                           >
                             Checkout as local branch
                           </ContextMenuItem>
-                          <ContextMenuSeparator />
-                          <MergeRebaseEntries repoId={repoId} branch={b} />
-                          <ContextMenuSeparator />
-                          <ContextMenuItem
-                            icon={<Trash2 />}
-                            destructive
-                            onSelect={() => void requestDelete(b, remote.name)}
-                          >
-                            Delete remote branch
-                          </ContextMenuItem>
+                          {!readOnly && (
+                            <>
+                              <ContextMenuSeparator />
+                              <MergeRebaseEntries repoId={repoId} branch={b} />
+                              <ContextMenuSeparator />
+                              <ContextMenuItem
+                                icon={<Trash2 />}
+                                destructive
+                                onSelect={() => void requestDelete(b, remote.name)}
+                              >
+                                Delete remote branch
+                              </ContextMenuItem>
+                            </>
+                          )}
                         </ContextMenuContent>
                       </ContextMenu>
                     );
@@ -275,17 +289,19 @@ export function RemotesSection({ repoId, branches }: { repoId: string; branches:
             </li>
           );
         })}
-        <li className="px-2 pt-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start"
-            onClick={() => setAddRemoteFor(repoId)}
-          >
-            <Plus />
-            Add remote
-          </Button>
-        </li>
+        {!readOnly && (
+          <li className="px-2 pt-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start"
+              onClick={() => setAddRemoteFor(repoId)}
+            >
+              <Plus />
+              Add remote
+            </Button>
+          </li>
+        )}
       </Section>
 
       <RemoteFormDialog repoId={repoId} mode={form} onClose={() => setForm(null)} />
