@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRegisterCommands, type Command, type CommandContext } from "@/app/commands";
-import { usePlatform } from "@/app/platform";
 import { AlertDialog, toast } from "@/design/components";
 import { useOpEvents } from "@/features/ops/ops";
 import { useOpsStore } from "@/features/ops/store";
