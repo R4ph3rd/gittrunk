@@ -699,7 +699,9 @@ describe("stash", () => {
   it("saves changes from the Stash dialog with its options", async () => {
     const commands = await backend();
     const user = await openStaging();
-    await user.click(screen.getByRole("button", { name: "Stash" }));
+    // The working-copy header and the toolbar both offer Stash; use the panel's.
+    const panel = screen.getByRole("complementary", { name: "Working copy" });
+    await user.click(within(panel).getByRole("button", { name: "Stash" }));
     const dialog = await screen.findByRole("dialog", { name: "Stash changes" });
     await typeInto(user, within(dialog).getByLabelText("Message"), "half done");
     await user.click(within(dialog).getByRole("switch", { name: "Include untracked files" }));
@@ -722,7 +724,9 @@ describe("stash", () => {
   it("uses a null message when left empty and supports keep-index", async () => {
     const commands = await backend();
     const user = await openStaging();
-    await user.click(screen.getByRole("button", { name: "Stash" }));
+    // Same dialog from the toolbar's Stash button.
+    const toolbar = screen.getByRole("toolbar", { name: "Remote operations" });
+    await user.click(within(toolbar).getByRole("button", { name: "Stash" }));
     const dialog = await screen.findByRole("dialog", { name: "Stash changes" });
     await user.click(within(dialog).getByRole("switch", { name: "Keep staged changes" }));
     await user.click(within(dialog).getByRole("button", { name: "Stash changes" }));

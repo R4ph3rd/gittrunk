@@ -321,7 +321,16 @@ describe("keyboard drag and drop and the confirmation flow", () => {
     await waitFor(() =>
       expect(commands.merge).toHaveBeenLastCalledWith("r1", expect.anything(), false),
     );
-    await user.click(await screen.findByRole("button", { name: "Undo" }));
+    // The toast's Undo action, not the toolbar's Undo button.
+    const toolbar = screen.getByRole("toolbar", { name: "Remote operations" });
+    const toastUndo = await waitFor(() => {
+      const found = screen
+        .getAllByRole("button", { name: "Undo" })
+        .find((b) => !toolbar.contains(b));
+      expect(found).toBeDefined();
+      return found!;
+    });
+    await user.click(toastUndo);
     await waitFor(() => expect(commands.undo).toHaveBeenCalledWith("r1", false));
   });
 
