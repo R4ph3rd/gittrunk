@@ -8,7 +8,11 @@ import {
   useSensors,
   type Announcements,
   type DragEndEvent,
+  type Activators,
   type DragStartEvent,
+  type KeyboardSensorOptions,
+  type PointerSensorOptions,
+  type Sensor,
 } from "@dnd-kit/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { GitBranch, GitCommitHorizontal, Tag } from "lucide-react";
@@ -82,6 +86,29 @@ function pointerAt(event: DragEndEvent): { x: number; y: number } {
 
 let stopAutoScroll: (() => void) | null = null;
 
+/** Sensor options with an on/off switch checked when a drag would start. */
+interface Switchable {
+  enabled: boolean;
+}
+
+function switchable<T>(activators: Activators<T>): Activators<T & Switchable> {
+  return activators.map(({ eventName, handler }) => ({
+    eventName,
+    handler: (event, options, context) => options.enabled && handler(event, options, context),
+  }));
+}
+
+// dnd-kit memoizes and subscribes on the list of sensor classes, which must keep the same length
+// across renders: drag and drop is switched off through the options instead of dropping sensors.
+const PointerBase = PointerSensor as unknown as Sensor<PointerSensorOptions & Switchable>;
+class SwitchablePointerSensor extends PointerBase {
+  static override activators = switchable<PointerSensorOptions>(PointerSensor.activators);
+}
+const KeyboardBase = KeyboardSensor as unknown as Sensor<KeyboardSensorOptions & Switchable>;
+class SwitchableKeyboardSensor extends KeyboardBase {
+  static override activators = switchable<KeyboardSensorOptions>(KeyboardSensor.activators);
+}
+
 /**
  * Drag and drop for the commit graph and the branch list, plus the shared hosts for the drop menu,
  * confirmation dialog, name prompts and palette commands. Wrap the repository view with it.
@@ -93,14 +120,19 @@ export function OperationsProvider({ children }: { children: ReactNode }) {
   useDndStore((s) => s.cursor);
   const { isCompact } = useLayout();
   const platform = usePlatform();
-  const pointer = useSensor(PointerSensor, { activationConstraint: { distance: 6 } });
-  const keyboard = useSensor(KeyboardSensor, {
+  // No drag and drop on compact layouts (replaced by the action sheets) nor on read-only
+  // platforms (nothing to drop).
+  const enabled = !isCompact && !platform.readOnly;
+  const pointer = useSensor(SwitchablePointerSensor, {
+    activationConstraint: { distance: 6 },
+    enabled,
+  });
+  const keyboard = useSensor(SwitchableKeyboardSensor, {
     coordinateGetter: keyboardCoordinates,
     keyboardCodes: KEYBOARD_CODES,
+    enabled,
   });
-  // No sensors on compact layouts (drag and drop is replaced by the action sheets) nor on
-  // read-only platforms (nothing to drop).
-  const sensors = useSensors(...(isCompact || platform.readOnly ? [] : [pointer, keyboard]));
+  const sensors = useSensors(pointer, keyboard);
 
   const onDragStart = (event: DragStartEvent) => {
     const data = event.active.data.current as Partial<DragData> | undefined;
