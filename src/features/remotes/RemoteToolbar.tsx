@@ -20,20 +20,17 @@ import {
   DropdownMenuTrigger,
   IconButton,
   Tooltip,
-  toast,
 } from "@/design/components";
 import { formatShortcut } from "@/app/shortcuts";
 import { useRepoBusy } from "@/features/ops/store";
-import { useOplogState, useRefs, useStatus, invalidateEverything } from "@/ipc/queries";
+import { useOplogState, useRefs, useStatus } from "@/ipc/queries";
 import type { PullStrategy } from "@/ipc/bindings";
-import { commands } from "@/ipc/bindings";
-import { unwrap } from "@/ipc/client";
 import { updateSettings, useSettings } from "@/stores/settings";
 import { useRemotesUi } from "@/stores/remotes";
-import { useDndStore } from "@/stores/dnd";
 import { useRepoStore } from "@/stores/repo";
 import { usePlatform } from "@/app/platform";
 import { fetchRemote, headBranch, pullCurrent, pushBranch, STRATEGY_LABEL } from "./actions";
+import { promptBranchAtHead, requestOplogStep } from "./oplogActions";
 
 const STRATEGIES: PullStrategy[] = ["merge", "rebase", "ffOnly"];
 
@@ -55,64 +52,29 @@ export function RemoteToolbar({ repoId }: { repoId: string }) {
   const strategy = useSettings().pullStrategy;
   const oplogState = useOplogState(repoId);
   const setForcePushFor = useRemotesUi((s) => s.setForcePushFor);
-  const setOplogPreview = useRemotesUi((s) => s.setOplogPreview);
   const platform = usePlatform();
 
   const branch = headBranch(refs.data);
   const canPull = !busy && !!branch?.upstream;
   const canPush = !busy && !!branch;
-  const isHeadUnborn = refs.data?.head.kind === "unborn";
-  const canCreateBranch = !busy && !isHeadUnborn;
-  const canStash =
-    !busy && (status.data?.unstaged.length ?? 0) + (status.data?.conflicted.length ?? 0) > 0;
-
-  const handleUndo = async () => {
-    try {
-      const outcome = await unwrap(commands.undo(repoId, true));
-      if (outcome.kind === "preview") {
-        setOplogPreview({ repoId, preview: outcome.preview, mode: "undo" });
-      } else {
-        void invalidateEverything(client, repoId);
-      }
-    } catch (e) {
-      toast.error(`Nothing to undo: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  };
-
-  const handleRedo = async () => {
-    try {
-      const outcome = await unwrap(commands.redo(repoId, true));
-      if (outcome.kind === "preview") {
-        setOplogPreview({ repoId, preview: outcome.preview, mode: "redo" });
-      } else {
-        void invalidateEverything(client, repoId);
-      }
-    } catch (e) {
-      toast.error(`Nothing to redo: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  };
-
-  const handleBranch = () => {
-    const headOid =
-      refs.data?.head.kind === "branch"
-        ? refs.data.head.oid
-        : refs.data?.head.kind === "detached"
-          ? refs.data.head.oid
-          : "";
-    const label =
-      refs.data?.head.kind === "branch"
-        ? refs.data.head.name
-        : refs.data?.head.kind === "detached"
-          ? refs.data.head.oid.slice(0, 7)
-          : "";
-    useDndStore.getState().setPrompt({ kind: "branch", repoId, startPoint: headOid, label });
-  };
+  // HEAD must be known and born: an unborn HEAD has no commit to branch from.
+  const canCreateBranch = !busy && !!refs.data && refs.data.head.kind !== "unborn";
+  const changes = status.data
+    ? status.data.staged.length + status.data.unstaged.length + status.data.conflicted.length
+    : 0;
+  const canStash = !busy && changes > 0;
+  const undoTip = oplogState.data?.undoDescription
+    ? `Undo: ${oplogState.data.undoDescription}`
+    : oplogState.data?.canUndo
+      ? "Undo last operation"
+      : "Nothing to undo";
+  const redoLabel = oplogState.data?.redoDescription
+    ? `Redo: ${oplogState.data.redoDescription}`
+    : "Redo";
 
   const handleStash = () => {
     useRepoStore.getState().setStashDialog(repoId, true);
   };
-
-  const handlePullFfOnly = () => void pullCurrent(client, repoId, "ffOnly");
 
   return (
     <div
@@ -123,42 +85,37 @@ export function RemoteToolbar({ repoId }: { repoId: string }) {
       {/* Undo/Redo split button (read-write only) */}
       {!platform.readOnly && (
         <div className="flex items-center gap-px">
-          <Tooltip
-            content={
-              oplogState.data?.undoDescription
-                ? `Undo: ${oplogState.data.undoDescription}`
-                : "Undo last operation"
-            }
-            shortcut={formatShortcut("mod+z")}
-          >
+          <Tooltip content={undoTip} shortcut={formatShortcut("mod+z")}>
             <Button
               disabled={!oplogState.data?.canUndo || busy}
               className="rounded-r-none"
-              onClick={() => void handleUndo()}
+              onClick={() => void requestOplogStep(client, repoId, "undo")}
             >
               <Undo2 />
               Undo
             </Button>
           </Tooltip>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <IconButton
-                aria-label="Undo options"
-                variant="secondary"
-                disabled={!oplogState.data?.canRedo || busy}
-                className="w-6 rounded-l-none"
-              >
-                <ChevronDown />
-              </IconButton>
-            </DropdownMenuTrigger>
+            <Tooltip content="Redo">
+              <DropdownMenuTrigger asChild>
+                <IconButton
+                  aria-label="Undo options"
+                  variant="secondary"
+                  disabled={busy}
+                  className="w-6 rounded-l-none"
+                >
+                  <ChevronDown />
+                </IconButton>
+              </DropdownMenuTrigger>
+            </Tooltip>
             <DropdownMenuContent align="start">
               <DropdownMenuItem
                 disabled={!oplogState.data?.canRedo}
                 icon={<Redo2 />}
-                onSelect={() => void handleRedo()}
+                shortcut={formatShortcut("mod+shift+z")}
+                onSelect={() => void requestOplogStep(client, repoId, "redo")}
               >
-                Redo
-                {oplogState.data?.redoDescription ? `: ${oplogState.data.redoDescription}` : ""}
+                {redoLabel}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -187,7 +144,7 @@ export function RemoteToolbar({ repoId }: { repoId: string }) {
             disabled={!canPull}
             className={platform.readOnly ? "" : "rounded-r-none"}
             onClick={() =>
-              platform.readOnly ? handlePullFfOnly() : void pullCurrent(client, repoId, strategy)
+              void pullCurrent(client, repoId, platform.readOnly ? "ffOnly" : strategy)
             }
           >
             <ArrowDown />
@@ -268,7 +225,10 @@ export function RemoteToolbar({ repoId }: { repoId: string }) {
           </div>
 
           <Tooltip content="Create branch at HEAD" shortcut={formatShortcut("mod+shift+b")}>
-            <Button disabled={!canCreateBranch} onClick={() => handleBranch()}>
+            <Button
+              disabled={!canCreateBranch}
+              onClick={() => promptBranchAtHead(repoId, refs.data)}
+            >
               <GitBranchPlus />
               Branch
             </Button>

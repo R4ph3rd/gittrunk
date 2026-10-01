@@ -13,24 +13,37 @@ import {
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRegisterCommands, type Command, type CommandContext } from "@/app/commands";
+import { fallbackPlatform } from "@/app/platform";
 import { AlertDialog, toast } from "@/design/components";
 import { useOpEvents } from "@/features/ops/ops";
 import { useOpsStore } from "@/features/ops/store";
-import { commands, type RefsSnapshot } from "@/ipc/bindings";
+import { commands, type PlatformInfo, type RefsSnapshot } from "@/ipc/bindings";
 import { unwrap } from "@/ipc/client";
 import { invalidateEverything, invalidateWorkingCopy, queryKeys } from "@/ipc/queries";
-import { useDndStore } from "@/stores/dnd";
+import { useLayoutStore } from "@/stores/layout";
 import { useRepoStore } from "@/stores/repo";
 import { useRemotesUi } from "@/stores/remotes";
 import { useWorkspaceStore } from "@/stores/workspace";
-import { fetchRemote, pullCurrent, pushBranch } from "./actions";
+import { fetchRemote, loadRefs, pullCurrent, pushBranch } from "./actions";
 import { CloneDialog } from "./CloneDialog";
 import { CredentialPrompt } from "./CredentialPrompt";
 import { useCredentialEvents } from "./credentials";
+import { promptBranchAtHead, requestOplogStep } from "./oplogActions";
 import { PushDialog } from "./PushDialog";
 import { RemoteFormDialog } from "./RemoteFormDialog";
 
 const hasRepo = (ctx: CommandContext) => ctx.repoId !== null;
+
+/** Read-only platforms (Android) hide git writes; read from the cached `platform_info`. */
+function isReadOnly(ctx: CommandContext): boolean {
+  const info =
+    ctx.queryClient.getQueryData<PlatformInfo>(queryKeys.platformInfo) ??
+    fallbackPlatform(typeof navigator === "undefined" ? undefined : navigator.userAgent);
+  return info.readOnly;
+}
+
+/** A repository is open and the platform allows git writes. */
+const canWrite = (ctx: CommandContext) => hasRepo(ctx) && !isReadOnly(ctx);
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** Runs `fn` with the active repo unless one of its operations is already running. */
@@ -74,6 +87,7 @@ function focusCommitBox(ctx: CommandContext) {
   const id = ctx.repoId;
   if (!id) return;
   useRepoStore.getState().selectWip(id);
+  useLayoutStore.getState().setVisible("right", true);
   useWorkspaceStore.getState().setRightTab(id, "changes");
   let tries = 0;
   const attempt = () => {
@@ -88,54 +102,17 @@ function focusCommitBox(ctx: CommandContext) {
   attempt();
 }
 
-async function undoPreview(ctx: CommandContext) {
+async function branchCreate(ctx: CommandContext) {
   const id = ctx.repoId;
   if (!id) return;
+  let refs: RefsSnapshot;
   try {
-    const outcome = await unwrap(commands.undo(id, true));
-    if (outcome.kind === "preview") {
-      useRemotesUi
-        .getState()
-        .setOplogPreview({ repoId: id, preview: outcome.preview, mode: "undo" });
-    } else {
-      void invalidateEverything(ctx.queryClient, id);
-    }
+    refs = await loadRefs(ctx.queryClient, id);
   } catch (e) {
-    toast.error(`Nothing to undo: ${message(e)}`);
+    toast.error(`Could not read HEAD: ${message(e)}`);
+    return;
   }
-}
-
-async function redoPreview(ctx: CommandContext) {
-  const id = ctx.repoId;
-  if (!id) return;
-  try {
-    const outcome = await unwrap(commands.redo(id, true));
-    if (outcome.kind === "preview") {
-      useRemotesUi
-        .getState()
-        .setOplogPreview({ repoId: id, preview: outcome.preview, mode: "redo" });
-    } else {
-      void invalidateEverything(ctx.queryClient, id);
-    }
-  } catch (e) {
-    toast.error(`Nothing to redo: ${message(e)}`);
-  }
-}
-
-function branchCreate(ctx: CommandContext) {
-  const id = ctx.repoId;
-  if (!id) return;
-  const refsData = ctx.queryClient.getQueryData<RefsSnapshot>(queryKeys.refs(id));
-  if (!refsData) return;
-  const headOid =
-    refsData.head.kind === "branch" || refsData.head.kind === "detached" ? refsData.head.oid : "";
-  const label =
-    refsData.head.kind === "branch"
-      ? refsData.head.name
-      : refsData.head.kind === "detached"
-        ? refsData.head.oid.slice(0, 7)
-        : "";
-  useDndStore.getState().setPrompt({ kind: "branch", repoId: id, startPoint: headOid, label });
+  if (!promptBranchAtHead(id, refs)) toast.info("Make a first commit before creating a branch");
 }
 
 function useRemoteCommands() {
@@ -158,7 +135,10 @@ function useRemoteCommands() {
       shortcut: "mod+shift+l",
       keywords: ["merge", "rebase", "update"],
       when: hasRepo,
-      run: withIdleRepo((id, ctx) => void pullCurrent(ctx.queryClient, id)),
+      // Read-only platforms only follow the remote: never create a merge or rebase there.
+      run: withIdleRepo(
+        (id, ctx) => void pullCurrent(ctx.queryClient, id, isReadOnly(ctx) ? "ffOnly" : undefined),
+      ),
     },
     {
       id: "remote.push",
@@ -167,7 +147,7 @@ function useRemoteCommands() {
       icon: ArrowUp,
       shortcut: "mod+shift+k",
       keywords: ["upload", "publish", "upstream"],
-      when: hasRepo,
+      when: canWrite,
       run: withIdleRepo((id, ctx) => void pushBranch(ctx.queryClient, id)),
     },
     {
@@ -175,7 +155,7 @@ function useRemoteCommands() {
       title: "Add remote",
       group: "Remotes",
       icon: Plus,
-      when: hasRepo,
+      when: canWrite,
       run: (ctx) => useRemotesUi.getState().setAddRemoteFor(ctx.repoId),
     },
     {
@@ -194,7 +174,7 @@ function useRemoteCommands() {
       icon: Layers,
       shortcut: "mod+shift+a",
       keywords: ["add", "index"],
-      when: hasRepo,
+      when: canWrite,
       run: stageAll,
     },
     {
@@ -203,7 +183,7 @@ function useRemoteCommands() {
       group: "Working copy",
       icon: GitCommitHorizontal,
       keywords: ["message", "summary", "wip"],
-      when: hasRepo,
+      when: canWrite,
       run: focusCommitBox,
     },
     {
@@ -213,7 +193,7 @@ function useRemoteCommands() {
       icon: Archive,
       shortcut: "mod+shift+s",
       keywords: ["shelve", "save"],
-      when: hasRepo,
+      when: canWrite,
       run: (ctx) => {
         if (ctx.repoId) useRepoStore.getState().setStashDialog(ctx.repoId, true);
       },
@@ -225,8 +205,10 @@ function useRemoteCommands() {
       icon: Undo2,
       shortcut: "mod+z",
       keywords: ["revert", "oplog"],
-      when: hasRepo,
-      run: undoPreview,
+      when: canWrite,
+      run: (ctx) => {
+        if (ctx.repoId) return requestOplogStep(ctx.queryClient, ctx.repoId, "undo");
+      },
     },
     {
       id: "history.redo",
@@ -235,8 +217,10 @@ function useRemoteCommands() {
       icon: Redo2,
       shortcut: "mod+shift+z",
       keywords: ["repeat", "oplog"],
-      when: hasRepo,
-      run: redoPreview,
+      when: canWrite,
+      run: (ctx) => {
+        if (ctx.repoId) return requestOplogStep(ctx.queryClient, ctx.repoId, "redo");
+      },
     },
     {
       id: "branch.create",
@@ -245,7 +229,7 @@ function useRemoteCommands() {
       icon: GitBranchPlus,
       shortcut: "mod+shift+b",
       keywords: ["new", "branch", "create"],
-      when: hasRepo,
+      when: canWrite,
       run: branchCreate,
     },
   ];
