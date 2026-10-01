@@ -1,4 +1,8 @@
 import type { ScreenContribution } from "@/app/layout/registry";
+import { IssueScreen, IssuesScreen, NewIssueScreen } from "./screens";
 
-/** Filled in by the mobile forge screens (UI-MOBILE). */
-export const forgeScreens: ScreenContribution = {};
+/** Mobile forge screens: the Issues tab and the issue and new-issue routes. */
+export const forgeScreens: ScreenContribution = {
+  tabs: { issues: IssuesScreen },
+  routes: { issue: IssueScreen, newIssue: NewIssueScreen },
+};
