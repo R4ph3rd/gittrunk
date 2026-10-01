@@ -14,7 +14,10 @@ export async function run(app, root) {
   await until(() => git(dir, "diff", "--cached", "--name-only") === "a.txt\nb.txt", "stage all");
 
   await app.type(await app.css('input[placeholder="Commit summary"]'), "add b and extend a");
-  await app.click(await app.xpath("//button[normalize-space()='Commit']"));
+  // Scoped: the right panel's "Commit" tab is a button too.
+  await app.click(
+    await app.xpath("//*[@aria-label='Working copy']//button[normalize-space()='Commit']"),
+  );
   await until(() => git(dir, "log", "-1", "--format=%s") === "add b and extend a", "commit");
 
   await app.click(
