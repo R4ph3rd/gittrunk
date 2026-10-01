@@ -162,7 +162,7 @@ describe("Composer (390x844)", () => {
   });
 
   it("asks for a git identity before the first commit on Android", async () => {
-    backend.platformInfo.mockImplementation(() => ok(ANDROID_PLATFORM));
+    backend.platformInfo.mockImplementation(() => ok({ ...ANDROID_PLATFORM, readOnly: false }));
     backend.gitIdentityGet.mockImplementation(() => ok({ name: null, email: null }));
     const user = await openChanges();
     act(() => useComposerStore.getState().update("r1", { summary: "First" }));
