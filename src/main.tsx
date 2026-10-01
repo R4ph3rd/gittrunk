@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./app/App";
+import { AppErrorBoundary } from "./app/ErrorBoundary";
 import { Toaster, TooltipProvider } from "./design/components";
 import { ThemeProvider } from "./design/theme";
 import "./index.css";
@@ -31,7 +32,9 @@ async function boot() {
         ) : (
           <ThemeProvider>
             <TooltipProvider>
-              <App />
+              <AppErrorBoundary>
+                <App />
+              </AppErrorBoundary>
               <Toaster />
             </TooltipProvider>
           </ThemeProvider>
