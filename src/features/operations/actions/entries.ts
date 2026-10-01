@@ -25,7 +25,8 @@ export interface ActionContext {
   copy: (text: string) => void;
   openRebaseEditor: (base: string) => void;
   /** Capabilities of the platform; entries the platform cannot run are left out. */
-  platform?: Pick<PlatformInfo, "supportsRebase" | "supportsInteractiveRebase">;
+  platform?: Pick<PlatformInfo, "supportsRebase" | "supportsInteractiveRebase"> &
+    Partial<Pick<PlatformInfo, "readOnly">>;
 }
 
 type Item = Extract<ActionEntry, { kind: "item" }>;
@@ -267,10 +268,17 @@ function tagEntries(t: Extract<ActionTarget, { kind: "tag" }>, c: ActionContext)
   return entries;
 }
 
+const READ_ONLY_IDS = new Set(["checkout", "copySha", "copyName"]);
+
 /** Drops entries the platform cannot run (rebase without the git CLI) and tidies separators. */
 export function gateEntries(entries: ActionEntry[], platform: ActionContext["platform"]) {
   if (!platform) return entries;
   const hidden = new Set<string>();
+  if (platform.readOnly) {
+    // Read-only platforms keep checkout and copy entries only.
+    const kept = entries.filter((e) => e.kind === "item" && READ_ONLY_IDS.has(e.id));
+    return kept;
+  }
   if (!platform.supportsRebase) hidden.add("rebase");
   if (!platform.supportsInteractiveRebase) hidden.add("interactiveRebase");
   if (hidden.size === 0) return entries;
@@ -291,6 +299,6 @@ export function buildActionEntries(target: ActionTarget, ctx: ActionContext): Ac
     case "branch":
       return gateEntries(branchEntries(target, ctx), ctx.platform);
     case "tag":
-      return tagEntries(target, ctx);
+      return gateEntries(tagEntries(target, ctx), ctx.platform);
   }
 }

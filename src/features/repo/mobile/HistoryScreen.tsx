@@ -27,7 +27,7 @@ import { DEFAULT_FILTER, useRepoStore } from "@/stores/repo";
 
 /** Phone History tab: two-line commit list with a lane gutter, search, filters, WIP row. */
 export function HistoryScreen({ repoId }: TabScreenProps) {
-  usePlatform(); // make sure capabilities are loaded before an action menu is built
+  const { readOnly } = usePlatform(); // also ensures capabilities are loaded before menus
   const nav = useNav();
   const client = useQueryClient();
   const filter = useRepoStore((s) => s.filters[repoId]) ?? DEFAULT_FILTER;
@@ -105,7 +105,9 @@ export function HistoryScreen({ repoId }: TabScreenProps) {
           </div>
         ) : null}
       </ShellAppBar>
-      <WipRow repoId={repoId} gutter={gutter} compact onOpen={() => nav.setTab("changes")} />
+      {readOnly ? null : (
+        <WipRow repoId={repoId} gutter={gutter} compact onOpen={() => nav.setTab("changes")} />
+      )}
       <PullToRefresh
         label="Fetching"
         onRefresh={() => fetchRemote(repoId, null)}
@@ -167,14 +169,18 @@ export function HistoryScreen({ repoId }: TabScreenProps) {
             id: "pull",
             label: "Pull",
             icon: <ArrowDown />,
-            onSelect: () => void pullCurrent(client, repoId),
+            onSelect: () => void pullCurrent(client, repoId, readOnly ? "ffOnly" : undefined),
           },
-          {
-            id: "push",
-            label: "Push",
-            icon: <ArrowUp />,
-            onSelect: () => void pushBranch(client, repoId),
-          },
+          ...(readOnly
+            ? []
+            : [
+                {
+                  id: "push",
+                  label: "Push",
+                  icon: <ArrowUp />,
+                  onSelect: () => void pushBranch(client, repoId),
+                },
+              ]),
         ]}
       />
     </div>

@@ -98,8 +98,9 @@ export function OperationsProvider({ children }: { children: ReactNode }) {
     coordinateGetter: keyboardCoordinates,
     keyboardCodes: KEYBOARD_CODES,
   });
-  // No sensors on compact layouts: drag and drop is replaced by the action sheets.
-  const sensors = useSensors(...(isCompact ? [] : [pointer, keyboard]));
+  // No sensors on compact layouts (drag and drop is replaced by the action sheets) nor on
+  // read-only platforms (nothing to drop).
+  const sensors = useSensors(...(isCompact || platform.readOnly ? [] : [pointer, keyboard]));
 
   const onDragStart = (event: DragStartEvent) => {
     const data = event.active.data.current as Partial<DragData> | undefined;

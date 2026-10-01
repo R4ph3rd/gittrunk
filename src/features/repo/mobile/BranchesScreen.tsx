@@ -63,7 +63,7 @@ const remoteOf = (b: BranchInfo, remotes: RemoteInfo[]) =>
 
 /** Phone Branches tab: Local / Remotes / Tags pages with ref action sheets. */
 export function BranchesScreen({ repoId }: TabScreenProps) {
-  usePlatform();
+  const { readOnly } = usePlatform();
   const nav = useNav();
   const client = useQueryClient();
   const refs = useRefs(repoId);
@@ -86,12 +86,16 @@ export function BranchesScreen({ repoId }: TabScreenProps) {
     useDndStore.getState().openMenu({ x: 0, y: 0, title, entries });
 
   const localMenu = (b: BranchInfo) => {
-    const extras: ActionEntry[] = [
-      { kind: "separator" },
-      item("push", "Push", ArrowUp, () => void pushBranch(client, repoId, { branch: b.name })),
-      item("setUpstream", "Set upstream…", GitBranch, () => setUpstreamFor(b)),
+    const extras: ActionEntry[] = readOnly
+      ? [{ kind: "separator" }]
+      : [
+          { kind: "separator" },
+          item("push", "Push", ArrowUp, () => void pushBranch(client, repoId, { branch: b.name })),
+          item("setUpstream", "Set upstream…", GitBranch, () => setUpstreamFor(b)),
+        ];
+    extras.push(
       item("reflog", "Show reflog", History, () => nav.push({ name: "reflog", ref: b.fullName })),
-    ];
+    );
     if (aiEnabled) {
       extras.push(
         item(
@@ -152,9 +156,11 @@ export function BranchesScreen({ repoId }: TabScreenProps) {
         repoId={repoId}
         actions={
           <>
-            <IconButton aria-label="New branch" onClick={newBranch}>
-              <Plus />
-            </IconButton>
+            {readOnly ? null : (
+              <IconButton aria-label="New branch" onClick={newBranch}>
+                <Plus />
+              </IconButton>
+            )}
             <IconButton aria-label="Fetch" onClick={() => void fetchRemote(repoId, null)}>
               <RefreshCw />
             </IconButton>
@@ -248,12 +254,14 @@ export function BranchesScreen({ repoId }: TabScreenProps) {
                   </section>
                 );
               })}
-              <div className="p-3">
-                <Button variant="outline" onClick={() => setAddRemoteFor(repoId)}>
-                  <Plus />
-                  Add remote
-                </Button>
-              </div>
+              {readOnly ? null : (
+                <div className="p-3">
+                  <Button variant="outline" onClick={() => setAddRemoteFor(repoId)}>
+                    <Plus />
+                    Add remote
+                  </Button>
+                </div>
+              )}
             </div>
           )}
           {data && page === "tags" && (
@@ -293,32 +301,44 @@ export function BranchesScreen({ repoId }: TabScreenProps) {
                   icon: <RefreshCw />,
                   onSelect: () => void fetchRemote(repoId, remoteSheet.name),
                 },
-                {
-                  id: "editUrl",
-                  label: "Edit URL",
-                  icon: <Pencil />,
-                  onSelect: () =>
-                    setForm({ kind: "url", name: remoteSheet.name, url: remoteSheet.fetchUrl }),
-                },
-                {
-                  id: "rename",
-                  label: "Rename",
-                  icon: <Pencil />,
-                  onSelect: () => setForm({ kind: "rename", name: remoteSheet.name }),
-                },
+                ...(readOnly
+                  ? []
+                  : [
+                      {
+                        id: "editUrl",
+                        label: "Edit URL",
+                        icon: <Pencil />,
+                        onSelect: () =>
+                          setForm({
+                            kind: "url",
+                            name: remoteSheet.name,
+                            url: remoteSheet.fetchUrl,
+                          }),
+                      },
+                      {
+                        id: "rename",
+                        label: "Rename",
+                        icon: <Pencil />,
+                        onSelect: () => setForm({ kind: "rename", name: remoteSheet.name }),
+                      },
+                    ]),
                 {
                   id: "copyUrl",
                   label: "Copy URL",
                   icon: <Copy />,
                   onSelect: () => void copy(remoteSheet.fetchUrl),
                 },
-                {
-                  id: "remove",
-                  label: "Remove",
-                  icon: <Trash2 />,
-                  destructive: true,
-                  onSelect: () => setRemoving(remoteSheet.name),
-                },
+                ...(readOnly
+                  ? []
+                  : [
+                      {
+                        id: "remove",
+                        label: "Remove",
+                        icon: <Trash2 />,
+                        destructive: true,
+                        onSelect: () => setRemoving(remoteSheet.name),
+                      },
+                    ]),
               ]
             : []
         }

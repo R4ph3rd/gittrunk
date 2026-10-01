@@ -240,7 +240,8 @@ describe("platform capabilities", () => {
 
   it("hides rebase entries without git CLI rebase support, on any layout", () => {
     expect(ids(DESKTOP_PLATFORM)).toEqual(expect.arrayContaining(["rebase", "interactiveRebase"]));
-    const android = ids(ANDROID_PLATFORM);
+    // Rebase gating is independent of the read-only entry filter (covered in readonly.test.tsx).
+    const android = ids({ ...ANDROID_PLATFORM, readOnly: false });
     expect(android).not.toContain("rebase");
     expect(android).not.toContain("interactiveRebase");
     expect(android).toContain("merge");
@@ -254,7 +255,7 @@ describe("platform capabilities", () => {
         isHead: false,
         oid: oid(2),
       },
-      ctx(ANDROID_PLATFORM),
+      ctx({ ...ANDROID_PLATFORM, readOnly: false }),
     );
     expect(branch.some((e) => e.kind === "item" && e.id === "rebase")).toBe(false);
     // Android tablets use the regular layout but keep the capability limits.
