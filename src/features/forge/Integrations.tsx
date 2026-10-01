@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button, Input, Label, SegmentedControl, Spinner } from "@/design/components";
+import { resetAvatarImages } from "@/features/graph/avatarImages";
 import type { AvatarMode } from "@/ipc/bindings";
 import {
   invalidateAvatars,
@@ -106,7 +107,11 @@ function Avatars() {
     if (next === avatars) return;
     setBusy(true);
     const result = await updateSettings({ avatars: next });
-    if (result.ok) await invalidateAvatars(client);
+    if (result.ok) {
+      // The graph keeps decoded node images outside the query cache: drop them too.
+      resetAvatarImages();
+      await invalidateAvatars(client);
+    }
     setBusy(false);
   };
 
