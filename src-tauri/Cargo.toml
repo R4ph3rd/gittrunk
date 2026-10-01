@@ -56,6 +56,11 @@ portable-pty = "0.9"
 
 [target.'cfg(target_os = "android")'.dependencies]
 git2 = { version = "0.21", default-features = false, features = ["vendored-libgit2", "https", "vendored-openssl"] }
+# libgit2 cannot read cert files on Android (OpenSSL is built no-stdio): certs are
+# parsed from memory and handed to libgit2 through its raw option API.
+libgit2-sys = "0.18"
+openssl = "0.10"
+foreign-types = "0.3"
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }

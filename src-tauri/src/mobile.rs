@@ -8,18 +8,13 @@ use git2::ConfigLevel;
 
 use crate::ipc::error::{AppError, AppResult, ErrorKind};
 
-/// Android's system CA store (one PEM per file, hashed names).
+/// CA stores to read, in order of preference: the updatable Conscrypt APEX
+/// store (Android 14+), then the system image one (one PEM per file).
 #[cfg(target_os = "android")]
-const ANDROID_CA_DIR: &str = "/system/etc/security/cacerts";
-
-/// CA stores to bundle, in order of preference: the updatable Conscrypt
-/// APEX store (Android 14+), then the system image one.
-#[cfg(target_os = "android")]
-const ANDROID_CA_DIRS: [&str; 2] = ["/apex/com.android.conscrypt/cacerts", ANDROID_CA_DIR];
-
-/// File name of the generated bundle inside the app data dir.
-#[cfg(target_os = "android")]
-const CA_BUNDLE: &str = "cacert.pem";
+const ANDROID_CA_DIRS: [&str; 2] = [
+    "/apex/com.android.conscrypt/cacerts",
+    "/system/etc/security/cacerts",
+];
 
 const PEM_BEGIN: &str = "-----BEGIN CERTIFICATE-----";
 const PEM_END: &str = "-----END CERTIFICATE-----";
@@ -44,16 +39,14 @@ fn pem_blocks(text: &str) -> Vec<&str> {
     out
 }
 
-/// Concatenates the PEM certificates of the first directory in `dirs` that
-/// holds any into `out` (written atomically). Files without a certificate
-/// and subdirectories are skipped. Returns the number of certificates
-/// written; with none, `out` is left untouched.
+/// The PEM certificates of the first directory in `dirs` that holds any
+/// (sorted by file name). Files without a certificate and subdirectories are
+/// skipped; with no certificate anywhere the result is empty.
 ///
-/// Why a bundle: Android names its CA files after OpenSSL's *old* subject
-/// hash, while OpenSSL 3 (libgit2's TLS backend on Android) looks up the new
-/// one, so pointing libgit2 at the directory finds no certificate.
+/// Why in memory: OpenSSL is built `no-stdio` on Android, so libgit2's file
+/// and directory options cannot load anything there.
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
-fn build_ca_bundle(dirs: &[&Path], out: &Path) -> AppResult<usize> {
+fn collect_ca_pems(dirs: &[&Path]) -> Vec<String> {
     for dir in dirs {
         let Ok(entries) = fs::read_dir(dir) else {
             continue;
@@ -64,50 +57,68 @@ fn build_ca_bundle(dirs: &[&Path], out: &Path) -> AppResult<usize> {
             .filter(|p| p.is_file())
             .collect();
         files.sort();
-        let mut bundle = String::new();
-        let mut count = 0;
+        let mut certs = Vec::new();
         for file in files {
             let Ok(bytes) = fs::read(&file) else {
                 continue;
             };
             for block in pem_blocks(&String::from_utf8_lossy(&bytes)) {
-                bundle.push_str(block);
-                bundle.push('\n');
-                count += 1;
+                certs.push(format!("{block}\n"));
             }
         }
-        if count > 0 {
-            crate::settings::atomic_write(out, bundle.as_bytes())?;
-            return Ok(count);
+        if !certs.is_empty() {
+            return certs;
         }
     }
-    Ok(0)
+    Vec::new()
 }
 
-/// Points libgit2 (OpenSSL) at a PEM bundle of the system CA certificates,
-/// or at the raw system directory when no bundle can be built.
+/// Registers the system CA certificates with libgit2's OpenSSL store.
+/// Individual bad certificates are skipped; fails only if none is added.
 ///
 /// # Safety
-/// Mutates process-global libgit2 state; call once at startup before any
+/// Mutates process-global libgit2 state; call at startup before any
 /// repository is opened.
 #[cfg(target_os = "android")]
-unsafe fn configure_ca(data_dir: &Path) -> AppResult<()> {
-    let bundle = data_dir.join(CA_BUNDLE);
+unsafe fn configure_ca() -> AppResult<()> {
+    use foreign_types::ForeignTypeRef;
+    use std::os::raw::c_int;
+
     let dirs = ANDROID_CA_DIRS.map(Path::new);
-    match build_ca_bundle(&dirs, &bundle) {
-        Ok(n) if n > 0 => {
-            return git2::opts::set_ssl_cert_file(&bundle).map_err(|e| git_error("CA bundle", e));
-        }
-        Ok(_) => eprintln!(
-            "gittrunk: warning: no CA certificates found in {ANDROID_CA_DIRS:?}; \
-             falling back to {ANDROID_CA_DIR}"
-        ),
-        Err(e) => eprintln!(
-            "gittrunk: warning: could not write the CA bundle ({}); falling back to {ANDROID_CA_DIR}",
-            e.message
-        ),
+    let pems = collect_ca_pems(&dirs);
+    if pems.is_empty() {
+        return Err(AppError::new(
+            ErrorKind::Internal,
+            format!("CA bundle: no CA certificates found in {ANDROID_CA_DIRS:?}"),
+        ));
     }
-    git2::opts::set_ssl_cert_dir(ANDROID_CA_DIR).map_err(|e| git_error("CA directory", e))
+    // Make sure libgit2 (and its OpenSSL backend) is initialised.
+    libgit2_sys::init();
+    let mut added = 0usize;
+    for pem in &pems {
+        let Ok(x509) = openssl::x509::X509::from_pem(pem.as_bytes()) else {
+            continue;
+        };
+        // libgit2 adds the certificate to its store, which takes its own
+        // reference; `x509` stays valid until the end of this iteration.
+        let rc = libgit2_sys::git_libgit2_opts(
+            libgit2_sys::GIT_OPT_ADD_SSL_X509_CERT as c_int,
+            x509.as_ptr(),
+        );
+        if rc >= 0 {
+            added += 1;
+        }
+    }
+    if added == 0 {
+        return Err(AppError::new(
+            ErrorKind::Internal,
+            format!(
+                "CA bundle: libgit2 accepted none of {} certificates",
+                pems.len()
+            ),
+        ));
+    }
+    Ok(())
 }
 
 pub fn init(data_dir: &Path) -> AppResult<()> {
@@ -133,7 +144,7 @@ pub fn init(data_dir: &Path) -> AppResult<()> {
         git2::opts::set_verify_owner_validation(false)
             .map_err(|e| git_error("owner validation", e))?;
         #[cfg(target_os = "android")]
-        configure_ca(data_dir)?;
+        configure_ca()?;
     }
     Ok(())
 }
@@ -191,7 +202,7 @@ mod tests {
     }
 
     #[test]
-    fn bundle_keeps_only_certificate_blocks_of_the_first_store_with_any() {
+    fn collect_keeps_only_certificate_blocks_of_the_first_store_with_any() {
         let tmp = tempfile::tempdir().unwrap();
         let missing = tmp.path().join("apex");
         let empty = tmp.path().join("empty");
@@ -206,18 +217,14 @@ mod tests {
         // A truncated block is not a certificate.
         fs::write(system.join("zz.0"), format!("{PEM_BEGIN}\nZZZZ\n")).unwrap();
 
-        let out = tmp.path().join("data").join("cacert.pem");
-        let n = build_ca_bundle(&[&missing, &empty, &system], &out).unwrap();
-        assert_eq!(n, 2);
-        let bundle = fs::read_to_string(&out).unwrap();
-        // Sorted by file name, blocks only, one per line group.
-        assert_eq!(bundle, format!("{}\n{}\n", cert("AAAA"), cert("BBBB")));
-        assert!(!bundle.contains("Certificate:"));
-        assert!(!bundle.contains("SUBDIR"));
+        let certs = collect_ca_pems(&[&missing, &empty, &system]);
+        // Sorted by file name, blocks only.
+        assert_eq!(certs, vec![cert("AAAA") + "\n", cert("BBBB") + "\n"]);
+        assert!(certs.iter().all(|c| !c.contains("Certificate:")));
     }
 
     #[test]
-    fn bundle_prefers_the_first_store_and_overwrites_a_previous_bundle() {
+    fn collect_prefers_the_first_store() {
         let tmp = tempfile::tempdir().unwrap();
         let apex = tmp.path().join("apex");
         let system = tmp.path().join("system");
@@ -225,28 +232,15 @@ mod tests {
         fs::create_dir_all(&system).unwrap();
         fs::write(apex.join("1.0"), android_file("NEW")).unwrap();
         fs::write(system.join("1.0"), android_file("OLD")).unwrap();
-        let out = tmp.path().join("cacert.pem");
-        fs::write(&out, "stale").unwrap();
-
-        assert_eq!(build_ca_bundle(&[&apex, &system], &out).unwrap(), 1);
-        assert_eq!(
-            fs::read_to_string(&out).unwrap(),
-            format!("{}\n", cert("NEW"))
-        );
+        assert_eq!(collect_ca_pems(&[&apex, &system]), vec![cert("NEW") + "\n"]);
     }
 
     #[test]
-    fn bundle_without_certificates_writes_nothing() {
+    fn collect_without_certificates_is_empty() {
         let tmp = tempfile::tempdir().unwrap();
         let empty = tmp.path().join("empty");
         fs::create_dir_all(&empty).unwrap();
         fs::write(empty.join("notes.txt"), "nothing here\n").unwrap();
-        let out = tmp.path().join("cacert.pem");
-
-        assert_eq!(
-            build_ca_bundle(&[&tmp.path().join("missing"), &empty], &out).unwrap(),
-            0
-        );
-        assert!(!out.exists());
+        assert!(collect_ca_pems(&[&tmp.path().join("missing"), &empty]).is_empty());
     }
 }
