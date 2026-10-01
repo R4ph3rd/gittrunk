@@ -23,12 +23,12 @@ export function Section({
   const Chevron = open ? ChevronDown : ChevronRight;
   return (
     <section>
-      <div className="flex h-7 w-full items-center text-xs font-medium uppercase tracking-wide text-fg-subtle">
+      <div className="flex h-7 w-full items-center text-xs font-medium uppercase tracking-wide text-fg-subtle hover:text-fg-muted">
         <button
           type="button"
           aria-expanded={open}
           onClick={() => setOpen(!open)}
-          className="flex h-7 min-w-0 flex-1 items-center gap-1 px-2 hover:text-fg-muted"
+          className="flex h-7 min-w-0 flex-1 items-center gap-1 px-2"
         >
           <Chevron className="size-3" aria-hidden />
           {title}

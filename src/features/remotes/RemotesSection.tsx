@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
+  GitBranch,
   GitBranchPlus,
   Pencil,
   Plus,
@@ -26,10 +27,12 @@ import {
 import { useOutcomeToast } from "@/features/staging/ops";
 import { commands, type BranchInfo, type OpPreview, type RemoteInfo } from "@/ipc/bindings";
 import { unwrap } from "@/ipc/client";
-import { invalidateAfterOp, useRemotes } from "@/ipc/queries";
+import { invalidateAfterOp, useRefColors, useRemotes } from "@/ipc/queries";
 import { useRemotesUi } from "@/stores/remotes";
 import { useRepoStore } from "@/stores/repo";
 import { branchDnd } from "@/features/operations/dnd/refs";
+import { showGraph } from "@/stores/workspace";
+import { laneVar } from "@/lib/laneColor";
 import { Item, Section } from "@/features/repo/SidebarParts";
 import { fetchRemote } from "./actions";
 import { RemoteFormDialog, type RemoteFormMode } from "./RemoteFormDialog";
@@ -80,6 +83,7 @@ export function RemotesSection({ repoId, branches }: { repoId: string; branches:
   const select = useRepoStore((s) => s.selectCommit);
   const setAddRemoteFor = useRemotesUi((s) => s.setAddRemoteFor);
   const notify = useOutcomeToast(repoId);
+  const refColors = useRefColors(repoId);
   const [form, setForm] = useState<RemoteFormMode | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<{
@@ -90,6 +94,11 @@ export function RemotesSection({ repoId, branches }: { repoId: string; branches:
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
   const groups = groupRemotes(remotes.data ?? [], branches);
+
+  const selectAndShowGraph = (repoId: string, oid: string) => {
+    select(repoId, oid);
+    showGraph(repoId);
+  };
 
   const copy = async (url: string) => {
     try {
@@ -218,36 +227,49 @@ export function RemotesSection({ repoId, branches }: { repoId: string; branches:
               </ContextMenu>
               {expanded && (
                 <ul>
-                  {list.map((b) => (
-                    <ContextMenu key={b.fullName}>
-                      <ContextMenuTrigger asChild>
-                        <Item
-                          nested
-                          dnd={branchDnd(repoId, b, true)}
-                          label={localNameOf(b, remote.name)}
-                          onClick={() => select(repoId, b.oid)}
-                        />
-                      </ContextMenuTrigger>
-                      <ContextMenuContent>
-                        <ContextMenuItem
-                          icon={<GitBranchPlus />}
-                          onSelect={() => void checkout(b, remote.name)}
-                        >
-                          Checkout as local branch
-                        </ContextMenuItem>
-                        <ContextMenuSeparator />
-                        <MergeRebaseEntries repoId={repoId} branch={b} />
-                        <ContextMenuSeparator />
-                        <ContextMenuItem
-                          icon={<Trash2 />}
-                          destructive
-                          onSelect={() => void requestDelete(b, remote.name)}
-                        >
-                          Delete remote branch
-                        </ContextMenuItem>
-                      </ContextMenuContent>
-                    </ContextMenu>
-                  ))}
+                  {list.map((b) => {
+                    const color = refColors.get(b.fullName);
+                    return (
+                      <ContextMenu key={b.fullName}>
+                        <ContextMenuTrigger asChild>
+                          <Item
+                            nested
+                            leading={
+                              <GitBranch
+                                className="size-3.5 shrink-0"
+                                aria-hidden
+                                style={{
+                                  color:
+                                    color !== undefined ? laneVar(color) : "var(--text-fg-subtle)",
+                                }}
+                              />
+                            }
+                            dnd={branchDnd(repoId, b, true)}
+                            label={localNameOf(b, remote.name)}
+                            onClick={() => selectAndShowGraph(repoId, b.oid)}
+                          />
+                        </ContextMenuTrigger>
+                        <ContextMenuContent>
+                          <ContextMenuItem
+                            icon={<GitBranchPlus />}
+                            onSelect={() => void checkout(b, remote.name)}
+                          >
+                            Checkout as local branch
+                          </ContextMenuItem>
+                          <ContextMenuSeparator />
+                          <MergeRebaseEntries repoId={repoId} branch={b} />
+                          <ContextMenuSeparator />
+                          <ContextMenuItem
+                            icon={<Trash2 />}
+                            destructive
+                            onSelect={() => void requestDelete(b, remote.name)}
+                          >
+                            Delete remote branch
+                          </ContextMenuItem>
+                        </ContextMenuContent>
+                      </ContextMenu>
+                    );
+                  })}
                 </ul>
               )}
             </li>
