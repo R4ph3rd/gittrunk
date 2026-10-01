@@ -111,8 +111,14 @@ unsafe fn configure_ca(data_dir: &Path) -> AppResult<()> {
 }
 
 pub fn init(data_dir: &Path) -> AppResult<()> {
-    fs::create_dir_all(data_dir)?;
-    crate::secrets::init(data_dir)?;
+    fs::create_dir_all(data_dir).map_err(|e| {
+        AppError::new(
+            ErrorKind::Io,
+            format!("create data dir {}: {e}", data_dir.display()),
+        )
+    })?;
+    crate::secrets::init(data_dir)
+        .map_err(|e| AppError::new(e.kind, format!("secret store: {}", e.message)))?;
     // libgit2 finds no HOME on Android: keep the global and XDG config in
     // the app's private data dir so `user.name` / `user.email` persist.
     // SAFETY: the option setters mutate process-global libgit2 state; this

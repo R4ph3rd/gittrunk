@@ -39,8 +39,17 @@ pub fn run() {
             #[cfg(embedded_git)]
             {
                 use tauri::Manager;
-                let dir = app.path().app_data_dir()?;
-                mobile::init(&dir)?;
+                // A failed bootstrap must not kill the app before the UI
+                // shows: log it (logcat RustStdoutStderr) and keep going so
+                // read-only browsing still works.
+                match app.path().app_data_dir() {
+                    Ok(dir) => {
+                        if let Err(e) = mobile::init(&dir) {
+                            eprintln!("gittrunk: mobile init failed: {e}");
+                        }
+                    }
+                    Err(e) => eprintln!("gittrunk: no app data dir: {e}"),
+                }
             }
             builder.mount_events(app);
             Ok(())

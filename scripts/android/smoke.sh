@@ -40,7 +40,10 @@ elif [ -z "$(adb shell pidof "$PKG" | tr -d '\r' || true)" ]; then
   echo "app process died after start" >&2
   status=1
 fi
-if grep -E "FATAL EXCEPTION|panicked at|rustls-platform-verifier" smoke/logcat.txt; then
+# Show Rust output and crash context so the job log carries the full message.
+grep -E "RustStdoutStderr|AndroidRuntime" smoke/logcat.txt | tail -n 60 || true
+grep -E "gittrunk: (mobile init failed|no app data dir)" smoke/logcat.txt && status=1
+if grep -E -A8 "FATAL EXCEPTION|panicked at|rustls-platform-verifier" smoke/logcat.txt; then
   echo "crash markers found in logcat" >&2
   status=1
 fi
