@@ -7,9 +7,10 @@ export interface PushDialogState {
   branch: string;
 }
 
-export interface UndoPreviewState {
+export interface OplogPreviewState {
   repoId: string;
   preview: OpPreview;
+  mode: "undo" | "redo";
 }
 
 interface RemotesUiState {
@@ -17,12 +18,13 @@ interface RemotesUiState {
   addRemoteFor: string | null;
   pushDialog: PushDialogState | null;
   forcePushFor: string | null;
-  undoPreview: UndoPreviewState | null;
+  oplogPreview: OplogPreviewState | null;
   setCloneOpen: (open: boolean) => void;
   setAddRemoteFor: (repoId: string | null) => void;
   setPushDialog: (state: PushDialogState | null) => void;
   setForcePushFor: (repoId: string | null) => void;
-  setUndoPreview: (state: UndoPreviewState | null) => void;
+  setOplogPreview: (state: OplogPreviewState | null) => void;
+  setUndoPreview: (state: Omit<OplogPreviewState, "mode"> | null) => void;
   reset: () => void;
 }
 
@@ -31,18 +33,22 @@ export const useRemotesUi = create<RemotesUiState>((set) => ({
   addRemoteFor: null,
   pushDialog: null,
   forcePushFor: null,
-  undoPreview: null,
+  oplogPreview: null,
   setCloneOpen: (cloneOpen) => set({ cloneOpen }),
   setAddRemoteFor: (addRemoteFor) => set({ addRemoteFor }),
   setPushDialog: (pushDialog) => set({ pushDialog }),
   setForcePushFor: (forcePushFor) => set({ forcePushFor }),
-  setUndoPreview: (undoPreview) => set({ undoPreview }),
+  setOplogPreview: (oplogPreview) => set({ oplogPreview }),
+  setUndoPreview: (undoPreview) =>
+    set({
+      oplogPreview: undoPreview ? { ...undoPreview, mode: "undo" } : null,
+    }),
   reset: () =>
     set({
       cloneOpen: false,
       addRemoteFor: null,
       pushDialog: null,
       forcePushFor: null,
-      undoPreview: null,
+      oplogPreview: null,
     }),
 }));

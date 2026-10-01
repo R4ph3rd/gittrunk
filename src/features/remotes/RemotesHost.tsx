@@ -1,24 +1,29 @@
 import {
+  Archive,
   ArrowDown,
   ArrowUp,
   CopyPlus,
-  Download,
+  GitBranchPlus,
   GitCommitHorizontal,
   Layers,
   Plus,
+  Redo2,
   RefreshCw,
   Undo2,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRegisterCommands, type Command, type CommandContext } from "@/app/commands";
+import { usePlatform } from "@/app/platform";
 import { AlertDialog, toast } from "@/design/components";
 import { useOpEvents } from "@/features/ops/ops";
 import { useOpsStore } from "@/features/ops/store";
-import { commands } from "@/ipc/bindings";
+import { commands, type RefsSnapshot } from "@/ipc/bindings";
 import { unwrap } from "@/ipc/client";
 import { invalidateEverything, invalidateWorkingCopy, queryKeys } from "@/ipc/queries";
+import { useDndStore } from "@/stores/dnd";
 import { useRepoStore } from "@/stores/repo";
 import { useRemotesUi } from "@/stores/remotes";
+import { useWorkspaceStore } from "@/stores/workspace";
 import { fetchRemote, pullCurrent, pushBranch } from "./actions";
 import { CloneDialog } from "./CloneDialog";
 import { CredentialPrompt } from "./CredentialPrompt";
@@ -65,11 +70,12 @@ async function stageAll(ctx: CommandContext) {
   }
 }
 
-/** Selects the WIP row, then focuses the commit summary once the staging panel has mounted. */
+/** Selects the WIP row, shows the right panel, selects Changes tab, then focuses the commit summary. */
 function focusCommitBox(ctx: CommandContext) {
   const id = ctx.repoId;
   if (!id) return;
   useRepoStore.getState().selectWip(id);
+  useWorkspaceStore.getState().setRightTab(id, "changes");
   let tries = 0;
   const attempt = () => {
     const input = document.getElementById("commit-summary");
@@ -89,13 +95,48 @@ async function undoPreview(ctx: CommandContext) {
   try {
     const outcome = await unwrap(commands.undo(id, true));
     if (outcome.kind === "preview") {
-      useRemotesUi.getState().setUndoPreview({ repoId: id, preview: outcome.preview });
+      useRemotesUi
+        .getState()
+        .setOplogPreview({ repoId: id, preview: outcome.preview, mode: "undo" });
     } else {
       void invalidateEverything(ctx.queryClient, id);
     }
   } catch (e) {
     toast.error(`Nothing to undo: ${message(e)}`);
   }
+}
+
+async function redoPreview(ctx: CommandContext) {
+  const id = ctx.repoId;
+  if (!id) return;
+  try {
+    const outcome = await unwrap(commands.redo(id, true));
+    if (outcome.kind === "preview") {
+      useRemotesUi
+        .getState()
+        .setOplogPreview({ repoId: id, preview: outcome.preview, mode: "redo" });
+    } else {
+      void invalidateEverything(ctx.queryClient, id);
+    }
+  } catch (e) {
+    toast.error(`Nothing to redo: ${message(e)}`);
+  }
+}
+
+function branchCreate(ctx: CommandContext) {
+  const id = ctx.repoId;
+  if (!id) return;
+  const refsData = ctx.queryClient.getQueryData<RefsSnapshot>(queryKeys.refs(id));
+  if (!refsData) return;
+  const headOid =
+    refsData.head.kind === "branch" || refsData.head.kind === "detached" ? refsData.head.oid : "";
+  const label =
+    refsData.head.kind === "branch"
+      ? refsData.head.name
+      : refsData.head.kind === "detached"
+        ? refsData.head.oid.slice(0, 7)
+        : "";
+  useDndStore.getState().setPrompt({ kind: "branch", repoId: id, startPoint: headOid, label });
 }
 
 function useRemoteCommands() {
@@ -170,7 +211,8 @@ function useRemoteCommands() {
       id: "stash.save",
       title: "Stash changes",
       group: "Working copy",
-      icon: Download,
+      icon: Archive,
+      shortcut: "mod+shift+s",
       keywords: ["shelve", "save"],
       when: hasRepo,
       run: (ctx) => {
@@ -187,22 +229,47 @@ function useRemoteCommands() {
       when: hasRepo,
       run: undoPreview,
     },
+    {
+      id: "history.redo",
+      title: "Redo last undone operation",
+      group: "History",
+      icon: Redo2,
+      shortcut: "mod+shift+z",
+      keywords: ["repeat", "oplog"],
+      when: hasRepo,
+      run: redoPreview,
+    },
+    {
+      id: "branch.create",
+      title: "Create branch at HEAD",
+      group: "Branches",
+      icon: GitBranchPlus,
+      shortcut: "mod+shift+b",
+      keywords: ["new", "branch", "create"],
+      when: hasRepo,
+      run: branchCreate,
+    },
   ];
   useRegisterCommands(list, []);
 }
 
-function UndoDialog() {
+function OplogDialog() {
   const client = useQueryClient();
-  const state = useRemotesUi((s) => s.undoPreview);
-  const setState = useRemotesUi((s) => s.setUndoPreview);
+  const state = useRemotesUi((s) => s.oplogPreview);
+  const setState = useRemotesUi((s) => s.setOplogPreview);
 
   const confirm = async () => {
     if (!state) return;
     try {
-      const outcome = await unwrap(commands.undo(state.repoId, false));
-      toast.success(outcome.kind === "applied" && outcome.message ? outcome.message : "Undone");
+      const isRedo = state.mode === "redo";
+      const outcome = await unwrap(
+        isRedo ? commands.redo(state.repoId, false) : commands.undo(state.repoId, false),
+      );
+      const verb = isRedo ? "Redone" : "Undone";
+      toast.success(outcome.kind === "applied" && outcome.message ? outcome.message : verb);
     } catch (e) {
-      toast.error(`Undo failed: ${message(e)}`);
+      const verb = state.mode === "redo" ? "Redo" : "Undo";
+      toast.error(`${verb} failed: ${message(e)}`);
     } finally {
       void invalidateEverything(client, state.repoId);
     }
@@ -212,8 +279,12 @@ function UndoDialog() {
     <AlertDialog
       open={state !== null}
       onOpenChange={(open) => !open && setState(null)}
-      title="Undo last operation?"
-      description="This reverts the most recent change made through gittrunk."
+      title={state?.mode === "redo" ? "Redo last undone operation?" : "Undo last operation?"}
+      description={
+        state?.mode === "redo"
+          ? "This reapplies the most recent change that was undone through gittrunk."
+          : "This reverts the most recent change made through gittrunk."
+      }
       preview={
         state ? (
           <div className="flex flex-col gap-2">
@@ -226,7 +297,7 @@ function UndoDialog() {
           </div>
         ) : null
       }
-      confirmLabel="Undo"
+      confirmLabel={state?.mode === "redo" ? "Redo" : "Undo"}
       destructive
       onConfirm={() => void confirm()}
     />
@@ -268,7 +339,7 @@ export function RemotesHost() {
       <CloneDialog />
       <PushDialog />
       <ForcePushDialog />
-      <UndoDialog />
+      <OplogDialog />
       {addRemoteFor && (
         <RemoteFormDialog
           repoId={addRemoteFor}
