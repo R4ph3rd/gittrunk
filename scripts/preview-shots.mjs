@@ -60,7 +60,9 @@ const shots = [
     },
   },
   { name: "desktop-dark-changes-tree", q: "theme=dark&right=changes&tree=1", tree: true },
-  { name: "desktop-dark-diff-center", q: "theme=dark&select=2&center=diff" },
+  // Row 11 carries fix/scroll + origin/fix/scroll on a non-accent lane: lane-colored chips in
+  // the commit details next to the diff in the center.
+  { name: "desktop-dark-diff-center", q: "theme=dark&select=11&center=diff" },
   { name: "desktop-dark-worktree-diff", q: "theme=dark&right=changes&center=worktree" },
   { name: "desktop-dark-issue", q: "theme=dark&center=issue" },
   {
@@ -80,6 +82,8 @@ const shots = [
     },
   },
   { name: "desktop-light-issues", q: "theme=light&center=issues" },
+  // An Android tablet: regular layout, read-only (no Undo/Push/Branch/Stash, no Changes tab).
+  { name: "desktop-dark-readonly", q: `theme=dark&select=0&${ANDROID}` },
   { name: "compact-history", q: ANDROID, size: COMPACT },
   {
     name: "compact-issues",
