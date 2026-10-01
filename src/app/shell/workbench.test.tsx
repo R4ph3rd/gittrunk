@@ -12,12 +12,20 @@ import {
   resetStore,
 } from "@/app/testing";
 import { ANDROID_PLATFORM, DESKTOP_PLATFORM } from "@/app/platform";
+import { forgeReady, makeIssue } from "@/features/forge/testing";
 import { LAYOUT_STORAGE_KEY } from "@/stores/layout";
 import { openIssues, useWorkspaceStore } from "@/stores/workspace";
 
 vi.mock("@/ipc/bindings", async () => (await import("@/app/mockBindings")).bindingsMock());
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(() => Promise.resolve("/work/demo")) }));
 vi.mock("sonner", async () => (await import("@/app/mockBindings")).sonnerMock());
+// The shell owns the panel, not the terminal: xterm needs a real canvas and matchMedia
+// (covered by src/features/terminal/terminal.test.tsx), so stand in for it here.
+vi.mock("@/features/terminal/TerminalPanel", () => ({
+  TerminalPanel: ({ repoId, cwd }: { repoId: string; cwd: string }) => (
+    <div data-testid="terminal-panel" data-repo={repoId} data-cwd={cwd} />
+  ),
+}));
 
 installDomShims();
 
@@ -197,11 +205,18 @@ describe("center views", () => {
   });
 
   it("renders the forge main view for issues with its header", async () => {
-    await backend();
-    await openRepo();
+    forgeReady(await backend(), { issues: [makeIssue(7, { title: "Crash on start" })] });
+    const user = await openRepo();
     act(() => openIssues("r1"));
     expect(await screen.findByTestId("forge-main-view")).toHaveAttribute("data-view", "issues");
-    expect(within(screen.getByTestId("center-area")).getByText("Issues")).toBeInTheDocument();
+    const center = screen.getByTestId("center-area");
+    expect(within(center).getByText("Issues", { selector: "span" })).toBeInTheDocument();
+    expect(await within(center).findByText("Crash on start")).toBeInTheDocument();
+    expect(
+      screen.getByRole("grid", { name: "Commit graph", hidden: true }).closest("[hidden]"),
+    ).not.toBeNull();
+    await user.click(screen.getByRole("button", { name: "Back to graph" }));
+    await waitFor(() => expect(screen.queryByTestId("forge-main-view")).toBeNull());
   });
 });
 
