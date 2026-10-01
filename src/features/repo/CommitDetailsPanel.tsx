@@ -26,9 +26,10 @@ function Person({ label, sig }: { label: string; sig: Signature }) {
     <div className="flex items-start gap-2 text-sm">
       <span className="w-20 shrink-0 text-fg-subtle">{label}</span>
       <Avatar name={sig.name} src={src} size={28} />
-      <span className="min-w-0">
+      <span className="min-w-0 flex-1">
         <span className="truncate">{sig.name}</span>{" "}
-        <span className="text-fg-muted">&lt;{sig.email}&gt;</span>
+        {/* Long noreply addresses wrap instead of running past the panel edge. */}
+        <span className="break-all text-fg-muted">&lt;{sig.email}&gt;</span>
         <div className="text-xs text-fg-subtle">{absoluteDate(sig.time)}</div>
       </span>
     </div>
