@@ -22,6 +22,7 @@ import type { CommitOrder, PullStrategy, ThemePreference } from "@/ipc/bindings"
 import { useRepoStore } from "@/stores/repo";
 import { updateSettings, useSettings, useSettingsStore, type SectionId } from "@/stores/settings";
 import { usePlatform } from "@/app/platform";
+import { Integrations } from "@/features/forge/Integrations";
 import { GitIdentityForm } from "./GitIdentityForm";
 import { KeyboardSection } from "./KeyboardSection";
 
@@ -287,6 +288,7 @@ const SECTIONS: { id: SectionId; label: string }[] = [
   { id: "git", label: "Git" },
   { id: "keyboard", label: "Keyboard" },
   { id: "ai", label: "AI" },
+  { id: "integrations", label: "Integrations" },
   { id: "about", label: "About" },
 ];
 
@@ -335,6 +337,7 @@ export function SettingsDialog() {
             {active === "git" ? <Git /> : null}
             {active === "keyboard" ? <KeyboardSection /> : null}
             {active === "ai" ? <Ai /> : null}
+            {active === "integrations" ? <Integrations /> : null}
             {active === "about" ? <About /> : null}
           </div>
         </div>

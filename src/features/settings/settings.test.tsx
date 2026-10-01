@@ -20,6 +20,7 @@ import {
   useSettingsStore,
 } from "@/stores/settings";
 import { SettingsHost } from "./SettingsHost";
+import { SettingsPage } from "./SettingsPage";
 import { installSettingsBackend } from "./testing";
 
 vi.mock("@/ipc/bindings", async () => (await import("./testing")).settingsBindingsMock());
@@ -27,6 +28,10 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(() => Promise.resolve("/usr/bin/git2")),
 }));
 vi.mock("sonner", async () => (await import("@/app/mockBindings")).sonnerMock());
+
+vi.mock("@/app/layout/ShellAppBar", () => ({
+  ShellAppBar: ({ title }: { title?: string }) => <h1>{title}</h1>,
+}));
 
 installDomShims();
 Element.prototype.scrollIntoView ??= () => {};
@@ -333,5 +338,46 @@ describe("keyboard recorder", () => {
     await user.click(within(dialog).getByRole("button", { name: "Reset shortcut for Refresh" }));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("bad keys"));
     expect(useCommandStore.getState().shortcutOverrides["repo.refresh"]).toBe("mod+u");
+  });
+});
+
+describe("integrations section", () => {
+  const mockForge = () =>
+    (commands.forgeTokenSource as ReturnType<typeof vi.fn>).mockImplementation(() => ok("none"));
+
+  it("is offered between AI and About in the dialog", async () => {
+    const user = userEvent.setup();
+    mockForge();
+    setup();
+    const dialog = await openDialog(user);
+    const labels = within(within(dialog).getByRole("navigation", { name: "Settings sections" }))
+      .getAllByRole("button")
+      .map((b) => b.textContent);
+    expect(labels.indexOf("Integrations")).toBe(labels.indexOf("About") - 1);
+    await user.click(within(dialog).getByRole("button", { name: "Integrations" }));
+    expect(
+      await within(dialog).findByText("No token: public repositories only, read-only"),
+    ).toBeInTheDocument();
+  });
+
+  it("opens straight on Integrations with openDialog", async () => {
+    mockForge();
+    setup();
+    act(() => useSettingsStore.getState().openDialog("integrations"));
+    const dialog = await screen.findByRole("dialog", { name: "Settings" });
+    expect(within(dialog).getByRole("radiogroup", { name: "Avatars" })).toBeInTheDocument();
+  });
+
+  it("is a page on compact layouts", async () => {
+    mockForge();
+    installSettingsBackend(commands as unknown as Record<string, unknown>);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <SettingsPage repoId="r1" route={{ name: "settings", section: "integrations" }} />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByRole("region", { name: "Integrations" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Personal access token")).toBeInTheDocument();
   });
 });

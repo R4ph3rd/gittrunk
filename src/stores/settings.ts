@@ -4,7 +4,7 @@ import { setShortcutOverrides } from "@/app/commands/registry";
 import { commands, type AppSettings, type Keybinding } from "@/ipc/bindings";
 import { unwrap } from "@/ipc/client";
 
-export type SectionId = "general" | "git" | "keyboard" | "ai" | "about";
+export type SectionId = "general" | "git" | "keyboard" | "ai" | "integrations" | "about";
 
 /** Used until the backend answers, and by getters when settings failed to load. */
 export const DEFAULT_SETTINGS: AppSettings = {

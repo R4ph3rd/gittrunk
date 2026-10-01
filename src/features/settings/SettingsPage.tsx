@@ -2,6 +2,7 @@ import { useCommandStore } from "@/app/commands";
 import { ShellAppBar } from "@/app/layout/ShellAppBar";
 import type { RouteScreenProps } from "@/app/layout/registry";
 import { ListRow } from "@/design/components";
+import { Integrations } from "@/features/forge/Integrations";
 import { useNav } from "@/stores/nav";
 import { AI_SETTINGS_COMMAND, Ai, General, Git } from "./SettingsDialog";
 
@@ -21,7 +22,9 @@ const LABELS: Record<Section, string> = {
 export function SettingsPage({ repoId, route }: RouteScreenProps<"settings">) {
   const nav = useNav();
   const hasAi = useCommandStore((s) => AI_SETTINGS_COMMAND in s.commands);
-  const sections = (["general", "git", "ai"] as const).filter((s) => s !== "ai" || hasAi);
+  const sections = (["general", "git", "ai", "integrations"] as const).filter(
+    (s) => s !== "ai" || hasAi,
+  );
   const section = route.section;
 
   if (!section) {
@@ -56,6 +59,7 @@ export function SettingsPage({ repoId, route }: RouteScreenProps<"settings">) {
         {section === "general" ? <General /> : null}
         {section === "git" ? <Git /> : null}
         {section === "ai" ? <Ai /> : null}
+        {section === "integrations" ? <Integrations /> : null}
       </div>
     </div>
   );
