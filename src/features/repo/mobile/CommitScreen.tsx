@@ -5,6 +5,7 @@ import { ShellAppBar } from "@/app/layout/ShellAppBar";
 import { usePlatform } from "@/app/platform";
 import { Button, IconButton, ListRow } from "@/design/components";
 import { AiSummaryButton } from "@/features/ai";
+import { CommitComments } from "@/features/forge/CommitComments";
 import { absoluteDate, relativeDate } from "@/features/graph/format";
 import { RefBadge } from "@/features/graph/GraphRowView";
 import { openActionMenu } from "@/features/operations/actions/openMenu";
@@ -153,6 +154,12 @@ export function CommitScreen({ repoId, route }: RouteScreenProps<"commit">) {
                 </li>
               ))}
             </ul>
+            <section aria-label="Comments" className="border-t border-border p-3">
+              <h3 className="pb-2 text-xs font-medium uppercase tracking-wide text-fg-subtle">
+                Comments
+              </h3>
+              <CommitComments repoId={repoId} oid={route.oid} />
+            </section>
           </>
         )}
       </div>
