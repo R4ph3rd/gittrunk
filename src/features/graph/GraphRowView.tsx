@@ -13,6 +13,10 @@ import { REFS_COLUMN_WIDTH, ROW_HEIGHT } from "./layout";
 import { RefBadge } from "./RefBadge";
 
 const MAX_DESKTOP_BADGES = 2;
+/** Refs cell geometry (px): right padding (`pr-1`), gap between chips (`gap-1`), `min-w-10`. */
+const CELL_PADDING = 4;
+const CHIP_GAP = 4;
+const MIN_CHIP = 40;
 
 export { RefBadge };
 
@@ -54,11 +58,14 @@ function GraphRefBadge({
   row,
   label,
   onMenu,
+  maxWidth,
 }: {
   repoId: string;
   row: GraphRow;
   label: RefLabel;
   onMenu: OpenMenu;
+  /** Fixed cap for the first chip of a crowded row; the other chips shrink instead. */
+  maxWidth?: number;
 }) {
   const source = refSource(label, row.oid);
   const target: DropTarget | undefined =
@@ -76,10 +83,14 @@ function GraphRefBadge({
       {...dragProps}
       color={row.color}
       className={cn(
+        // Chips share the fixed refs column: the first keeps its (capped) width, the others
+        // shrink to an ellipsis instead of overflowing the column's left edge.
+        maxWidth !== undefined ? "shrink-0" : "min-w-10 shrink",
         source && "cursor-grab",
         dndState && dndStateClass[dndState],
         isDragging && "opacity-50",
       )}
+      style={maxWidth !== undefined ? { maxWidth } : undefined}
       onContextMenu={
         source
           ? (e) => {
@@ -216,6 +227,11 @@ function DesktopRow({
   const sorted = useMemo(() => (row ? sortRefs(row.refs) : []), [row]);
   const badges = sorted.slice(0, MAX_DESKTOP_BADGES);
   const hidden = sorted.slice(MAX_DESKTOP_BADGES);
+  // With a second chip, cap the first so the second keeps at least 40px (and "+N" fits).
+  const firstChipMax =
+    badges.length > 1
+      ? REFS_COLUMN_WIDTH - CELL_PADDING - CHIP_GAP - MIN_CHIP - (hidden.length > 0 ? 24 : 0)
+      : undefined;
   const commit = row
     ? ({ kind: "commit", oid: row.oid, shortOid: row.shortOid, index: row.index } as const)
     : undefined;
@@ -252,8 +268,15 @@ function DesktopRow({
             className="flex shrink-0 items-center justify-end gap-1 overflow-hidden pr-1"
             style={{ width: REFS_COLUMN_WIDTH }}
           >
-            {badges.map((l) => (
-              <GraphRefBadge key={l.fullName} repoId={repoId} row={row} label={l} onMenu={onMenu} />
+            {badges.map((l, i) => (
+              <GraphRefBadge
+                key={l.fullName}
+                repoId={repoId}
+                row={row}
+                label={l}
+                onMenu={onMenu}
+                maxWidth={i === 0 ? firstChipMax : undefined}
+              />
             ))}
             {hidden.length > 0 && (
               <span
