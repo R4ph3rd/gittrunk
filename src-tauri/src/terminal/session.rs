@@ -281,7 +281,9 @@ mod tests {
         wait_output(&rx, real.to_str().unwrap());
         t.resize(&id, 100, 30).unwrap();
         t.resize(&id, 0, 0).unwrap();
-        t.write(&id, "exit 3\n").unwrap();
+        // `exec` so a login shell's ~/.bash_logout (Ubuntu runs clear_console,
+        // which fails in a pty) cannot replace the exit status.
+        t.write(&id, "exec sh -c 'exit 3'\n").unwrap();
         assert_eq!(wait_exit(&rx), Some(3));
         wait_count(&t, 0);
         assert_eq!(t.write(&id, "x").unwrap_err().kind, ErrorKind::InvalidInput);
