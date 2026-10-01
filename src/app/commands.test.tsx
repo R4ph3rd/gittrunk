@@ -179,15 +179,15 @@ describe("shortcut overrides", () => {
   it("applies overrides to the matcher and the help display live", async () => {
     const user = userEvent.setup();
     const run = vi.fn();
-    setup([{ id: "t.a", title: "Alpha", group: "Test", shortcut: "mod+j", run }]);
+    setup([{ id: "t.a", title: "Alpha", group: "Test", shortcut: "mod+y", run }]);
     act(() => setShortcutOverrides({ "t.a": "mod+u" }));
-    await user.keyboard(ctrl("j"));
+    await user.keyboard(ctrl("y"));
     expect(run).not.toHaveBeenCalled();
     await user.keyboard(ctrl("u"));
     expect(run).toHaveBeenCalledTimes(1);
     await user.keyboard("?");
     expect(await screen.findByText("Ctrl+U")).toBeInTheDocument();
-    expect(screen.queryByText("Ctrl+J")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ctrl+Y")).not.toBeInTheDocument();
     act(() => setShortcutOverrides({ "t.a": null }));
     await user.keyboard("{Escape}");
     await user.keyboard(ctrl("u"));
