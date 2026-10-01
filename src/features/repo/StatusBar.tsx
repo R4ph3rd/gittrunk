@@ -27,7 +27,7 @@ export function StatusBar() {
         : head.name;
 
   return (
-    <footer className="flex h-6 shrink-0 items-center gap-4 border-t border-border bg-bg-subtle px-3 font-mono text-xs text-fg-subtle">
+    <footer className="flex h-6 shrink-0 items-center gap-4 border-t border-border bg-panel-header px-3 font-mono text-xs text-fg-subtle">
       {repo && headText && <span className="text-fg-muted">{headText}</span>}
       {repo && <RepoStatus repoId={repo.id} />}
       <OpIndicator repoId={repo?.id ?? null} />

@@ -5,6 +5,10 @@ import {
   FolderOpen,
   Keyboard,
   Moon,
+  PanelBottom,
+  PanelLeft,
+  PanelRight,
+  LayoutGrid,
   RefreshCw,
   Search,
   X,
@@ -13,7 +17,10 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { commands as backend } from "@/ipc/bindings";
 import { unwrap } from "@/ipc/client";
 import { queryKeys } from "@/ipc/queries";
+import { usePlatform } from "@/app/platform";
+import { useLayoutStore } from "@/stores/layout";
 import { useRepoStore } from "@/stores/repo";
+import { showGraph, useWorkspaceStore } from "@/stores/workspace";
 import { useTheme } from "@/design/theme";
 import { useRegisterCommands, type Command, type CommandContext } from "./registry";
 
@@ -35,6 +42,7 @@ async function closeActiveRepo(ctx: CommandContext) {
   const id = ctx.repoId;
   if (!id) return;
   useRepoStore.getState().removeRepo(id);
+  useWorkspaceStore.getState().forget(id);
   ctx.queryClient.removeQueries({ queryKey: queryKeys.repo(id) });
   await backend.repoClose(id);
 }
@@ -77,6 +85,7 @@ export function useBuiltinCommands() {
   const theme = useOptionalTheme();
   const resolved = theme?.resolvedTheme;
   const setTheme = theme?.setTheme;
+  const { supportsTerminal } = usePlatform();
 
   const list: Command[] = [
     {
@@ -149,6 +158,51 @@ export function useBuiltinCommands() {
       when: hasRepo,
       run: goToHead,
     },
+    {
+      id: "view.toggleSidebar",
+      title: "Toggle sidebar",
+      group: "View",
+      icon: PanelLeft,
+      shortcut: "mod+b",
+      keywords: ["refs", "branches", "panel"],
+      when: hasRepo,
+      run: () => useLayoutStore.getState().toggle("sidebar"),
+    },
+    ...(supportsTerminal
+      ? [
+          {
+            id: "view.toggleTerminal",
+            title: "Toggle terminal",
+            group: "View",
+            icon: PanelBottom,
+            shortcut: "mod+j",
+            keywords: ["shell", "console", "panel"],
+            when: hasRepo,
+            run: () => useLayoutStore.getState().toggle("bottom"),
+          } satisfies Command,
+        ]
+      : []),
+    {
+      id: "view.toggleRightPanel",
+      title: "Toggle changes panel",
+      group: "View",
+      icon: PanelRight,
+      shortcut: "mod+alt+b",
+      keywords: ["commit", "details", "panel"],
+      when: hasRepo,
+      run: () => useLayoutStore.getState().toggle("right"),
+    },
+    {
+      id: "view.showGraph",
+      title: "Show graph",
+      group: "View",
+      icon: LayoutGrid,
+      keywords: ["back", "close diff", "center"],
+      when: hasRepo,
+      run: (ctx) => {
+        if (ctx.repoId) showGraph(ctx.repoId);
+      },
+    },
     ...(setTheme
       ? [
           {
@@ -172,5 +226,5 @@ export function useBuiltinCommands() {
     },
   ];
 
-  useRegisterCommands(list, [resolved, setTheme]);
+  useRegisterCommands(list, [resolved, setTheme, supportsTerminal]);
 }

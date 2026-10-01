@@ -1,27 +1,19 @@
-import { lazy, Suspense, useState } from "react";
 import { Archive, CheckCircle2 } from "lucide-react";
-import {
-  Button,
-  EmptyState,
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-  Spinner,
-} from "@/design/components";
+import { Button, EmptyState, Spinner } from "@/design/components";
 import { useStatus } from "@/ipc/queries";
 import { useRepoStore } from "@/stores/repo";
+import { openWorktreeDiff, useCenterView } from "@/stores/workspace";
 import { CommitBox } from "./CommitBox";
 import { FileList, type OpenFile } from "./FileList";
 import { effectiveOpen } from "./effectiveOpen";
 
-// The diff library (with syntax highlighting) is large: load it when a diff is first opened.
-const DiffViewer = lazy(() => import("./diff/DiffViewer").then((m) => ({ default: m.DiffViewer })));
-
-/** Right-hand panel while the WIP row is selected: file lists, diff viewer and commit box. */
+/** Changes tab of the right panel: file lists and commit box; diffs open in the center. */
 export function StagingPanel({ repoId }: { repoId: string }) {
   const status = useStatus(repoId);
   const setStashDialog = useRepoStore((s) => s.setStashDialog);
-  const [rawOpen, setOpen] = useState<OpenFile | null>(null);
+  const view = useCenterView(repoId);
+  const rawOpen: OpenFile | null =
+    view.kind === "worktreeDiff" ? { path: view.path, staged: view.staged } : null;
 
   const data = status.data;
   const open = data ? effectiveOpen(rawOpen, data) : null;
@@ -72,35 +64,12 @@ export function StagingPanel({ repoId }: { repoId: string }) {
       )}
       {data && changes > 0 && (
         <div className="flex min-h-0 flex-1 flex-col">
-          {/* One stable tree so the file list keeps its selection while a diff opens or closes. */}
-          <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
-            <ResizablePanel id="files" minSize="15%">
-              <div className="flex h-full min-h-0 flex-col">
-                <FileList repoId={repoId} status={data} open={open} onOpen={setOpen} />
-              </div>
-            </ResizablePanel>
-            {open && (
-              <>
-                <ResizableHandle aria-label="Resize diff" />
-                <ResizablePanel id="diff" defaultSize="65%" minSize="20%">
-                  <Suspense
-                    fallback={
-                      <div className="flex justify-center p-4">
-                        <Spinner />
-                      </div>
-                    }
-                  >
-                    <DiffViewer
-                      key={`${open.staged ? "s" : "u"}:${open.path}`}
-                      repoId={repoId}
-                      path={open.path}
-                      staged={open.staged}
-                    />
-                  </Suspense>
-                </ResizablePanel>
-              </>
-            )}
-          </ResizablePanelGroup>
+          <FileList
+            repoId={repoId}
+            status={data}
+            open={open}
+            onOpen={(f) => openWorktreeDiff(repoId, f.path, f.staged)}
+          />
         </div>
       )}
       <CommitBox repoId={repoId} stagedCount={data?.staged.length ?? 0} />

@@ -6,6 +6,7 @@ import { queryKeys } from "@/ipc/queries";
 import { unwrap } from "@/ipc/client";
 import { useNavStore } from "@/stores/nav";
 import { useRepoStore } from "@/stores/repo";
+import { useWorkspaceStore } from "@/stores/workspace";
 
 /** Opens a repository by path; failures (e.g. `notARepo`) land in the store as an inline error. */
 export function useOpenRepo() {
@@ -41,6 +42,7 @@ export function useCloseRepo() {
     async (id: string) => {
       removeRepo(id);
       useNavStore.getState().forget(id);
+      useWorkspaceStore.getState().forget(id);
       client.removeQueries({ queryKey: queryKeys.repo(id) });
       await commands.repoClose(id);
     },

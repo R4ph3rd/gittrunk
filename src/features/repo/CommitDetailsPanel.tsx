@@ -1,6 +1,6 @@
-import { useState } from "react";
 import { FileClock, ScrollText } from "lucide-react";
 import {
+  Avatar,
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
@@ -14,15 +14,18 @@ import { RefBadge } from "@/features/graph/GraphRowView";
 import { absoluteDate } from "@/features/graph/format";
 import { usePlatform } from "@/app/platform";
 import type { Signature } from "@/ipc/bindings";
-import { useCommitDetails } from "@/ipc/queries";
+import { useAvatar, useCommitDetails } from "@/ipc/queries";
 import { cn } from "@/lib/cn";
 import { selectedOidOf, useRepoStore } from "@/stores/repo";
-import { FileDiffView } from "./FileDiffView";
+import { openCommitDiff, showGraph, useCenterView } from "@/stores/workspace";
+import { CommitComments } from "@/features/forge/CommitComments";
 
 function Person({ label, sig }: { label: string; sig: Signature }) {
+  const src = useAvatar({ kind: "email", email: sig.email });
   return (
-    <div className="flex gap-2 text-sm">
+    <div className="flex items-start gap-2 text-sm">
       <span className="w-20 shrink-0 text-fg-subtle">{label}</span>
+      <Avatar name={sig.name} src={src} size={28} />
       <span className="min-w-0">
         <span className="truncate">{sig.name}</span>{" "}
         <span className="text-fg-muted">&lt;{sig.email}&gt;</span>
@@ -37,8 +40,8 @@ export function CommitDetailsPanel({ repoId }: { repoId: string }) {
   const oid = useRepoStore((s) => selectedOidOf(s.selection[repoId]));
   const select = useRepoStore((s) => s.selectCommit);
   const details = useCommitDetails(repoId, oid);
-  const [fileSel, setFileSel] = useState<{ oid: string; path: string } | null>(null);
-  const filePath = fileSel && fileSel.oid === oid ? fileSel.path : null;
+  const view = useCenterView(repoId);
+  const filePath = view.kind === "commitDiff" && view.oid === oid ? view.path : null;
 
   return (
     <aside
@@ -87,7 +90,10 @@ export function CommitDetailsPanel({ repoId }: { repoId: string }) {
                     <button
                       key={p}
                       type="button"
-                      onClick={() => select(repoId, p)}
+                      onClick={() => {
+                        select(repoId, p);
+                        showGraph(repoId);
+                      }}
                       className="font-mono text-xs text-accent hover:underline"
                     >
                       {p.slice(0, 7)}
@@ -101,10 +107,7 @@ export function CommitDetailsPanel({ repoId }: { repoId: string }) {
             <h3 className="px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-fg-subtle">
               {details.data.files.length} changed files
             </h3>
-            <ul
-              aria-label="Changed files"
-              className={cn("overflow-auto", filePath ? "max-h-[35%] shrink-0" : "flex-1")}
-            >
+            <ul aria-label="Changed files" className="min-h-0 flex-1 overflow-auto">
               {details.data.files.map((f) => (
                 <li key={f.path} className="group relative">
                   <ContextMenu>
@@ -112,7 +115,7 @@ export function CommitDetailsPanel({ repoId }: { repoId: string }) {
                       <button
                         type="button"
                         aria-pressed={f.path === filePath}
-                        onClick={() => setFileSel({ oid, path: f.path })}
+                        onClick={() => openCommitDiff(repoId, oid, f.path)}
                         className={cn(
                           "flex h-6 w-full items-center gap-2 px-3 text-left text-sm hover:bg-surface-hover",
                           f.path === filePath && "bg-accent-muted",
@@ -172,12 +175,8 @@ export function CommitDetailsPanel({ repoId }: { repoId: string }) {
                 </li>
               ))}
             </ul>
-            {filePath && oid && (
-              <div className="min-h-0 flex-1 border-t border-border">
-                <FileDiffView repoId={repoId} oid={oid} path={filePath} />
-              </div>
-            )}
           </div>
+          <CommitComments repoId={repoId} oid={oid} />
         </>
       )}
     </aside>
