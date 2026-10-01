@@ -47,7 +47,7 @@ pub async fn op_cancel(
     Ok(())
 }
 
-/// Undo/redo availability for the toolbar.
+// Undo/redo availability for the toolbar.
 #[tauri::command]
 #[specta::specta]
 pub async fn oplog_state(
