@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
-import { FileDiff, GitBranch, GitCommitVertical, Menu } from "lucide-react";
+import { CircleDot, FileDiff, GitBranch, GitCommitVertical, Menu } from "lucide-react";
 import { AiHost, suggestConflictResolution } from "@/features/ai";
-import { BottomNav, EmptyState, NavRail, type NavItem } from "@/design/components";
+import { BottomNav, NavRail, type NavItem } from "@/design/components";
 import { GraphView } from "@/features/graph/GraphView";
 import { useWipCount } from "@/features/graph/useWipCount";
 import { ConflictSuggestProvider } from "@/features/operations/conflicts/suggest";
 import { OperationsProvider } from "@/features/operations/dnd/OperationsProvider";
 import { OperationsHost } from "@/features/operations/OperationsHost";
+import { forgeScreens } from "@/features/forge/mobile/contrib";
 import { RemotesHost } from "@/features/remotes/RemotesHost";
 import { RefsSidebar } from "@/features/repo/RefsSidebar";
 import { repoScreens } from "@/features/repo/mobile/contrib";
@@ -16,6 +17,7 @@ import { SettingsPage } from "@/features/settings/SettingsPage";
 import { StagingPanel } from "@/features/staging/StagingPanel";
 import { stagingScreens } from "@/features/staging/mobile/contrib";
 import { StashDialog } from "@/features/stash/StashDialog";
+import { usePlatform } from "@/app/platform";
 import { useAiEnabled, useRepoEvents } from "@/ipc/queries";
 import { NO_REPO, useNav, useNavStore, type RouteName, type TabId } from "@/stores/nav";
 import { useRepoStore } from "@/stores/repo";
@@ -50,8 +52,9 @@ const shellScreens: ScreenContribution = {
 const useRepoBadges = repoScreens.useTabBadges ?? useNoBadges;
 const useStagingBadges = stagingScreens.useTabBadges ?? useNoBadges;
 const useShellBadges = shellScreens.useTabBadges ?? useNoBadges;
+const useForgeBadges = forgeScreens.useTabBadges ?? useNoBadges;
 
-const CONTRIBUTIONS = [repoScreens, stagingScreens, shellScreens];
+const CONTRIBUTIONS = [repoScreens, stagingScreens, forgeScreens, shellScreens];
 const TAB_SCREENS: Partial<Record<TabId, ComponentType<TabScreenProps>>> = Object.assign(
   {},
   ...CONTRIBUTIONS.map((c) => c.tabs ?? {}),
@@ -101,12 +104,11 @@ function BranchesFallback({ repoId }: TabScreenProps) {
   );
 }
 
-/** Replaced by the forge issues screen (UI-MOBILE). */
-function IssuesPlaceholder({ repoId }: TabScreenProps) {
+/** Shown when no forge screen is contributed. */
+function IssuesFallback({ repoId }: TabScreenProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ShellAppBar repoId={repoId} />
-      <EmptyState title="Issues" />
     </div>
   );
 }
@@ -115,7 +117,7 @@ const FALLBACK_TABS: Record<TabId, ComponentType<TabScreenProps>> = {
   history: HistoryFallback,
   changes: ChangesFallback,
   branches: BranchesFallback,
-  issues: IssuesPlaceholder,
+  issues: IssuesFallback,
   more: MoreScreen,
 };
 
@@ -123,8 +125,18 @@ const NAV_ITEMS: { id: TabId; label: string; icon: NavItem["icon"] }[] = [
   { id: "history", label: "History", icon: <GitCommitVertical /> },
   { id: "changes", label: "Changes", icon: <FileDiff /> },
   { id: "branches", label: "Branches", icon: <GitBranch /> },
+  { id: "issues", label: "Issues", icon: <CircleDot /> },
   { id: "more", label: "More", icon: <Menu /> },
 ];
+
+/** Routes that need write access; read-only platforms show "not available" instead. */
+const WRITE_ROUTES: ReadonlySet<RouteName> = new Set<RouteName>([
+  "compose",
+  "worktreeDiff",
+  "conflicts",
+  "conflict",
+  "stash",
+]);
 
 function isTextInput(el: Element | null): boolean {
   if (!el) return false;
@@ -167,8 +179,12 @@ function isScroller(el: HTMLElement): boolean {
 
 function RouteScreen({ repoId }: { repoId: string }) {
   const nav = useNav();
+  const { readOnly } = usePlatform();
   const route = nav.top;
   if (!route) return null;
+  if (readOnly && WRITE_ROUTES.has(route.name)) {
+    return <NotAvailableScreen repoId={repoId} name={route.name} />;
+  }
   const Screen = ROUTE_SCREENS[route.name] as
     ComponentType<RouteScreenProps<RouteName>> | undefined;
   if (!Screen) return <NotAvailableScreen repoId={repoId} name={route.name} />;
@@ -179,6 +195,7 @@ function RouteScreen({ repoId }: { repoId: string }) {
 function RepoShell({ repoId }: { repoId: string }) {
   const { isShort } = useLayout();
   const nav = useNav();
+  const { readOnly } = usePlatform();
   const mainRef = useRef<HTMLElement>(null);
   const typing = useTextFocused();
   useRepoEvents(repoId);
@@ -195,9 +212,13 @@ function RepoShell({ repoId }: { repoId: string }) {
   const badges = {
     ...useShellBadges(repoId),
     ...useStagingBadges(repoId),
+    ...useForgeBadges(repoId),
     ...useRepoBadges(repoId),
   };
-  const items: NavItem[] = NAV_ITEMS.map((i) => ({ ...i, badge: badges[i.id] }));
+  const items: NavItem[] = NAV_ITEMS.filter((i) => !(readOnly && i.id === "changes")).map((i) => ({
+    ...i,
+    badge: badges[i.id],
+  }));
 
   const onSelect = (id: string) => {
     const tab = id as TabId;
@@ -209,7 +230,9 @@ function RepoShell({ repoId }: { repoId: string }) {
     requestAnimationFrame(() => scrollRootToTop(mainRef.current));
   };
 
-  const TabScreen = TAB_SCREENS[nav.tab] ?? FALLBACK_TABS[nav.tab];
+  // Read-only platforms have no Changes tab: a stored "changes" tab shows History.
+  const tab: TabId = readOnly && nav.tab === "changes" ? "history" : nav.tab;
+  const TabScreen = TAB_SCREENS[tab] ?? FALLBACK_TABS[tab];
   const Nav = isShort ? NavRail : BottomNav;
 
   return (
@@ -217,13 +240,13 @@ function RepoShell({ repoId }: { repoId: string }) {
       <OperationsProvider>
         <div className={isShort ? "flex min-h-0 flex-1 flex-row" : "flex min-h-0 flex-1 flex-col"}>
           {isShort ? (
-            <Nav items={items} activeId={nav.tab} onSelect={onSelect} hidden={typing} />
+            <Nav items={items} activeId={tab} onSelect={onSelect} hidden={typing} />
           ) : null}
           <main ref={mainRef} className="flex min-h-0 min-w-0 flex-1 flex-col">
             {nav.top ? <RouteScreen repoId={repoId} /> : <TabScreen repoId={repoId} />}
           </main>
           {isShort ? null : (
-            <Nav items={items} activeId={nav.tab} onSelect={onSelect} hidden={typing} />
+            <Nav items={items} activeId={tab} onSelect={onSelect} hidden={typing} />
           )}
         </div>
         <StashDialog repoId={repoId} />

@@ -15,6 +15,7 @@ export function MoreScreen({ repoId }: TabScreenProps) {
   const nav = useNav();
   const info = useAppInfo();
   const platform = usePlatform();
+  const { readOnly } = platform;
   const [switcher, setSwitcher] = useState(false);
 
   return (
@@ -24,31 +25,37 @@ export function MoreScreen({ repoId }: TabScreenProps) {
         data-scroll-root=""
         className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain bg-surface"
       >
-        <ListRow
-          title="Stash"
-          leading={<Archive className="size-4" />}
-          chevron
-          onClick={() => nav.push({ name: "stash" })}
-        />
+        {readOnly ? null : (
+          <ListRow
+            title="Stash"
+            leading={<Archive className="size-4" />}
+            chevron
+            onClick={() => nav.push({ name: "stash" })}
+          />
+        )}
         <ListRow
           title="Reflog"
           leading={<History className="size-4" />}
           chevron
           onClick={() => nav.push({ name: "reflog", ref: null })}
         />
-        <ListRow
-          title="Ask AI"
-          leading={<Sparkles className="size-4" />}
-          chevron
-          onClick={() => openAskAi(repoId)}
-        />
-        <ListRow
-          title="Actions"
-          subtitle="Command palette"
-          leading={<TerminalSquare className="size-4" />}
-          chevron
-          onClick={() => useCommandStore.getState().setPaletteOpen(true)}
-        />
+        {readOnly ? null : (
+          <>
+            <ListRow
+              title="Ask AI"
+              leading={<Sparkles className="size-4" />}
+              chevron
+              onClick={() => openAskAi(repoId)}
+            />
+            <ListRow
+              title="Actions"
+              subtitle="Command palette"
+              leading={<TerminalSquare className="size-4" />}
+              chevron
+              onClick={() => useCommandStore.getState().setPaletteOpen(true)}
+            />
+          </>
+        )}
         <ListRow
           title="Repositories"
           leading={<FolderGit2 className="size-4" />}

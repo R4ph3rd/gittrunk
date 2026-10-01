@@ -54,14 +54,14 @@ beforeEach(async () => {
 });
 
 describe("mobile shell (390x844)", () => {
-  it("renders the bottom nav with four tabs and the history fallback, without the desktop panels", async () => {
+  it("renders the bottom nav with five tabs and the history fallback, without the desktop panels", async () => {
     await openDemo();
     const nav = screen.getByRole("navigation", { name: "Primary" });
     expect(
       within(nav)
         .getAllByRole("button")
         .map((b) => b.getAttribute("aria-label")),
-    ).toEqual(["History", "Changes", "Branches", "More"]);
+    ).toEqual(["History", "Changes", "Branches", "Issues", "More"]);
     expect(await screen.findByRole("grid", { name: "Commit graph" })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "References" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tablist", { name: "Open repositories" })).not.toBeInTheDocument();
