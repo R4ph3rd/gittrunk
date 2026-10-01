@@ -247,6 +247,13 @@ export function GraphList({
   useEffect(() => {
     requestDrawRef.current = requestDraw;
   });
+  // Avatar batches resolve asynchronously: once unmounted, their callback must not draw.
+  useEffect(
+    () => () => {
+      requestDrawRef.current = () => {};
+    },
+    [],
+  );
 
   useEffect(() => {
     const scroller = listRef.current;
