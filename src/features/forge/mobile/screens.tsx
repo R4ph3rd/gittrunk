@@ -20,6 +20,7 @@ import { commentsLabel } from "../helpers";
 import { NO_REMOTE_TEXT, UNSUPPORTED_TEXT, useForgeGate } from "../gate";
 import { IssueBody, IssueComposer, NewIssueForm } from "../IssueViews";
 import { ForgeError, StateDot } from "../parts";
+import { PullsList } from "./pullScreens";
 
 function GateMessage({ state }: { state: "noRemote" | "unsupported" }) {
   return (
@@ -40,8 +41,9 @@ export function IssuesScreen({ repoId }: TabScreenProps) {
   const nav = useNav();
   const gate = useForgeGate(repoId);
   const ready = gate.state === "ready";
+  const [show, setShow] = useState<"issues" | "pulls">("issues");
   const [filter, setFilter] = useState<Exclude<IssueStateFilter, "all">>("open");
-  const query = useIssues(repoId, filter, { enabled: ready });
+  const query = useIssues(repoId, filter, { enabled: ready && show === "issues" });
   const issues = query.data?.pages.flatMap((p) => p.items) ?? [];
   const canWrite = gate.state === "ready" && gate.canWrite;
 
@@ -99,14 +101,25 @@ export function IssuesScreen({ repoId }: TabScreenProps) {
         repoId={repoId}
         title="Issues"
         actions={
-          canWrite ? (
+          canWrite && show === "issues" ? (
             <IconButton aria-label="New issue" onClick={() => nav.push({ name: "newIssue" })}>
               <Plus />
             </IconButton>
           ) : null
         }
       >
-        {ready ? (
+        <div className="px-3 pb-2">
+          <SegmentedControl<"issues" | "pulls">
+            aria-label="Show"
+            value={show}
+            onValueChange={setShow}
+            options={[
+              { value: "issues", label: "Issues" },
+              { value: "pulls", label: "Pull requests" },
+            ]}
+          />
+        </div>
+        {ready && show === "issues" ? (
           <div className="px-3 pb-2">
             <SegmentedControl<"open" | "closed">
               aria-label="Issue state"
@@ -120,14 +133,18 @@ export function IssuesScreen({ repoId }: TabScreenProps) {
           </div>
         ) : null}
       </ShellAppBar>
-      <PullToRefresh
-        className="flex-1"
-        disabled={!ready}
-        onRefresh={() => query.refetch()}
-        label="Refreshing issues"
-      >
-        {body}
-      </PullToRefresh>
+      {show === "pulls" ? (
+        <PullsList repoId={repoId} />
+      ) : (
+        <PullToRefresh
+          className="flex-1"
+          disabled={!ready}
+          onRefresh={() => query.refetch()}
+          label="Refreshing issues"
+        >
+          {body}
+        </PullToRefresh>
+      )}
     </Screen>
   );
 }
