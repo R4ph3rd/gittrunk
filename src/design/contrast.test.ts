@@ -361,4 +361,56 @@ describe("WCAG contrast", () => {
       expect(ratio).toBeGreaterThanOrEqual(3);
     });
   });
+
+  describe("backdrop", () => {
+    const blend = (
+      base: [number, number, number],
+      top: [number, number, number],
+      a: number,
+    ): [number, number, number] => [
+      base[0] * (1 - a) + top[0] * a,
+      base[1] * (1 - a) + top[1] * a,
+      base[2] * (1 - a) + top[2] * a,
+    ];
+    /** All three blobs stacked at peak alpha over the base color. */
+    const stacked = (tokens: Record<string, string>, base: string, alphaToken: string) => {
+      const alpha = parseFloat(getToken(tokens, alphaToken));
+      let c: [number, number, number] = resolveColor(getToken(tokens, base), tokens);
+      for (const n of [1, 2, 3]) {
+        c = blend(c, resolveColor(getToken(tokens, `backdrop-${n}`), tokens), alpha);
+      }
+      return c;
+    };
+    const rnd = (c: [number, number, number]): [number, number, number] => [
+      Math.round(c[0]),
+      Math.round(c[1]),
+      Math.round(c[2]),
+    ];
+
+    const themes: [string, Record<string, string>][] = [
+      ["dark", darkTokens],
+      ["light", lightTokens],
+    ];
+    for (const [name, tokens] of themes) {
+      it(`${name}: subtle over --surface keeps text >= 4.5 and lanes >= 3`, () => {
+        const base = rnd(stacked(tokens, "surface", "backdrop-alpha-subtle"));
+        for (const t of ["fg", "fg-muted", "fg-subtle", "accent"]) {
+          const fg = resolveColor(getToken(tokens, t), tokens);
+          expect(getContrast(fg, base), t).toBeGreaterThanOrEqual(4.5);
+        }
+        for (let i = 0; i < 8; i++) {
+          const lane = resolveColor(getToken(tokens, `lane-${i}`), tokens);
+          expect(getContrast(lane, base), `lane-${i}`).toBeGreaterThanOrEqual(3);
+        }
+      });
+
+      it(`${name}: page over --bg keeps fg and fg-muted >= 4.5`, () => {
+        const base = rnd(stacked(tokens, "bg", "backdrop-alpha-page"));
+        for (const t of ["fg", "fg-muted"]) {
+          const fg = resolveColor(getToken(tokens, t), tokens);
+          expect(getContrast(fg, base), t).toBeGreaterThanOrEqual(4.5);
+        }
+      });
+    }
+  });
 });

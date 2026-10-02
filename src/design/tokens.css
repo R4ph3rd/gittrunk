@@ -89,6 +89,15 @@
     radial-gradient(60% 90% at 100% 0%, rgb(255 79 123 / 0.07) 0%, transparent 60%),
     linear-gradient(180deg, #111113 0%, #0c0c0d 100%);
 
+  /* mesh backdrop blobs (bounded by the "backdrop" suite in contrast.test.ts) */
+  --backdrop-1: #ff4f7b;
+  --backdrop-2: #a78bfa;
+  --backdrop-3: #ff8a4c;
+  --backdrop-alpha-subtle: 0.035;
+  --backdrop-alpha-page: 0.12;
+  --backdrop-blur-subtle: 56px;
+  --backdrop-blur-page: 96px;
+
   /* graph lane palette (index = GraphRow.color % 8) */
   --lane-0: #ff4f7b;
   --lane-1: #5cc8ff;
@@ -163,6 +172,14 @@
   --gradient-chrome:
     radial-gradient(60% 90% at 100% 0%, rgb(214 25 90 / 0.06) 0%, transparent 60%),
     linear-gradient(180deg, #f4f4f5 0%, #fafafa 100%);
+
+  --backdrop-1: #d6195a;
+  --backdrop-2: #7c3aed;
+  --backdrop-3: #c2410c;
+  --backdrop-alpha-subtle: 0.02;
+  --backdrop-alpha-page: 0.11;
+  --backdrop-blur-subtle: 56px;
+  --backdrop-blur-page: 96px;
 
   /* shell tokens */
   --tabbar-bg: #e9e9ec;
