@@ -360,11 +360,16 @@ describe("keyboard drag and drop and the confirmation flow", () => {
     const { requestOperation } = await import("../preview/useConfirmedOperation");
     const { ops } = await import("../actions/ops");
     const { QueryClient } = await import("@tanstack/react-query");
-    await requestOperation(
-      new QueryClient(),
-      ops.merge("r1", { source: "feature", into: null, strategy: "auto" }),
-    );
+    // The error toast is also recorded as a notification, which re-renders the
+    // tab strip's Notifications badge: drive the imperative call inside act().
+    await act(async () => {
+      await requestOperation(
+        new QueryClient(),
+        ops.merge("r1", { source: "feature", into: null, strategy: "auto" }),
+      );
+    });
     expect(await screen.findByText(/cannot merge/)).toBeInTheDocument();
     expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.getByRole("button", { name: /^Notifications, \d+ unread$/ })).toBeInTheDocument();
   });
 });
