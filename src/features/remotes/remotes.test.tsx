@@ -75,7 +75,7 @@ async function openRepo() {
   return { user, ...view };
 }
 
-const PULL = /^Pull(?! options)/;
+const PULL = /^Pull(?! options| requests)/;
 const PUSH = /^Push(?! options)/;
 /** Radix menus open on pointerdown, which jsdom does not model; the keyboard path is equivalent. */
 async function openMenu(user: ReturnType<typeof userEvent.setup>, name: string) {
