@@ -5,7 +5,7 @@ use std::process::Command;
 
 use tauri::Manager;
 
-use crate::ipc::error::AppResult;
+use crate::ipc::error::{AppError, AppResult, ErrorKind};
 use crate::ipc::types::{AppInfo, PlatformInfo};
 use crate::platform;
 
@@ -125,9 +125,83 @@ mod tests {
     }
 }
 
+/// Hosts the system browser may be opened on.
+pub const OPEN_URL_HOSTS: &[&str] = &["github.com", "gitlab.com", "bitbucket.org"];
+
+const OPEN_URL_MAX_LEN: usize = 2048;
+
+/// The URL if it is safe to hand to the system browser.
+pub fn validate_open_url(url: &str) -> AppResult<reqwest::Url> {
+    let refuse = || {
+        AppError::new(
+            ErrorKind::InvalidInput,
+            "Only https links to GitHub, GitLab or Bitbucket can be opened",
+        )
+    };
+    if url.len() > OPEN_URL_MAX_LEN {
+        return Err(refuse());
+    }
+    let parsed = reqwest::Url::parse(url).map_err(|_| refuse())?;
+    let host_ok = parsed
+        .host_str()
+        .is_some_and(|h| OPEN_URL_HOSTS.contains(&h.to_ascii_lowercase().as_str()));
+    let port_ok = matches!(parsed.port(), None | Some(443));
+    if parsed.scheme() != "https"
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || !host_ok
+        || !port_ok
+    {
+        return Err(refuse());
+    }
+    Ok(parsed)
+}
+
 /// Opens an https URL of a known forge in the system browser.
 #[tauri::command]
 #[specta::specta]
-pub async fn app_open_url(_app: tauri::AppHandle, _url: String) -> AppResult<()> {
-    Err(crate::ipc::error::AppError::not_implemented("app_open_url"))
+pub async fn app_open_url(app: tauri::AppHandle, url: String) -> AppResult<()> {
+    use tauri_plugin_opener::OpenerExt;
+    let url = validate_open_url(&url)?;
+    app.opener()
+        .open_url(url.as_str(), None::<&str>)
+        .map_err(|_| AppError::new(ErrorKind::Io, "Could not open the link in the browser"))
+}
+
+#[cfg(test)]
+mod open_url_tests {
+    use super::*;
+
+    #[test]
+    fn accepts_forge_links() {
+        for url in [
+            "https://github.com/a/b/pull/1",
+            "https://gitlab.com/-/user_settings/ssh_keys",
+            "https://GitHub.com:443/a",
+            "https://bitbucket.org/x",
+        ] {
+            assert!(validate_open_url(url).is_ok(), "{url}");
+        }
+    }
+
+    #[test]
+    fn rejects_everything_else() {
+        let long = format!("https://github.com/{}", "a".repeat(3000));
+        for url in [
+            "http://github.com",
+            "javascript:alert(1)",
+            "file:///etc/passwd",
+            "https://user:pw@github.com/",
+            "https://github.com.evil.com/",
+            "https://evil.com/?u=https://github.com",
+            "https://api.github.com/",
+            "https://github.com:8443/",
+            "https://127.0.0.1/",
+            "",
+            long.as_str(),
+        ] {
+            let err = validate_open_url(url).unwrap_err();
+            assert_eq!(err.kind, ErrorKind::InvalidInput, "{url}");
+        }
+    }
 }
