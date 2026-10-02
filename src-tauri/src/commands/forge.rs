@@ -3,7 +3,7 @@ use crate::forge::tokens::{self, ForgeTokens, SystemTokens};
 use crate::forge::{self, remote, Forge};
 use crate::git::blocking;
 use crate::git::remote::keychain::Keychain;
-use crate::ipc::error::{AppError, AppResult};
+use crate::ipc::error::{AppError, AppResult, ErrorKind};
 use crate::ipc::types::*;
 
 #[tauri::command]
@@ -163,6 +163,14 @@ pub async fn forge_pull_comment(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn forge_notifications(_host: String) -> AppResult<Vec<ForgeNotification>> {
-    Err(AppError::not_implemented("forge_notifications"))
+pub async fn forge_notifications(host: String) -> AppResult<Vec<ForgeNotification>> {
+    if host != remote::GITHUB_HOST {
+        return Err(AppError::new(
+            ErrorKind::Unsupported,
+            "Notifications are only available for github.com",
+        ));
+    }
+    let token = blocking(move || Ok(tokens::resolve(&SystemTokens, &Keychain, &host).0)).await?;
+    let client = crate::http::client(forge::github::TIMEOUT)?;
+    forge::notifications::list(&client, forge::github::API_BASE, token.as_deref()).await
 }

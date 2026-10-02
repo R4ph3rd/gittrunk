@@ -827,3 +827,147 @@ async fn pull_errors_never_contain_the_token() {
     assert_eq!(err.kind, ErrorKind::AuthFailed);
     assert_no_token(&err);
 }
+
+// -------------------------------------------------------- notifications
+
+fn notification_json(id: &str, kind: &str, url: Option<&str>) -> serde_json::Value {
+    json!({
+        "id": id, "unread": true, "reason": "mention",
+        "updated_at": "2024-01-02T03:04:05Z",
+        "subject": {"title": format!("T{id}"), "type": kind, "url": url},
+        "repository": {"full_name": "octo/repo"}
+    })
+}
+
+fn http_client() -> reqwest::Client {
+    crate::http::client(std::time::Duration::from_secs(5)).unwrap()
+}
+
+#[tokio::test]
+async fn notifications_without_token_make_no_request() {
+    let mut server = Server::new_async().await;
+    let m = server
+        .mock("GET", "/notifications")
+        .match_query(Matcher::Any)
+        .expect(0)
+        .create_async()
+        .await;
+    for token in [None, Some("")] {
+        let err = notifications::list(&http_client(), &server.url(), token)
+            .await
+            .unwrap_err();
+        assert_eq!(err.kind, ErrorKind::AuthRequired);
+    }
+    m.assert_async().await;
+}
+
+#[tokio::test]
+async fn notifications_are_mapped() {
+    let mut server = Server::new_async().await;
+    let api = |p: &str| format!("https://api.github.com/repos/octo/repo/{p}");
+    let m = server
+        .mock("GET", "/notifications")
+        .match_query(Matcher::UrlEncoded("per_page".into(), "50".into()))
+        .match_header("authorization", format!("Bearer {SENTINEL}").as_str())
+        .match_header("accept", "application/vnd.github+json")
+        .with_body(
+            json!([
+                notification_json("1", "PullRequest", Some(&api("pulls/12"))),
+                notification_json("2", "Release", None)
+            ])
+            .to_string(),
+        )
+        .create_async()
+        .await;
+    let list = notifications::list(&http_client(), &server.url(), Some(SENTINEL))
+        .await
+        .unwrap();
+    m.assert_async().await;
+    assert_eq!(list.len(), 2);
+    let n = &list[0];
+    assert_eq!(
+        (n.id.as_str(), n.title.as_str(), n.kind.as_str()),
+        ("1", "T1", "PullRequest")
+    );
+    assert_eq!(
+        (n.reason.as_str(), n.repo.as_str()),
+        ("mention", "octo/repo")
+    );
+    assert!(n.unread);
+    assert_eq!(n.updated_at, 1_704_164_645.0);
+    assert_eq!(
+        n.url.as_deref(),
+        Some("https://github.com/octo/repo/pull/12")
+    );
+    assert_eq!(list[1].url.as_deref(), Some("https://github.com/octo/repo"));
+}
+
+#[tokio::test]
+async fn notifications_error_mapping() {
+    let mut server = Server::new_async().await;
+    for (status, kind, text) in [
+        (401, ErrorKind::AuthFailed, "GitHub rejected the token"),
+        (403, ErrorKind::Unsupported, "classic token"),
+        (500, ErrorKind::Network, "HTTP 500"),
+    ] {
+        let m = server
+            .mock("GET", "/notifications")
+            .match_query(Matcher::Any)
+            .with_status(status)
+            .with_body(json!({"message": "nope"}).to_string())
+            .create_async()
+            .await;
+        let err = notifications::list(&http_client(), &server.url(), Some(SENTINEL))
+            .await
+            .unwrap_err();
+        assert_eq!(err.kind, kind);
+        assert!(err.message.contains(text), "{err:?}");
+        assert_no_token(&err);
+        m.remove_async().await;
+    }
+}
+
+#[test]
+fn notification_web_url_table() {
+    let api = "https://api.github.com/repos/octo/repo";
+    let ghe = "https://ghe.example.com/api/v3/repos/octo/repo";
+    let w = |url: Option<&str>, kind: &str, repo: &str| notifications::web_url(url, kind, repo);
+    let page = Some("https://github.com/octo/repo".to_string());
+    let sha = "0123456789abcdef0123456789abcdef01234567";
+    assert_eq!(
+        w(Some(&format!("{api}/pulls/12")), "PullRequest", "octo/repo").as_deref(),
+        Some("https://github.com/octo/repo/pull/12")
+    );
+    assert_eq!(
+        w(Some(&format!("{ghe}/issues/3")), "Issue", "octo/repo").as_deref(),
+        Some("https://github.com/octo/repo/issues/3")
+    );
+    assert_eq!(
+        w(Some(&format!("{api}/commits/{sha}")), "Commit", "octo/repo").as_deref(),
+        Some(format!("https://github.com/octo/repo/commit/{sha}").as_str())
+    );
+    // Releases, discussions and unknown subjects fall back to the repository page.
+    assert_eq!(
+        w(Some(&format!("{api}/releases/9")), "Release", "octo/repo"),
+        page
+    );
+    assert_eq!(w(None, "Discussion", "octo/repo"), page);
+    assert_eq!(w(Some("https://example.com/x"), "Issue", "octo/repo"), page);
+    // Invalid segments fall back to the repository page.
+    for bad in [
+        format!("{api}/pulls/abc"),
+        format!("{api}/pulls/1x"),
+        format!("{api}/pulls/"),
+        format!("{api}/commits/zzzzzzz"),
+        format!("{api}/commits/abc"),
+        "https://api.github.com/repos/o%2Fx/repo/pulls/1".to_string(),
+        "https://api.github.com/repos/../repo/pulls/1".to_string(),
+        "https://api.github.com/repos/oct o/repo/pulls/1".to_string(),
+    ] {
+        assert_eq!(w(Some(&bad), "PullRequest", "octo/repo"), page, "{bad}");
+    }
+    // A bad repository name yields nothing; the result is always on github.com.
+    assert_eq!(w(None, "Issue", "../evil"), None);
+    assert_eq!(w(None, "Issue", "a/b/c"), None);
+    assert_eq!(w(None, "Issue", ""), None);
+}

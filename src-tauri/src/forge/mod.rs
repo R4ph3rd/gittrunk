@@ -1,6 +1,7 @@
 //! Forge integration (GitHub issues, pull requests, comments, notifications).
 
 pub mod github;
+pub mod notifications;
 pub mod remote;
 pub mod tokens;
 
