@@ -6,8 +6,11 @@ export type CenterView =
   | { kind: "worktreeDiff"; path: string; staged: boolean }
   | { kind: "issues" }
   | { kind: "issue"; number: number }
-  | { kind: "newIssue" };
+  | { kind: "newIssue" }
+  | { kind: "pulls" }
+  | { kind: "pull"; number: number };
 export type ForgeCenterView = Extract<CenterView, { kind: "issues" | "issue" | "newIssue" }>;
+export type PullCenterView = Extract<CenterView, { kind: "pulls" | "pull" }>;
 export type RightTab = "commit" | "changes";
 
 const MAX_STACK = 20;
@@ -92,5 +95,7 @@ export const openWorktreeDiff = (repoId: string, path: string, staged: boolean) 
 export const openIssues = (repoId: string) => open(repoId, { kind: "issues" });
 export const openIssue = (repoId: string, number: number) =>
   open(repoId, { kind: "issue", number });
+export const openPulls = (repoId: string) => open(repoId, { kind: "pulls" });
+export const openPull = (repoId: string, number: number) => open(repoId, { kind: "pull", number });
 export const openNewIssue = (repoId: string) => open(repoId, { kind: "newIssue" });
 export const showGraph = (repoId: string) => useWorkspaceStore.getState().showGraph(repoId);

@@ -126,6 +126,8 @@ describe("graph view", () => {
         graphOrder: "date",
         diffContextLines: 3,
         avatars: "github",
+        backdrop: true,
+        workspaces: [],
       }),
     );
     await openRepo();

@@ -4,7 +4,7 @@ import { setShortcutOverrides } from "@/app/commands/registry";
 import { commands, type AppSettings, type Keybinding } from "@/ipc/bindings";
 import { unwrap } from "@/ipc/client";
 
-export type SectionId = "general" | "git" | "keyboard" | "ai" | "integrations" | "about";
+export type SectionId = "general" | "git" | "keyboard" | "ai" | "integrations" | "ssh" | "about";
 
 /** Used until the backend answers, and by getters when settings failed to load. */
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -15,6 +15,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   graphOrder: "topo",
   diffContextLines: 3,
   avatars: "github",
+  backdrop: true,
+  workspaces: [],
 };
 
 export type UpdateResult = { ok: true } | { ok: false; message: string };

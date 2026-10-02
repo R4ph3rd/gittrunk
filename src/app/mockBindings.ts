@@ -128,6 +128,15 @@ export const names = [
   "terminalWrite",
   "terminalResize",
   "terminalClose",
+  "repoKnown",
+  "repoForget",
+  "appOpenUrl",
+  "forgePulls",
+  "forgePull",
+  "forgePullComment",
+  "forgeNotifications",
+  "sshKeysList",
+  "sshKeyGenerate",
 ] as const;
 
 /** Factory for `vi.mock("@/ipc/bindings", ...)`. */

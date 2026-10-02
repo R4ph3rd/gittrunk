@@ -3,6 +3,8 @@ import {
   openCommitDiff,
   openIssue,
   openIssues,
+  openPull,
+  openPulls,
   openWorktreeDiff,
   showGraph,
   useWorkspaceStore,
@@ -45,6 +47,16 @@ describe("workspace store", () => {
     openIssue("r1", 1);
     openIssue("r1", 1);
     expect(stack()).toHaveLength(1);
+  });
+
+  it("opens the pull request list and a pull request", () => {
+    openPulls("r1");
+    openPull("r1", 7);
+    expect(stack()).toEqual([{ kind: "pulls" }, { kind: "pull", number: 7 }]);
+    openPull("r1", 7);
+    expect(stack()).toHaveLength(2);
+    openPull("r1", 8);
+    expect(stack()[2]).toEqual({ kind: "pull", number: 8 });
   });
 
   it("caps the stack at 20", () => {

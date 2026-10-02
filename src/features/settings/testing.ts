@@ -10,6 +10,8 @@ export const baseSettings: AppSettings = {
   graphOrder: "topo",
   diffContextLines: 3,
   avatars: "github",
+  backdrop: true,
+  workspaces: [],
 };
 
 /** Factory for `vi.mock("@/ipc/bindings", ...)`: the shared mock plus the settings commands. */

@@ -14,7 +14,8 @@ export type Route =
   | { name: "stash" } // UI-B
   | { name: "issue"; number: number } // UI-FORGE
   | { name: "newIssue" } // UI-FORGE
-  | { name: "settings"; section?: "general" | "git" | "ai" | "integrations" }; // UI-A
+  | { name: "pull"; number: number } // UI-PULLS
+  | { name: "settings"; section?: "general" | "git" | "ai" | "integrations" | "ssh" }; // UI-A
 export type RouteName = Route["name"];
 
 export interface RepoNav {

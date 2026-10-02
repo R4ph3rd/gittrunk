@@ -17,7 +17,9 @@ import {
   type IssueCreateRequest,
   type IssueStateFilter,
   type LineSelection,
+  type PullStateFilter,
   type RepoChanged,
+  type SshKeyGenerateRequest,
   type StashSaveRequest,
 } from "./bindings";
 import { DEFAULT_FILTER, useRepoStore } from "@/stores/repo";
@@ -31,6 +33,8 @@ export const queryKeys = {
   gitIdentity: ["gitIdentity"] as const,
   aiSettings: ["aiSettings"] as const,
   recent: ["repoRecent"] as const,
+  known: ["repoKnown"] as const,
+  ssh: ["sshKeys"] as const,
   repo: (id: string) => ["repo", id] as const,
   info: (id: string) => ["repo", id, "info"] as const,
   refs: (id: string) => ["repo", id, "refs"] as const,
@@ -55,6 +59,9 @@ export const queryKeys = {
     issue: (id: string, n: number) => ["forge", id, "issue", n] as const,
     commitComments: (id: string, oid: string) => ["forge", id, "commitComments", oid] as const,
     tokenSource: (host: string) => ["forge", "token", host] as const,
+    pulls: (id: string, state: PullStateFilter) => ["forge", id, "pulls", state] as const,
+    pull: (id: string, n: number) => ["forge", id, "pull", n] as const,
+    notifications: (host: string) => ["forge", "notifications", host] as const,
   },
 };
 
@@ -95,6 +102,27 @@ export function useSetGitIdentity() {
 
 export function useRecentRepos() {
   return useQuery({ queryKey: queryKeys.recent, queryFn: () => unwrap(commands.repoRecent()) });
+}
+
+/** Every repository ever opened, with whether its folder still exists. */
+export function useKnownRepos() {
+  return useQuery({ queryKey: queryKeys.known, queryFn: () => unwrap(commands.repoKnown()) });
+}
+
+/** The recent and known repository lists share one source; refresh both together. */
+export async function invalidateRepoLists(client: QueryClient): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: queryKeys.recent }),
+    client.invalidateQueries({ queryKey: queryKeys.known }),
+  ]);
+}
+
+export function useForgetRepo() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (path: string) => unwrap(commands.repoForget(path)),
+    onSuccess: () => invalidateRepoLists(client),
+  });
 }
 
 /** AI settings (global, not repo scoped). Invalidate `queryKeys.aiSettings` after saving. */
@@ -552,6 +580,76 @@ export function useAddIssueComment(repoId: string, number: number) {
         client.invalidateQueries({ queryKey: [...queryKeys.forge.all, repoId, "issues"] }),
       ]),
   });
+}
+
+export function usePulls(
+  repoId: string,
+  state: PullStateFilter,
+  opts: { enabled?: boolean; perPage?: number } = {},
+) {
+  const perPage = opts.perPage ?? 30;
+  return useInfiniteQuery({
+    queryKey: queryKeys.forge.pulls(repoId, state),
+    queryFn: ({ pageParam }) =>
+      unwrap(commands.forgePulls(repoId, { state, page: pageParam, perPage })),
+    initialPageParam: 1,
+    getNextPageParam: (last) => last.nextPage ?? undefined,
+    enabled: opts.enabled ?? true,
+    staleTime: 60_000,
+  });
+}
+
+export function usePull(repoId: string, number: number | null) {
+  return useQuery({
+    queryKey: queryKeys.forge.pull(repoId, number ?? 0),
+    queryFn: () => unwrap(commands.forgePull(repoId, number!)),
+    enabled: number !== null,
+    staleTime: 30_000,
+  });
+}
+
+export function useAddPullComment(repoId: string, number: number) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: string) => unwrap(commands.forgePullComment(repoId, number, body)),
+    onSuccess: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: queryKeys.forge.pull(repoId, number) }),
+        client.invalidateQueries({ queryKey: [...queryKeys.forge.all, repoId, "pulls"] }),
+      ]),
+  });
+}
+
+export function useForgeNotifications(host: string, opts: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: queryKeys.forge.notifications(host),
+    queryFn: () => unwrap(commands.forgeNotifications(host)),
+    staleTime: 120_000,
+    refetchInterval: 300_000,
+    retry: false,
+    enabled: opts.enabled ?? true,
+  });
+}
+
+export function useSshKeys(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.ssh,
+    queryFn: () => unwrap(commands.sshKeysList()),
+    enabled,
+  });
+}
+
+export function useGenerateSshKey() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (req: SshKeyGenerateRequest) => unwrap(commands.sshKeyGenerate(req)),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.ssh }),
+  });
+}
+
+/** Opens an https forge URL in the system browser (throws IpcError on refusal). */
+export async function openUrl(url: string): Promise<void> {
+  await unwrap(commands.appOpenUrl(url));
 }
 
 export function useCommitComments(repoId: string, oid: string | null, enabled = true) {

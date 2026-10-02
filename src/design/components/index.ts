@@ -14,6 +14,7 @@ export * from "./Input";
 export * from "./Kbd";
 export * from "./Label";
 export * from "./ListRow";
+export * from "./MeshBackdrop";
 export * from "./Popover";
 export * from "./PullToRefresh";
 export * from "./ResizablePanels";

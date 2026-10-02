@@ -13,6 +13,7 @@ import type {
   StatusSnapshot,
 } from "@/ipc/bindings";
 import { useLayoutStore } from "@/stores/layout";
+import { useNotificationsStore } from "@/stores/notifications";
 import { useRepoStore } from "@/stores/repo";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { setViewport } from "@/test/viewport";
@@ -205,6 +206,14 @@ export async function installBackend(rowCount = 1000, searchHits: number[] = [])
   commands.repoRecent.mockImplementation(() =>
     ok([{ path: "/work/demo", name: "demo", lastOpened: 1 }]),
   );
+  commands.repoKnown.mockImplementation(() =>
+    ok([{ path: "/work/demo", name: "demo", lastOpened: 1, exists: true }]),
+  );
+  commands.repoForget.mockImplementation(() => ok(null));
+  commands.appOpenUrl.mockImplementation(() => ok(null));
+  commands.forgePulls.mockImplementation(() => ok({ items: [], nextPage: null }));
+  commands.forgeNotifications.mockImplementation(() => ok([]));
+  commands.sshKeysList.mockImplementation(() => ok({ dir: "/home/test/.ssh", keys: [] }));
   commands.repoOpen.mockImplementation(() => ok(repoInfo));
   commands.repoClose.mockImplementation(() => ok(null));
   commands.repoInfo.mockImplementation(() => ok(repoInfo));
@@ -365,6 +374,8 @@ export function resetStore() {
   useRepoStore.setState({
     repos: [],
     activeId: null,
+    page: { kind: "repo" },
+    newTabs: [],
     selection: {},
     stashDialog: {},
     filters: {},
@@ -375,6 +386,7 @@ export function resetStore() {
   useSettingsStore.setState({ settings: null });
   useLayoutStore.getState().reset();
   useWorkspaceStore.getState().reset();
+  useNotificationsStore.getState().reset();
 }
 
 /** Renders the app at a viewport size (compact below 768 px wide), see `setViewport`. */

@@ -6,13 +6,14 @@ import { Integrations } from "@/features/forge/Integrations";
 import { useNav } from "@/stores/nav";
 import { AI_SETTINGS_COMMAND, Ai, General, Git } from "./SettingsDialog";
 
-type Section = "general" | "git" | "ai" | "integrations";
+type Section = "general" | "git" | "ai" | "integrations" | "ssh";
 
 const LABELS: Record<Section, string> = {
   general: "General",
   git: "Git",
   ai: "AI",
   integrations: "Integrations",
+  ssh: "SSH keys",
 };
 
 /**
