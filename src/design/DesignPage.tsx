@@ -1,6 +1,6 @@
 /** Dev-only `/design` route: every token and component, in both themes. */
 import { Copy, GitBranch, GitCommit, Inbox, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import {
   AlertDialog,
   Avatar,
@@ -32,6 +32,7 @@ import {
   Input,
   Kbd,
   Label,
+  MeshBackdrop,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -86,6 +87,27 @@ const radii = ["sm", "md", "lg"];
 const shadows = ["sm", "md", "lg"];
 const zIndexes = ["base", "sticky", "dropdown", "overlay", "modal", "popover", "toast", "tooltip"];
 const lanes = [0, 1, 2, 3, 4, 5, 6, 7];
+
+function BackdropDemo({ intensity }: { intensity: "subtle" | "page" }) {
+  const ref = useRef<HTMLDivElement>(null);
+  return (
+    <div
+      className={`relative isolate h-56 overflow-hidden rounded-lg border border-border ${intensity === "page" ? "bg-bg" : "bg-surface"}`}
+    >
+      <MeshBackdrop intensity={intensity} scrollRef={ref} />
+      <div ref={ref} className="absolute inset-0 overflow-y-auto">
+        {Array.from({ length: 40 }, (_, i) => (
+          <div key={i} className="border-b border-border px-3 py-1.5 text-sm text-fg">
+            <span className="font-mono text-xs text-fg-muted">
+              {(i * 4919).toString(16).padStart(7, "0")}
+            </span>{" "}
+            Commit number {i}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -558,6 +580,13 @@ function Page() {
             style={{ background: "var(--gradient-chrome)" }}
           >
             --gradient-chrome (app chrome and empty states only)
+          </div>
+        </Section>
+
+        <Section title="MeshBackdrop (scroll the lists)">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <BackdropDemo intensity="subtle" />
+            <BackdropDemo intensity="page" />
           </div>
         </Section>
 

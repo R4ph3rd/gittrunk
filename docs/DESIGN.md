@@ -2,7 +2,7 @@
 
 Source of truth: `src/design/tokens.css`. Tailwind utilities map to tokens in `src/index.css` (`@theme inline`). Components live in `src/design/components/` and are imported from `@/design/components`. The dev-only `/design` route shows every token and component in both themes.
 
-Direction: Clerk, Linear, Vercel. Dark first plus a light theme, 13px base text, 28px default control (24px small), crisp 1px borders, subtle shadows, 120-180ms motion (durations collapse to ~0 under `prefers-reduced-motion`). Gradients appear only on app chrome and empty states; content surfaces are flat.
+Direction: Clerk, Linear, Vercel. Dark first plus a light theme, 13px base text, 28px default control (24px small), crisp 1px borders, subtle shadows, 120-180ms motion (durations collapse to ~0 under `prefers-reduced-motion`). Gradients appear on app chrome and empty states; content surfaces are flat, except for the `MeshBackdrop` blurred blobs behind the commit graph and on Home, whose strength is bounded by the contrast test.
 
 ## Rules
 
@@ -52,9 +52,15 @@ Values shown as dark / light where they differ.
 
 ### Gradient
 
-| Token               | Use                                                                     |
-| ------------------- | ----------------------------------------------------------------------- |
-| `--gradient-chrome` | Neutral surfaces with pinky-red glow. Utility `bg-chrome`. Chrome only. |
+| Token                              | Use                                                                                                                                               |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--gradient-chrome`                | Neutral surfaces with pinky-red glow. Utility `bg-chrome`. Chrome only.                                                                           |
+| `--backdrop-1` / `-2` / `-3`       | Blob colors: accent pink-red, violet (lane 3), warm orange (lane 5). Dark `#ff4f7b`, `#a78bfa`, `#ff8a4c`; light `#d6195a`, `#7c3aed`, `#c2410c`. |
+| `--backdrop-alpha-subtle`          | Peak opacity per blob behind the graph. Dark `0.035`, light `0.02`.                                                                               |
+| `--backdrop-alpha-page`            | Peak opacity per blob on Home. Dark `0.12`, light `0.11`.                                                                                         |
+| `--backdrop-blur-subtle` / `-page` | Blur radius, `56px` / `96px`.                                                                                                                     |
+
+The alphas are valid only while the `backdrop` suite in `src/design/contrast.test.ts` passes: with all three blobs stacked at peak alpha, `subtle` over `--surface` keeps `--fg`, `--fg-muted`, `--fg-subtle`, `--accent` at 4.5:1 or more and every lane at 3:1 or more; `page` over `--bg` keeps `--fg` and `--fg-muted` at 4.5:1 or more.
 
 ### Shell (tab strip, toolbar, panels, staged/unstaged, terminal, avatar)
 
@@ -245,6 +251,17 @@ Button sizes: `xs` (20px), `sm` (24px), `md` (28px, default).
   ]}
 />
 ```
+
+**MeshBackdrop**: decorative wavy, blurred blobs (organic Catmull-Rom shapes from `src/design/mesh.ts`) in the `--backdrop-*` colors.
+
+```tsx
+<div className="relative isolate">
+  {backdrop && <MeshBackdrop intensity="subtle" scrollRef={listRef} scrollKey={generation} />}
+  {/* content */}
+</div>
+```
+
+Props: `intensity` (`subtle` behind the graph, `page` on Home), `scrollRef` and `scrollKey` (optional scroll container for parallax), `className`. Place it as the first child of a `relative isolate` container. It is `aria-hidden`, `pointer-events-none`, never focusable, and does nothing while idle. On scroll the blobs translate mostly on X and a little on Y; transforms are written straight to the DOM through `requestAnimationFrame` (no React re-render per scroll). Under `prefers-reduced-motion` (`usePrefersReducedMotion`) it stays static. Consumers render it only when `AppSettings.backdrop` is true (Settings switch).
 
 **EmptyState**: gradient chrome background.
 
