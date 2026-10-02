@@ -14,7 +14,8 @@ A fast, native Git client for Windows, macOS, Linux and Android. An alternative 
 
 ## Features
 
-- **Commit graph** on a virtualized canvas: lanes, colored branch/tag/HEAD labels, author avatars, search, filters (refs, first-parent, author, path), smooth on 100k+ commits.
+- **Commit graph** on a virtualized canvas: lanes, colored branch/tag/HEAD labels, author avatars, search, filters (refs, first-parent, author, path), smooth on 100k+ commits. Subtle scroll-parallax gradient backdrop with reduced-motion awareness.
+- **Home page**: wordmark, quick actions (open, clone, init, workspaces, integrations), recent and all known repositories. New-tab start view with dialogs for opening, cloning, or creating repositories.
 - **Workbench layout**: tabs, toolbar (Undo, Redo, Fetch, Pull, Push, Branch, Stash), refs sidebar, graph in the center, and a right panel with a Commit tab and a Changes tab. File diffs open in the center; sidebar, terminal and right panel can be toggled.
 - **Working copy**: stage and unstage files, hunks or individual lines; split and unified diffs with syntax highlighting; discard with preview and undo; commit, amend, sign-off; stashes.
 - **Full Git coverage**: clone, fetch, pull (merge / rebase / ff-only), push (with force-with-lease), branches, tags, checkout, merge, rebase, interactive rebase, cherry-pick, revert, reset, submodules, worktrees, blame, file history, reflog.
@@ -22,12 +23,14 @@ A fast, native Git client for Windows, macOS, Linux and Android. An alternative 
 - **Undo and redo anything**: an operation journal lets `Mod+Z` revert the last operation as one step, including hard resets and discards, and `Mod+Shift+Z` redo it.
 - **Conflicts**: 3-way resolver (ours / result / theirs, optional base) with per-block accept buttons; continue, skip or abort from the operation banner.
 - **Integrated terminal (desktop only)**: a shell in the repository folder in a bottom panel, one session per open repository.
-- **GitHub issues and comments**: list, read and create issues, and comment on issues and on commits, for repositories with a GitHub origin. Content is shown as plain text.
+- **GitHub issues, pull requests and comments**: list, read, and create issues and pull requests; comment on issues, PRs, and commits; check out PR branches; open PRs on GitHub. Content is shown as plain text.
+- **Notifications**: app activity and GitHub notifications in a popover (GitHub notifications require a token with the `notifications` scope).
+- **SSH keys (desktop only)**: list public keys from `~/.ssh/`, generate new ed25519 keys.
 - **Avatars**: author avatars in the graph and details, fetched by the app (see [Avatars and privacy](#avatars-and-privacy)).
 - **Remotes**: multiple remotes per repository (GitHub, GitLab, Bitbucket, Azure DevOps, self-hosted); uses your system Git credential helpers, with in-app prompts and optional OS keychain storage.
 - **AI assistance (optional, off by default)**: commit messages from the staged diff, conflict suggestions, commit and branch summaries, PR descriptions, and "Ask AI" natural-language plans that are previewed before anything runs. Anthropic by default, or any OpenAI-compatible endpoint. You always see exactly what will be sent; keys live in the OS keychain.
 - **Android, read-only**: a follow-and-comment app for phones and tablets (see [Android](#android)).
-- **Keyboard first**: command palette for every action, rebindable shortcuts, accessible focus states. Dark and light themes.
+- **Keyboard first**: command palette for every action, rebindable shortcuts, accessible focus states. Dark and light themes. `Mod+T` for a new tab.
 
 ## Download and install
 
@@ -51,13 +54,13 @@ Desktop builds need `git` on your `PATH`.
 
 ## GitHub integration
 
-Issues and commit comments work for repositories whose `origin` (or first GitHub remote) is on github.com. Public repositories can be read without a token (with GitHub's low anonymous rate limit); creating issues and comments needs one.
+Issues, pull requests and commit comments work for repositories whose `origin` (or first GitHub remote) is on github.com. Public repositories can be read without a token (with GitHub's low anonymous rate limit); creating issues and comments needs one.
 
-1. Create a personal access token on GitHub: a classic token with the `repo` scope (or `public_repo` for public repositories only), or a fine-grained token with Issues and Contents read and write access.
+1. Create a personal access token on GitHub: a classic token with the `repo` scope (or `public_repo` for public repositories only), or a fine-grained token with Issues and Contents read and write access. For notifications, use a classic token with the `notifications` scope in addition to `repo`.
 2. Open **Settings**, section **Integrations**, paste it under **GitHub token** and press **Save**. gittrunk checks it with GitHub and shows "Connected as @login". It is stored in the system keychain and never shown again; **Remove** deletes it.
-3. If no token is saved, gittrunk falls back to the HTTPS credential it remembered for github.com. On Android this means the token you used to clone a repository works for issues and comments right away.
+3. If no token is saved, gittrunk falls back to the HTTPS credential it remembered for github.com. On Android this means the token you used to clone a repository works for issues, pull requests and comments right away.
 
-GitHub Enterprise, GitLab and Bitbucket issues are not supported. Pull requests are not supported yet.
+GitHub Enterprise is not supported. GitLab, Bitbucket and Gitea integrations are coming soon.
 
 ## Avatars and privacy
 
