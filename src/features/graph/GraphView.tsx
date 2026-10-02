@@ -4,6 +4,8 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { GraphFilter, GraphMeta, GraphRow } from "@/ipc/bindings";
 import { graphPageOptions, locateOid, PAGE_SIZE, useGraphMeta, useRefs } from "@/ipc/queries";
 import { DEFAULT_FILTER, selectedOidOf, useRepoStore } from "@/stores/repo";
+import { MeshBackdrop } from "@/design/components/MeshBackdrop";
+import { useSettings } from "@/stores/settings";
 import { openActionMenu } from "@/features/operations/actions/openMenu";
 import { useActionContext } from "@/features/operations/actions/useActionContext";
 import { onThemeChange, readPalette, type Palette } from "./colors";
@@ -50,6 +52,7 @@ export function GraphView({ repoId, onOpenDetails }: Props) {
   const meta = useGraphMeta(repoId, filter);
   const refs = useRefs(repoId);
   const generation = meta.dataUpdatedAt;
+  const { backdrop } = useSettings();
 
   const { query, setQuery, matches, matchPos, step, jumpRef } = useGraphSearchState(
     repoId,
@@ -88,7 +91,8 @@ export function GraphView({ repoId, onOpenDetails }: Props) {
         gutter={gutterWidth(meta.data?.laneCount ?? 1)}
         offset={REFS_COLUMN_WIDTH}
       />
-      <div className="relative min-h-0 flex-1">
+      <div className="relative isolate min-h-0 flex-1">
+        {backdrop && <MeshBackdrop intensity="subtle" scrollRef={listRef} scrollKey={generation} />}
         {meta.isError ? (
           <p role="alert" className="p-4 text-sm text-danger">
             Could not load history: {meta.error.message}
