@@ -3,7 +3,7 @@ use crate::forge::tokens::{self, ForgeTokens, SystemTokens};
 use crate::forge::{self, remote, Forge};
 use crate::git::blocking;
 use crate::git::remote::keychain::Keychain;
-use crate::ipc::error::AppResult;
+use crate::ipc::error::{AppError, AppResult};
 use crate::ipc::types::*;
 
 #[tauri::command]
@@ -122,4 +122,41 @@ pub async fn forge_commit_comment(
         .await?
         .comment_commit(&oid, &body)
         .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn forge_pulls(
+    _state: tauri::State<'_, crate::git::GitState>,
+    _repo: RepoId,
+    _query: PullQuery,
+) -> AppResult<PullPage> {
+    Err(AppError::not_implemented("forge_pulls"))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn forge_pull(
+    _state: tauri::State<'_, crate::git::GitState>,
+    _repo: RepoId,
+    _number: u32,
+) -> AppResult<PullDetail> {
+    Err(AppError::not_implemented("forge_pull"))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn forge_pull_comment(
+    _state: tauri::State<'_, crate::git::GitState>,
+    _repo: RepoId,
+    _number: u32,
+    _body: String,
+) -> AppResult<ForgeComment> {
+    Err(AppError::not_implemented("forge_pull_comment"))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn forge_notifications(_host: String) -> AppResult<Vec<ForgeNotification>> {
+    Err(AppError::not_implemented("forge_notifications"))
 }

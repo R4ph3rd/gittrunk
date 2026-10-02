@@ -133,6 +133,14 @@ wire! {
         pub last_opened: f64,
     }
 
+    pub struct KnownRepo {
+        pub path: String,
+        pub name: String,
+        pub last_opened: f64,
+        /// The folder still exists on disk.
+        pub exists: bool,
+    }
+
     pub struct CloneRequest {
         pub url: String,
         pub dest: String,
@@ -847,6 +855,18 @@ wire! {
         pub diff_context_lines: u32,
         /// Where avatars may be fetched from (by the backend; the webview never contacts avatar hosts).
         pub avatars: AvatarMode,
+        /// Decorative gradients behind the graph and on the Home page.
+        pub backdrop: bool,
+        /// Named groups of repository paths (Home page).
+        pub workspaces: Vec<Workspace>,
+    }
+
+    /// A named group of repositories shown on the Home page.
+    pub struct Workspace {
+        pub id: String,
+        pub name: String,
+        /// Repository paths, in display order.
+        pub repos: Vec<String>,
     }
 
     pub struct Keybinding {
@@ -884,6 +904,18 @@ wire_enum! {
     }
 
     pub enum IssueStateFilter {
+        Open,
+        Closed,
+        All,
+    }
+
+    pub enum PullState {
+        Open,
+        Closed,
+        Merged,
+    }
+
+    pub enum PullStateFilter {
         Open,
         Closed,
         All,
@@ -958,6 +990,106 @@ wire! {
     pub struct IssueCreateRequest {
         pub title: String,
         pub body: String,
+    }
+
+    pub struct PullBranch {
+        /// Branch name, e.g. "feature/login".
+        pub name: String,
+        /// "owner:branch" as GitHub shows it.
+        pub label: String,
+        pub sha: Oid,
+        /// "owner/name" of the repository holding the branch; None when it was deleted.
+        pub repo: Option<String>,
+        /// The branch lives in another repository than the base.
+        pub is_fork: bool,
+    }
+
+    pub struct ForgePull {
+        pub number: u32,
+        pub title: String,
+        pub state: PullState,
+        pub draft: bool,
+        pub author: ForgeUser,
+        pub head: PullBranch,
+        pub base: PullBranch,
+        pub labels: Vec<String>,
+        pub created_at: f64,
+        pub updated_at: f64,
+        /// Web URL of the pull request.
+        pub url: String,
+    }
+
+    pub struct PullQuery {
+        pub state: PullStateFilter,
+        pub page: u32,
+        pub per_page: u32,
+    }
+
+    pub struct PullPage {
+        pub items: Vec<ForgePull>,
+        pub next_page: Option<u32>,
+    }
+
+    pub struct PullDetail {
+        pub pull: ForgePull,
+        /// Plain text as written (Markdown source); never rendered as HTML.
+        pub body: String,
+        /// Conversation comments (not review comments).
+        pub comments: Vec<ForgeComment>,
+        pub commits: u32,
+        pub additions: u32,
+        pub deletions: u32,
+        pub changed_files: u32,
+        /// None while GitHub is still computing it.
+        pub mergeable: Option<bool>,
+    }
+
+    pub struct ForgeNotification {
+        pub id: String,
+        pub title: String,
+        /// GitHub subject type: "Issue", "PullRequest", "Commit", "Release", "Discussion", ...
+        pub kind: String,
+        /// GitHub reason: "mention", "review_requested", "subscribed", ...
+        pub reason: String,
+        /// "owner/name"
+        pub repo: String,
+        pub unread: bool,
+        pub updated_at: f64,
+        /// https://github.com/... page of the subject; None when unknown.
+        pub url: Option<String>,
+    }
+}
+
+// ---------------------------------------------------------------- ssh
+
+wire! {
+    pub struct SshKey {
+        /// File stem, e.g. "id_ed25519".
+        pub name: String,
+        /// Path of the private key file (it may not exist, see has_private_key).
+        pub path: String,
+        /// The whole public key line ("ssh-ed25519 AAAA... comment").
+        pub public_key: String,
+        /// e.g. "ssh-ed25519", "ssh-rsa", "ecdsa-sha2-nistp256".
+        pub algorithm: String,
+        /// "SHA256:..."
+        pub fingerprint: String,
+        pub comment: String,
+        pub has_private_key: bool,
+    }
+
+    pub struct SshKeyList {
+        /// The ~/.ssh directory (it may not exist yet).
+        pub dir: String,
+        pub keys: Vec<SshKey>,
+    }
+
+    pub struct SshKeyGenerateRequest {
+        /// File stem to create in ~/.ssh, e.g. "id_ed25519_gittrunk".
+        pub name: String,
+        pub comment: String,
+        /// None or empty = unencrypted private key.
+        pub passphrase: Option<String>,
     }
 }
 

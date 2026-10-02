@@ -32,6 +32,8 @@ pub fn defaults() -> AppSettings {
         graph_order: CommitOrder::Topo,
         diff_context_lines: 3,
         avatars: AvatarMode::Github,
+        backdrop: true,
+        workspaces: Vec::new(),
     }
 }
 

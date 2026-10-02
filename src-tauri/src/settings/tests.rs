@@ -23,6 +23,16 @@ fn defaults_when_nothing_stored() {
 }
 
 #[test]
+fn settings_without_m10_fields_get_their_defaults() {
+    let d = tempfile::tempdir().unwrap();
+    fs::write(d.path().join(SETTINGS_FILE), r#"{"theme":"dark"}"#).unwrap();
+    let s = load(d.path());
+    assert_eq!(s.theme, ThemePreference::Dark);
+    assert!(s.backdrop);
+    assert!(s.workspaces.is_empty());
+}
+
+#[test]
 fn round_trip_and_partial_and_corrupt_files() {
     let d = tempfile::tempdir().unwrap();
     let mut s = defaults();

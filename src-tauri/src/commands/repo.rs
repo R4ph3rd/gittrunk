@@ -183,3 +183,15 @@ mod tests {
         assert!(outside.exists());
     }
 }
+
+#[tauri::command]
+#[specta::specta]
+pub async fn repo_known(app: tauri::AppHandle) -> AppResult<Vec<KnownRepo>> {
+    Err(AppError::not_implemented("repo_known"))
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn repo_forget(app: tauri::AppHandle, path: String) -> AppResult<()> {
+    Err(AppError::not_implemented("repo_forget"))
+}

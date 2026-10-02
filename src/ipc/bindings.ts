@@ -12,6 +12,8 @@ export const commands = {
 	platformInfo: () => typedError<PlatformInfo, AppError>(__TAURI_INVOKE("platform_info")),
 	/**  Lets the Android back handler close the app ("press back again to exit"). */
 	appExit: () => typedError<null, AppError>(__TAURI_INVOKE("app_exit")),
+	/**  Opens an https URL of a known forge in the system browser. */
+	appOpenUrl: (url: string) => typedError<null, AppError>(__TAURI_INVOKE("app_open_url", { url })),
 	gitIdentityGet: () => typedError<GitIdentity, AppError>(__TAURI_INVOKE("git_identity_get")),
 	gitIdentitySet: (name: string, email: string) => typedError<GitIdentity, AppError>(__TAURI_INVOKE("git_identity_set", { name, email })),
 	repoOpen: (path: string) => typedError<RepoInfo, AppError>(__TAURI_INVOKE("repo_open", { path })),
@@ -22,6 +24,8 @@ export const commands = {
 	repoRecent: () => typedError<RecentRepo[], AppError>(__TAURI_INVOKE("repo_recent")),
 	/**  Deletes a repository folder under the default repos dir (mobile/embedded). */
 	repoDelete: (path: string) => typedError<null, AppError>(__TAURI_INVOKE("repo_delete", { path })),
+	repoKnown: () => typedError<KnownRepo[], AppError>(__TAURI_INVOKE("repo_known")),
+	repoForget: (path: string) => typedError<null, AppError>(__TAURI_INVOKE("repo_forget", { path })),
 	graphLoad: (repo: string, filter: GraphFilter) => typedError<GraphMeta, AppError>(__TAURI_INVOKE("graph_load", { repo, filter })),
 	graphRows: (repo: string, start: number, len: number) => typedError<GraphRow[], AppError>(__TAURI_INVOKE("graph_rows", { repo, start, len })),
 	graphSearch: (repo: string, search: GraphSearch) => typedError<number[], AppError>(__TAURI_INVOKE("graph_search", { repo, search })),
@@ -97,6 +101,12 @@ export const commands = {
 	forgeIssueComment: (repo: string, number: number, body: string) => typedError<ForgeComment, AppError>(__TAURI_INVOKE("forge_issue_comment", { repo, number, body })),
 	forgeCommitComments: (repo: string, oid: string) => typedError<ForgeComment[], AppError>(__TAURI_INVOKE("forge_commit_comments", { repo, oid })),
 	forgeCommitComment: (repo: string, oid: string, body: string) => typedError<ForgeComment, AppError>(__TAURI_INVOKE("forge_commit_comment", { repo, oid, body })),
+	forgePulls: (repo: string, query: PullQuery) => typedError<PullPage, AppError>(__TAURI_INVOKE("forge_pulls", { repo, query })),
+	forgePull: (repo: string, number: number) => typedError<PullDetail, AppError>(__TAURI_INVOKE("forge_pull", { repo, number })),
+	forgePullComment: (repo: string, number: number, body: string) => typedError<ForgeComment, AppError>(__TAURI_INVOKE("forge_pull_comment", { repo, number, body })),
+	forgeNotifications: (host: string) => typedError<ForgeNotification[], AppError>(__TAURI_INVOKE("forge_notifications", { host })),
+	sshKeysList: () => typedError<SshKeyList, AppError>(__TAURI_INVOKE("ssh_keys_list")),
+	sshKeyGenerate: (request: SshKeyGenerateRequest) => typedError<SshKey, AppError>(__TAURI_INVOKE("ssh_key_generate", { request })),
 	terminalOpen: (request: TerminalOpenRequest) => typedError<string, AppError>(__TAURI_INVOKE("terminal_open", { request })),
 	terminalWrite: (id: string, data: string) => typedError<null, AppError>(__TAURI_INVOKE("terminal_write", { id, data })),
 	terminalResize: (id: string, cols: number, rows: number) => typedError<null, AppError>(__TAURI_INVOKE("terminal_resize", { id, cols, rows })),
@@ -182,6 +192,10 @@ export type AppSettings = {
 	diffContextLines: number,
 	/**  Where avatars may be fetched from (by the backend; the webview never contacts avatar hosts). */
 	avatars: AvatarMode,
+	/**  Decorative gradients behind the graph and on the Home page. */
+	backdrop: boolean,
+	/**  Named groups of repository paths (Home page). */
+	workspaces: Workspace[],
 };
 
 export type AvatarMode = "off" | "github" | "githubAndGravatar";
@@ -380,6 +394,36 @@ export type ForgeComment = {
 
 export type ForgeKind = "github" | "gitlab";
 
+export type ForgeNotification = {
+	id: string,
+	title: string,
+	/**  GitHub subject type: "Issue", "PullRequest", "Commit", "Release", "Discussion", ... */
+	kind: string,
+	/**  GitHub reason: "mention", "review_requested", "subscribed", ... */
+	reason: string,
+	/**  "owner/name" */
+	repo: string,
+	unread: boolean,
+	updatedAt: number | null,
+	/**  https://github.com/... page of the subject; None when unknown. */
+	url: string | null,
+};
+
+export type ForgePull = {
+	number: number,
+	title: string,
+	state: PullState,
+	draft: boolean,
+	author: ForgeUser,
+	head: PullBranch,
+	base: PullBranch,
+	labels: string[],
+	createdAt: number | null,
+	updatedAt: number | null,
+	/**  Web URL of the pull request. */
+	url: string,
+};
+
 export type ForgeRepo = {
 	kind: ForgeKind,
 	/**  e.g. "github.com" */
@@ -535,6 +579,14 @@ export type Keybinding = {
 	keys: string,
 };
 
+export type KnownRepo = {
+	path: string,
+	name: string,
+	lastOpened: number | null,
+	/**  The folder still exists on disk. */
+	exists: boolean,
+};
+
 export type LineKind = "context" | "add" | "delete" | 
 /**  "\ No newline at end of file" marker. */
 "noNewline";
@@ -639,11 +691,52 @@ export type PlatformInfo = {
 	defaultReposDir: string | null,
 };
 
+export type PullBranch = {
+	/**  Branch name, e.g. "feature/login". */
+	name: string,
+	/**  "owner:branch" as GitHub shows it. */
+	label: string,
+	sha: string,
+	/**  "owner/name" of the repository holding the branch; None when it was deleted. */
+	repo: string | null,
+	/**  The branch lives in another repository than the base. */
+	isFork: boolean,
+};
+
+export type PullDetail = {
+	pull: ForgePull,
+	/**  Plain text as written (Markdown source); never rendered as HTML. */
+	body: string,
+	/**  Conversation comments (not review comments). */
+	comments: ForgeComment[],
+	commits: number,
+	additions: number,
+	deletions: number,
+	changedFiles: number,
+	/**  None while GitHub is still computing it. */
+	mergeable: boolean | null,
+};
+
+export type PullPage = {
+	items: ForgePull[],
+	nextPage: number | null,
+};
+
+export type PullQuery = {
+	state: PullStateFilter,
+	page: number,
+	perPage: number,
+};
+
 export type PullRequest = {
 	remote: string | null,
 	branch: string | null,
 	strategy: PullStrategy,
 };
+
+export type PullState = "open" | "closed" | "merged";
+
+export type PullStateFilter = "open" | "closed" | "all";
 
 export type PullStrategy = "merge" | "rebase" | "ffOnly";
 
@@ -772,6 +865,35 @@ export type Signature = {
 	offsetMinutes: number,
 };
 
+export type SshKey = {
+	/**  File stem, e.g. "id_ed25519". */
+	name: string,
+	/**  Path of the private key file (it may not exist, see has_private_key). */
+	path: string,
+	/**  The whole public key line ("ssh-ed25519 AAAA... comment"). */
+	publicKey: string,
+	/**  e.g. "ssh-ed25519", "ssh-rsa", "ecdsa-sha2-nistp256". */
+	algorithm: string,
+	/**  "SHA256:..." */
+	fingerprint: string,
+	comment: string,
+	hasPrivateKey: boolean,
+};
+
+export type SshKeyGenerateRequest = {
+	/**  File stem to create in ~/.ssh, e.g. "id_ed25519_gittrunk". */
+	name: string,
+	comment: string,
+	/**  None or empty = unencrypted private key. */
+	passphrase: string | null,
+};
+
+export type SshKeyList = {
+	/**  The ~/.ssh directory (it may not exist yet). */
+	dir: string,
+	keys: SshKey[],
+};
+
 export type StashEntry = {
 	index: number,
 	oid: string,
@@ -844,6 +966,14 @@ export type TerminalOutput = {
 };
 
 export type ThemePreference = "dark" | "light" | "system";
+
+/**  A named group of repositories shown on the Home page. */
+export type Workspace = {
+	id: string,
+	name: string,
+	/**  Repository paths, in display order. */
+	repos: string[],
+};
 
 export type WorktreeAddRequest = {
 	path: string,

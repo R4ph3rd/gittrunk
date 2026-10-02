@@ -124,3 +124,10 @@ mod tests {
         assert_eq!(platform_info_for(None).default_repos_dir, None);
     }
 }
+
+/// Opens an https URL of a known forge in the system browser.
+#[tauri::command]
+#[specta::specta]
+pub async fn app_open_url(_app: tauri::AppHandle, _url: String) -> AppResult<()> {
+    Err(crate::ipc::error::AppError::not_implemented("app_open_url"))
+}

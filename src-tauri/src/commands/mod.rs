@@ -14,6 +14,7 @@ pub mod refs;
 pub mod remotes;
 pub mod repo;
 pub mod settings;
+pub mod ssh;
 pub mod stash;
 pub mod terminal;
 pub mod worktree;
