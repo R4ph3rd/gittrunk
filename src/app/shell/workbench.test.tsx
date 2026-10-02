@@ -67,12 +67,13 @@ beforeEach(async () => {
 });
 
 describe("repository tabs", () => {
-  it("marks the active tab, opens the picker with + and closes a tab", async () => {
+  it("marks the active tab, opens a new tab with + and closes a tab", async () => {
     await backend();
     const user = await openRepo();
     expect(screen.getByRole("tab", { name: "demo" })).toHaveAttribute("aria-selected", "true");
-    await user.click(screen.getByRole("button", { name: "Open repository" }));
-    await waitFor(() => expect(open).toHaveBeenCalled());
+    await user.click(screen.getByRole("button", { name: "New tab" }));
+    expect(screen.getByRole("tab", { name: "New tab" })).toHaveAttribute("aria-selected", "true");
+    expect(open).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Close demo" }));
     await waitFor(() => expect(screen.queryByRole("tab", { name: "demo" })).toBeNull());
   });
