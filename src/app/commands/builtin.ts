@@ -3,11 +3,13 @@ import {
   ArrowRightToLine,
   CircleDot,
   FolderOpen,
+  House,
   Keyboard,
   Moon,
   PanelBottom,
   PanelLeft,
   PanelRight,
+  Plus,
   LayoutGrid,
   RefreshCw,
   Search,
@@ -39,6 +41,11 @@ async function openRepository(ctx: CommandContext) {
 }
 
 async function closeActiveRepo(ctx: CommandContext) {
+  const { page, closeNewTab } = useRepoStore.getState();
+  if (page.kind === "newTab") {
+    closeNewTab(page.id);
+    return;
+  }
   const id = ctx.repoId;
   if (!id) return;
   useRepoStore.getState().removeRepo(id);
@@ -98,12 +105,31 @@ export function useBuiltinCommands() {
       run: openRepository,
     },
     {
+      id: "app.newTab",
+      title: "New tab",
+      group: "Repository",
+      icon: Plus,
+      shortcut: "mod+t",
+      keywords: ["start", "clone", "create"],
+      run: () => {
+        useRepoStore.getState().openNewTab();
+      },
+    },
+    {
+      id: "app.home",
+      title: "Go to Home",
+      group: "View",
+      icon: House,
+      keywords: ["recent", "workspaces", "repositories"],
+      run: () => useRepoStore.getState().showHome(),
+    },
+    {
       id: "repo.close",
       title: "Close repository tab",
       group: "Repository",
       icon: X,
       shortcut: "mod+w",
-      when: hasRepo,
+      when: (ctx) => hasRepo(ctx) || useRepoStore.getState().page.kind === "newTab",
       run: closeActiveRepo,
     },
     {

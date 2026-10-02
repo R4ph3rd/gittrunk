@@ -1,10 +1,11 @@
-import { CopyPlus, FolderOpen, GitBranch } from "lucide-react";
+import { CopyPlus, FolderOpen, FolderPlus, GitBranch } from "lucide-react";
 import { useLayout } from "@/app/layout/useLayout";
 import { usePlatform } from "@/app/platform";
 import { Button } from "@/design/components";
 import { useRecentRepos } from "@/ipc/queries";
 import { useRemotesUi } from "@/stores/remotes";
 import { useRepoStore } from "@/stores/repo";
+import { useHomeDialogs } from "@/features/home/store";
 import { RecentRepoRows } from "./RecentRepos";
 import { useOpenRepo } from "./useOpenRepo";
 
@@ -14,14 +15,16 @@ export function Welcome() {
   const error = useRepoStore((s) => s.openError);
   const setCloneOpen = useRemotesUi((s) => s.setCloneOpen);
   const { isCompact } = useLayout();
-  const { canPickFolder, defaultReposDir } = usePlatform();
+  const { canPickFolder, readOnly, defaultReposDir } = usePlatform();
+  const openInit = useHomeDialogs((s) => s.openInit);
 
   const errorNode = error && (
     <p role="alert" className="rounded-md border border-danger/40 px-3 py-2 text-sm text-danger">
       {error}
     </p>
   );
-  const hasRecent = recent.data && recent.data.length > 0;
+  const recentRepos = (recent.data ?? []).slice(0, 10);
+  const hasRecent = recentRepos.length > 0;
 
   if (isCompact) {
     return (
@@ -60,7 +63,7 @@ export function Welcome() {
           {hasRecent && (
             <section aria-label="Recent repositories" className="flex flex-col gap-1">
               <h2 className="text-xs uppercase tracking-wide text-fg-subtle">Recent</h2>
-              <RecentRepoRows repos={recent.data} onOpen={(p) => void openPath(p)} />
+              <RecentRepoRows repos={recentRepos} onOpen={(p) => void openPath(p)} />
             </section>
           )}
         </div>
@@ -87,7 +90,7 @@ export function Welcome() {
                 className="flex h-8 items-center gap-2 rounded-md bg-accent px-4 text-sm font-medium text-accent-fg"
               >
                 <FolderOpen className="size-4" aria-hidden />
-                Open
+                Open repository
               </button>
             ) : null}
             <button
@@ -98,6 +101,16 @@ export function Welcome() {
               <CopyPlus className="size-4" aria-hidden />
               Clone repository
             </button>
+            {canPickFolder && !readOnly ? (
+              <button
+                type="button"
+                onClick={openInit}
+                className="flex h-8 items-center gap-2 rounded-md border border-border px-4 text-sm font-medium text-fg hover:bg-surface-hover"
+              >
+                <FolderPlus className="size-4" aria-hidden />
+                Create repository
+              </button>
+            ) : null}
           </div>
         </div>
         {errorNode}
@@ -105,10 +118,10 @@ export function Welcome() {
           <section aria-label="Recent repositories" className="flex flex-col gap-1">
             <h2 className="text-xs uppercase tracking-wide text-fg-subtle">Recent</h2>
             {defaultReposDir ? (
-              <RecentRepoRows repos={recent.data} onOpen={(p) => void openPath(p)} />
+              <RecentRepoRows repos={recentRepos} onOpen={(p) => void openPath(p)} />
             ) : (
               <ul className="flex flex-col">
-                {recent.data.map((r) => (
+                {recentRepos.map((r) => (
                   <li key={r.path}>
                     <button
                       type="button"

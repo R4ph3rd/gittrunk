@@ -54,7 +54,10 @@ const PALETTE_COMMANDS: Command[] = [
  */
 export function CommandHost() {
   const queryClient = useQueryClient();
-  const repoId = useRepoStore((s) => s.activeId);
+  const activeId = useRepoStore((s) => s.activeId);
+  const pageKind = useRepoStore((s) => s.page.kind);
+  // Repo commands never act on a repository hidden behind Home or a new tab.
+  const repoId = pageKind === "repo" ? activeId : null;
   const commands = useCommandStore((s) => s.commands);
   const paletteOpen = useCommandStore((s) => s.paletteOpen);
   const helpOpen = useCommandStore((s) => s.helpOpen);
