@@ -187,11 +187,17 @@ mod tests {
 #[tauri::command]
 #[specta::specta]
 pub async fn repo_known(app: tauri::AppHandle) -> AppResult<Vec<KnownRepo>> {
-    Err(AppError::not_implemented("repo_known"))
+    match recent_store(&app) {
+        Some(store) => blocking(move || Ok(store.known())).await,
+        None => Ok(Vec::new()),
+    }
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn repo_forget(app: tauri::AppHandle, path: String) -> AppResult<()> {
-    Err(AppError::not_implemented("repo_forget"))
+    match recent_store(&app) {
+        Some(store) => store.forget(&path),
+        None => Ok(()),
+    }
 }
