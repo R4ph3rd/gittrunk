@@ -73,7 +73,7 @@ export function Welcome() {
 
   return (
     <div className="flex flex-1 items-center justify-center bg-chrome p-6">
-      <div className="flex w-full max-w-md flex-col gap-4">
+      <div className="flex w-full max-w-xl flex-col gap-4">
         <div className="flex flex-col items-center gap-2 text-center">
           <GitBranch className="size-8 text-accent" aria-hidden />
           <h1 className="text-xl font-semibold tracking-tight">Open a repository</h1>
@@ -82,12 +82,12 @@ export function Welcome() {
               ? "Choose a folder that contains a git repository."
               : "Clone a repository to get started."}
           </p>
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
             {canPickFolder ? (
               <button
                 type="button"
                 onClick={() => void pickAndOpen()}
-                className="flex h-8 items-center gap-2 rounded-md bg-accent px-4 text-sm font-medium text-accent-fg"
+                className="flex h-8 items-center gap-2 whitespace-nowrap rounded-md bg-accent px-4 text-sm font-medium text-accent-fg"
               >
                 <FolderOpen className="size-4" aria-hidden />
                 Open repository
@@ -96,7 +96,7 @@ export function Welcome() {
             <button
               type="button"
               onClick={() => setCloneOpen(true)}
-              className="flex h-8 items-center gap-2 rounded-md border border-border px-4 text-sm font-medium text-fg hover:bg-surface-hover"
+              className="flex h-8 items-center gap-2 whitespace-nowrap rounded-md border border-border px-4 text-sm font-medium text-fg hover:bg-surface-hover"
             >
               <CopyPlus className="size-4" aria-hidden />
               Clone repository
@@ -105,7 +105,7 @@ export function Welcome() {
               <button
                 type="button"
                 onClick={openInit}
-                className="flex h-8 items-center gap-2 rounded-md border border-border px-4 text-sm font-medium text-fg hover:bg-surface-hover"
+                className="flex h-8 items-center gap-2 whitespace-nowrap rounded-md border border-border px-4 text-sm font-medium text-fg hover:bg-surface-hover"
               >
                 <FolderPlus className="size-4" aria-hidden />
                 Create repository
