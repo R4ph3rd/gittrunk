@@ -185,7 +185,7 @@ async fn github_for_requires_a_github_remote() {
     let (_, info) = state.open(t.dir.path()).unwrap();
     let err = github_for(&state, &info.id).await.err().unwrap();
     assert_eq!(err.kind, ErrorKind::Unsupported);
-    assert_eq!(err.message, "Issues need a GitHub remote");
+    assert_eq!(err.message, "This needs a GitHub remote");
 }
 
 // --------------------------------------------------------------- tokens
@@ -627,4 +627,203 @@ async fn transport_errors_do_not_leak_token_or_url() {
     assert_eq!(e.kind, ErrorKind::Network);
     assert_no_token(&e);
     assert!(!e.message.contains("127.0.0.1"));
+}
+
+// ---------------------------------------------------------------- pulls
+
+fn pull_json(n: u32) -> serde_json::Value {
+    json!({
+        "number": n, "title": format!("PR {n}"), "state": "open", "draft": false,
+        "merged_at": null,
+        "user": {"login": "alice"}, "labels": [{"name": "bug"}],
+        "created_at": "2024-01-02T03:04:05Z", "updated_at": "2024-01-03T03:04:05Z",
+        "html_url": format!("https://github.com/octo/repo/pull/{n}"),
+        "head": {"ref": "feature/x", "label": "octo:feature/x", "sha": OID,
+                 "repo": {"full_name": "octo/repo"}},
+        "base": {"ref": "main", "label": "octo:main", "sha": OID,
+                 "repo": {"full_name": "octo/repo"}},
+        "body": null, "commits": 3, "additions": 10, "deletions": 4,
+        "changed_files": 2, "mergeable": null
+    })
+}
+
+fn pull_query() -> PullQuery {
+    PullQuery {
+        state: PullStateFilter::All,
+        page: 2,
+        per_page: 500,
+    }
+}
+
+#[tokio::test]
+async fn list_pulls_maps_states_forks_and_next_page() {
+    let mut server = Server::new_async().await;
+    let mut merged = pull_json(2);
+    merged["state"] = json!("closed");
+    merged["merged_at"] = json!("2024-01-04T00:00:00Z");
+    let mut closed = pull_json(3);
+    closed["state"] = json!("closed");
+    let mut draft = pull_json(4);
+    draft["draft"] = json!(true);
+    let mut fork = pull_json(5);
+    fork["head"]["repo"] = json!({"full_name": "someone/repo"});
+    fork["head"]["label"] = json!("someone:feature/x");
+    let mut gone = pull_json(6);
+    gone["head"]["repo"] = json!(null);
+    let link = format!(
+        "<{}/repos/octo/repo/pulls?state=all&per_page=100&page=3>; rel=\"next\"",
+        server.url()
+    );
+    let m = server
+        .mock("GET", "/repos/octo/repo/pulls")
+        .match_query(Matcher::AllOf(vec![
+            Matcher::UrlEncoded("state".into(), "all".into()),
+            Matcher::UrlEncoded("per_page".into(), "100".into()),
+            Matcher::UrlEncoded("page".into(), "2".into()),
+            Matcher::UrlEncoded("sort".into(), "updated".into()),
+            Matcher::UrlEncoded("direction".into(), "desc".into()),
+        ]))
+        .with_header("link", &link)
+        .with_body(json!([pull_json(1), merged, closed, draft, fork, gone]).to_string())
+        .create_async()
+        .await;
+    let page = forge(&server, None)
+        .list_pulls(&pull_query())
+        .await
+        .unwrap();
+    m.assert_async().await;
+    assert_eq!(page.next_page, Some(3));
+    let states: Vec<_> = page.items.iter().map(|p| p.state).collect();
+    assert_eq!(
+        states,
+        [
+            PullState::Open,
+            PullState::Merged,
+            PullState::Closed,
+            PullState::Open,
+            PullState::Open,
+            PullState::Open
+        ]
+    );
+    let first = &page.items[0];
+    assert_eq!(first.number, 1);
+    assert_eq!(first.author.login, "alice");
+    assert_eq!(first.labels, vec!["bug"]);
+    assert_eq!(first.created_at, 1_704_164_645.0);
+    assert_eq!(first.url, "https://github.com/octo/repo/pull/1");
+    assert_eq!(first.head.name, "feature/x");
+    assert_eq!(first.head.label, "octo:feature/x");
+    assert_eq!(first.head.repo.as_deref(), Some("octo/repo"));
+    assert_eq!(first.base.name, "main");
+    assert!(!first.head.is_fork && !first.base.is_fork);
+    assert!(page.items[3].draft && !first.draft);
+    assert!(page.items[4].head.is_fork);
+    assert!(page.items[5].head.is_fork && page.items[5].head.repo.is_none());
+}
+
+#[tokio::test]
+async fn pull_detail_has_stats_and_merged_comments() {
+    let mut server = Server::new_async().await;
+    server
+        .mock("GET", "/repos/octo/repo/pulls/7")
+        .with_body(pull_json(7).to_string())
+        .create_async()
+        .await;
+    let link = format!(
+        "<{}/repos/octo/repo/issues/7/comments?per_page=100&page=2>; rel=\"next\"",
+        server.url()
+    );
+    server
+        .mock("GET", "/repos/octo/repo/issues/7/comments")
+        .match_query(Matcher::UrlEncoded("page".into(), "1".into()))
+        .with_header("link", &link)
+        .with_body(json!([comment_json(1, "one")]).to_string())
+        .create_async()
+        .await;
+    server
+        .mock("GET", "/repos/octo/repo/issues/7/comments")
+        .match_query(Matcher::UrlEncoded("page".into(), "2".into()))
+        .with_body(json!([comment_json(2, "two")]).to_string())
+        .create_async()
+        .await;
+    let d = forge(&server, None).pull(7).await.unwrap();
+    assert_eq!(d.pull.number, 7);
+    assert_eq!(d.body, "");
+    assert_eq!(
+        (d.commits, d.additions, d.deletions, d.changed_files),
+        (3, 10, 4, 2)
+    );
+    assert_eq!(d.mergeable, None);
+    let ids: Vec<_> = d.comments.iter().map(|c| c.id.as_str()).collect();
+    assert_eq!(ids, ["1", "2"]);
+}
+
+#[tokio::test]
+async fn pull_detail_mergeable_and_large_counts() {
+    let mut server = Server::new_async().await;
+    let mut v = pull_json(8);
+    v["body"] = json!("text");
+    v["mergeable"] = json!(true);
+    v["additions"] = json!(u64::MAX);
+    v.as_object_mut().unwrap().remove("changed_files");
+    server
+        .mock("GET", "/repos/octo/repo/pulls/8")
+        .with_body(v.to_string())
+        .create_async()
+        .await;
+    server
+        .mock("GET", "/repos/octo/repo/issues/8/comments")
+        .match_query(Matcher::Any)
+        .with_body("[]")
+        .create_async()
+        .await;
+    let d = forge(&server, None).pull(8).await.unwrap();
+    assert_eq!(d.body, "text");
+    assert_eq!(d.mergeable, Some(true));
+    assert_eq!(d.additions, u32::MAX);
+    assert_eq!(d.changed_files, 0);
+}
+
+#[tokio::test]
+async fn comment_pull_requires_a_token_and_posts_json() {
+    let mut server = Server::new_async().await;
+    let m = server
+        .mock("POST", "/repos/octo/repo/issues/5/comments")
+        .match_header("authorization", format!("Bearer {SENTINEL}").as_str())
+        .match_body(Matcher::Json(json!({"body": "lgtm"})))
+        .with_status(201)
+        .with_body(comment_json(78, "lgtm").to_string())
+        .expect(1)
+        .create_async()
+        .await;
+    let err = forge(&server, None)
+        .comment_pull(5, "lgtm")
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, ErrorKind::AuthRequired);
+    let c = forge(&server, Some(SENTINEL))
+        .comment_pull(5, "lgtm")
+        .await
+        .unwrap();
+    m.assert_async().await;
+    assert_eq!(c.id, "78");
+    let err = forge(&server, Some(SENTINEL))
+        .comment_pull(5, "  ")
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, ErrorKind::InvalidInput);
+}
+
+#[tokio::test]
+async fn pull_errors_never_contain_the_token() {
+    let mut server = Server::new_async().await;
+    server
+        .mock("GET", "/repos/octo/repo/pulls/9")
+        .with_status(401)
+        .with_body(json!({"message": "Bad credentials"}).to_string())
+        .create_async()
+        .await;
+    let err = forge(&server, Some(SENTINEL)).pull(9).await.unwrap_err();
+    assert_eq!(err.kind, ErrorKind::AuthFailed);
+    assert_no_token(&err);
 }

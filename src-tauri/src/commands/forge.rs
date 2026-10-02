@@ -127,32 +127,38 @@ pub async fn forge_commit_comment(
 #[tauri::command]
 #[specta::specta]
 pub async fn forge_pulls(
-    _state: tauri::State<'_, crate::git::GitState>,
-    _repo: RepoId,
-    _query: PullQuery,
+    state: tauri::State<'_, crate::git::GitState>,
+    repo: RepoId,
+    query: PullQuery,
 ) -> AppResult<PullPage> {
-    Err(AppError::not_implemented("forge_pulls"))
+    forge::github_for(&state, &repo)
+        .await?
+        .list_pulls(&query)
+        .await
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn forge_pull(
-    _state: tauri::State<'_, crate::git::GitState>,
-    _repo: RepoId,
-    _number: u32,
+    state: tauri::State<'_, crate::git::GitState>,
+    repo: RepoId,
+    number: u32,
 ) -> AppResult<PullDetail> {
-    Err(AppError::not_implemented("forge_pull"))
+    forge::github_for(&state, &repo).await?.pull(number).await
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn forge_pull_comment(
-    _state: tauri::State<'_, crate::git::GitState>,
-    _repo: RepoId,
-    _number: u32,
-    _body: String,
+    state: tauri::State<'_, crate::git::GitState>,
+    repo: RepoId,
+    number: u32,
+    body: String,
 ) -> AppResult<ForgeComment> {
-    Err(AppError::not_implemented("forge_pull_comment"))
+    forge::github_for(&state, &repo)
+        .await?
+        .comment_pull(number, &body)
+        .await
 }
 
 #[tauri::command]

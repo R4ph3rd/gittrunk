@@ -28,7 +28,7 @@ pub struct GithubForge {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Scope {
+pub(crate) enum Scope {
     Repo,
     Commit,
 }
@@ -64,20 +64,7 @@ fn issue_of(v: &Value) -> AppResult<Issue> {
         .and_then(Value::as_u64)
         .and_then(|n| u32::try_from(n).ok())
         .ok_or_else(|| AppError::new(ErrorKind::Network, "Unexpected response from GitHub"))?;
-    let labels = v
-        .get("labels")
-        .and_then(Value::as_array)
-        .map(|a| {
-            a.iter()
-                .filter_map(|l| {
-                    l.get("name")
-                        .and_then(Value::as_str)
-                        .or_else(|| l.as_str())
-                        .map(str::to_string)
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    let labels = labels_of(v);
     Ok(Issue {
         number,
         title: str_of(v, "title"),
@@ -92,6 +79,83 @@ fn issue_of(v: &Value) -> AppResult<Issue> {
             .get("comments")
             .and_then(Value::as_u64)
             .map_or(0, |n| u32::try_from(n).unwrap_or(u32::MAX)),
+        created_at: parse_time(&str_of(v, "created_at")),
+        updated_at: parse_time(&str_of(v, "updated_at")),
+        url: str_of(v, "html_url"),
+    })
+}
+
+fn labels_of(v: &Value) -> Vec<String> {
+    v.get("labels")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter_map(|l| {
+                    l.get("name")
+                        .and_then(Value::as_str)
+                        .or_else(|| l.as_str())
+                        .map(str::to_string)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn unexpected() -> AppError {
+    AppError::new(ErrorKind::Network, "Unexpected response from GitHub")
+}
+
+fn count_of(v: &Value, key: &str) -> u32 {
+    v.get(key)
+        .and_then(Value::as_u64)
+        .map_or(0, |n| u32::try_from(n).unwrap_or(u32::MAX))
+}
+
+fn branch_of(v: &Value, base_repo: Option<&str>) -> PullBranch {
+    let repo = v
+        .get("repo")
+        .and_then(|r| r.get("full_name"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    PullBranch {
+        name: str_of(v, "ref"),
+        label: str_of(v, "label"),
+        sha: str_of(v, "sha"),
+        is_fork: repo.is_none() || repo.as_deref() != base_repo,
+        repo,
+    }
+}
+
+fn pull_of(v: &Value) -> AppResult<ForgePull> {
+    let number = v
+        .get("number")
+        .and_then(Value::as_u64)
+        .and_then(|n| u32::try_from(n).ok())
+        .ok_or_else(unexpected)?;
+    let empty = Value::Null;
+    let base_json = v.get("base").unwrap_or(&empty);
+    let base_repo = base_json
+        .get("repo")
+        .and_then(|r| r.get("full_name"))
+        .and_then(Value::as_str);
+    let base = branch_of(base_json, base_repo);
+    let head = branch_of(v.get("head").unwrap_or(&empty), base_repo);
+    let state = if v.get("merged_at").is_some_and(Value::is_string) {
+        PullState::Merged
+    } else if str_of(v, "state") == "closed" {
+        PullState::Closed
+    } else {
+        PullState::Open
+    };
+    Ok(ForgePull {
+        number,
+        title: str_of(v, "title"),
+        state,
+        draft: v.get("draft").and_then(Value::as_bool).unwrap_or(false),
+        author: user_of(v),
+        head,
+        base,
+        labels: labels_of(v),
         created_at: parse_time(&str_of(v, "created_at")),
         updated_at: parse_time(&str_of(v, "updated_at")),
         url: str_of(v, "html_url"),
@@ -136,12 +200,12 @@ fn reset_time(resp: &Response) -> Option<String> {
     Some(format!("{:02}:{:02} UTC", t.hour(), t.minute()))
 }
 
-fn network(e: reqwest::Error) -> AppError {
+pub(crate) fn network(e: reqwest::Error) -> AppError {
     AppError::new(ErrorKind::Network, scrub(&e))
 }
 
 /// Maps a non-success response to an error (never includes credentials).
-async fn error_for(resp: Response, authed: bool, scope: Scope) -> AppError {
+pub(crate) async fn error_for(resp: Response, authed: bool, scope: Scope) -> AppError {
     let status = resp.status();
     let rate_limited = resp
         .headers()
@@ -328,6 +392,56 @@ impl GithubForge {
         Ok(out)
     }
 
+    async fn do_list_pulls(&self, q: &PullQuery) -> AppResult<PullPage> {
+        let state = match q.state {
+            PullStateFilter::Open => "open",
+            PullStateFilter::Closed => "closed",
+            PullStateFilter::All => "all",
+        };
+        let per_page = q.per_page.clamp(1, 100);
+        let page = q.page.max(1);
+        let url = self.repo_path(&format!(
+            "pulls?state={state}&per_page={per_page}&page={page}&sort=updated&direction=desc"
+        ));
+        let resp = self
+            .send(self.request(Method::GET, &url), Scope::Repo)
+            .await?;
+        let next = next_page(&resp);
+        let v = Self::json(resp).await?;
+        let items = v
+            .as_array()
+            .ok_or_else(unexpected)?
+            .iter()
+            .map(pull_of)
+            .collect::<AppResult<Vec<_>>>()?;
+        Ok(PullPage {
+            items,
+            next_page: next,
+        })
+    }
+
+    async fn do_pull(&self, number: u32) -> AppResult<PullDetail> {
+        let url = self.repo_path(&format!("pulls/{number}"));
+        let resp = self
+            .send(self.request(Method::GET, &url), Scope::Repo)
+            .await?;
+        let v = Self::json(resp).await?;
+        let pull = pull_of(&v)?;
+        let comments = self
+            .comment_pages(&format!("issues/{number}/comments"), Scope::Repo)
+            .await?;
+        Ok(PullDetail {
+            pull,
+            body: str_of(&v, "body"),
+            comments,
+            commits: count_of(&v, "commits"),
+            additions: count_of(&v, "additions"),
+            deletions: count_of(&v, "deletions"),
+            changed_files: count_of(&v, "changed_files"),
+            mergeable: v.get("mergeable").and_then(Value::as_bool),
+        })
+    }
+
     async fn do_issue(&self, number: u32) -> AppResult<IssueDetail> {
         let url = self.repo_path(&format!("issues/{number}"));
         let resp = self
@@ -381,7 +495,7 @@ impl GithubForge {
     }
 }
 
-fn authed(
+pub(crate) fn authed(
     client: &reqwest::Client,
     token: &Option<String>,
     method: Method,
@@ -433,6 +547,25 @@ impl Forge for GithubForge {
     }
 
     fn comment_issue<'a>(
+        &'a self,
+        number: u32,
+        body: &'a str,
+    ) -> BoxFuture<'a, AppResult<ForgeComment>> {
+        Box::pin(async move {
+            self.post_comment(&format!("issues/{number}/comments"), body, Scope::Repo)
+                .await
+        })
+    }
+
+    fn list_pulls<'a>(&'a self, q: &'a PullQuery) -> BoxFuture<'a, AppResult<PullPage>> {
+        Box::pin(self.do_list_pulls(q))
+    }
+
+    fn pull<'a>(&'a self, number: u32) -> BoxFuture<'a, AppResult<PullDetail>> {
+        Box::pin(self.do_pull(number))
+    }
+
+    fn comment_pull<'a>(
         &'a self,
         number: u32,
         body: &'a str,

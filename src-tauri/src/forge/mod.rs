@@ -1,4 +1,4 @@
-//! Forge integration (GitHub issues and comments).
+//! Forge integration (GitHub issues, pull requests, comments, notifications).
 
 pub mod github;
 pub mod remote;
@@ -19,6 +19,13 @@ pub trait Forge: Send + Sync {
     fn issue<'a>(&'a self, number: u32) -> BoxFuture<'a, AppResult<IssueDetail>>;
     fn create_issue<'a>(&'a self, req: &'a IssueCreateRequest) -> BoxFuture<'a, AppResult<Issue>>;
     fn comment_issue<'a>(
+        &'a self,
+        number: u32,
+        body: &'a str,
+    ) -> BoxFuture<'a, AppResult<ForgeComment>>;
+    fn list_pulls<'a>(&'a self, q: &'a PullQuery) -> BoxFuture<'a, AppResult<PullPage>>;
+    fn pull<'a>(&'a self, number: u32) -> BoxFuture<'a, AppResult<PullDetail>>;
+    fn comment_pull<'a>(
         &'a self,
         number: u32,
         body: &'a str,
@@ -62,7 +69,7 @@ pub async fn github_for(state: &crate::git::GitState, repo: &str) -> AppResult<G
         let Some(fr) = forge_repo.filter(|r| r.kind == ForgeKind::Github) else {
             return Err(AppError::new(
                 ErrorKind::Unsupported,
-                "Issues need a GitHub remote",
+                "This needs a GitHub remote",
             ));
         };
         let (token, _) = tokens::resolve(
