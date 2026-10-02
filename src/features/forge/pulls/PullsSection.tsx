@@ -52,7 +52,10 @@ export function PullsSection({ repoId }: { repoId: string }) {
             badges={
               <>
                 {pull.draft ? <Badge>Draft</Badge> : null}
-                <BranchChip repoId={repoId} branch={pull.head} remote={remote} />
+                {/* Bounded so the title keeps room in the narrow sidebar row. */}
+                <span className="flex min-w-0 max-w-24">
+                  <BranchChip repoId={repoId} branch={pull.head} remote={remote} />
+                </span>
               </>
             }
             onClick={() => openPull(repoId, pull.number)}
