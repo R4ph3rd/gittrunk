@@ -195,6 +195,30 @@ describe("settings dialog", () => {
     );
   });
 
+  it("turns the background gradients off", async () => {
+    const user = userEvent.setup();
+    setup();
+    const dialog = await openDialog(user);
+    const toggle = within(dialog).getByRole("switch", { name: "Background gradients" });
+    await waitFor(() => expect(toggle).toBeChecked());
+    await user.click(toggle);
+    await waitFor(() =>
+      expect(mocks().settingsSet).toHaveBeenCalledWith(
+        expect.objectContaining({ backdrop: false }),
+      ),
+    );
+  });
+
+  it("opens the documentation through the backend", async () => {
+    const user = userEvent.setup();
+    setup();
+    (commands.appOpenUrl as ReturnType<typeof vi.fn>).mockImplementation(() => ok(null));
+    const dialog = await openDialog(user);
+    await user.click(within(dialog).getByRole("button", { name: "About" }));
+    await user.click(await within(dialog).findByRole("button", { name: "gittrunk documentation" }));
+    expect(commands.appOpenUrl).toHaveBeenCalledWith("https://github.com/R4ph3rd/gittrunk#readme");
+  });
+
   it("shows backend validation errors for the git path", async () => {
     const user = userEvent.setup();
     setup();

@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fail, ok } from "@/app/mockBindings";
@@ -86,5 +86,33 @@ describe("Integrations", () => {
     await waitFor(() =>
       expect(spy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["avatar"] })),
     );
+  });
+
+  it("shows GitLab and Bitbucket cards as coming soon without any input", async () => {
+    forgeReady(commands, { token: "none" });
+    renderWithClient(<Integrations />);
+    for (const title of ["GitLab", "Bitbucket and Gitea"]) {
+      const card = (await screen.findByRole("heading", { name: title })).closest("section")!;
+      expect(within(card).getByText("Coming soon")).toBeInTheDocument();
+      expect(within(card).queryByRole("textbox")).not.toBeInTheDocument();
+      expect(within(card).queryByLabelText(/token/i)).not.toBeInTheDocument();
+      expect(within(card).queryByRole("button")).not.toBeInTheDocument();
+      expect(card).toHaveTextContent(`Repositories on ${title}`);
+    }
+  });
+
+  it("orders GitHub, GitLab, Bitbucket and Gitea, then Avatars", async () => {
+    forgeReady(commands, { token: "none" });
+    renderWithClient(<Integrations />);
+    await screen.findByText("No token: public repositories only, read-only");
+    const names = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+    expect(names).toEqual(["GitHub", "GitLab", "Bitbucket and Gitea"]);
+    expect(screen.getByText("Avatars")).toBeInTheDocument();
+  });
+
+  it("explains the token scopes", async () => {
+    forgeReady(commands, { token: "none" });
+    renderWithClient(<Integrations />);
+    expect(await screen.findByText(/plus the notifications scope/)).toBeInTheDocument();
   });
 });

@@ -15,14 +15,16 @@ import {
   Label,
   SegmentedControl,
   Switch,
+  toast,
 } from "@/design/components";
 import { cn } from "@/lib/cn";
-import { useAppInfo } from "@/ipc/queries";
+import { openUrl, useAppInfo } from "@/ipc/queries";
 import type { CommitOrder, PullStrategy, ThemePreference } from "@/ipc/bindings";
 import { useRepoStore } from "@/stores/repo";
 import { updateSettings, useSettings, useSettingsStore, type SectionId } from "@/stores/settings";
 import { usePlatform } from "@/app/platform";
 import { Integrations } from "@/features/forge/Integrations";
+import { errorMessage } from "@/features/forge/helpers";
 import { GitIdentityForm } from "./GitIdentityForm";
 import { KeyboardSection } from "./KeyboardSection";
 import { SshKeysSection } from "./SshKeysSection";
@@ -80,6 +82,17 @@ export function General() {
           id="settings-confirm"
           checked={s.confirmDestructive}
           onCheckedChange={(confirmDestructive) => void updateSettings({ confirmDestructive })}
+        />
+      </Row>
+      <Row
+        title="Background gradients"
+        description="Soft gradients behind the commit graph and on the Home page. They stay still when your system asks for reduced motion."
+        htmlFor="settings-backdrop"
+      >
+        <Switch
+          id="settings-backdrop"
+          checked={s.backdrop}
+          onCheckedChange={(backdrop) => void updateSettings({ backdrop })}
         />
       </Row>
     </>
@@ -271,14 +284,13 @@ function About() {
       <dd>{info.data?.platform ?? "…"}</dd>
       <dt className="text-fg-muted">Documentation</dt>
       <dd>
-        <a
-          href={DOCS_URL}
-          target="_blank"
-          rel="noreferrer"
+        <button
+          type="button"
+          onClick={() => openUrl(DOCS_URL).catch((e: unknown) => toast.error(errorMessage(e)))}
           className="text-accent underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--focus-ring)]"
         >
           gittrunk documentation
-        </a>
+        </button>
       </dd>
     </dl>
   );

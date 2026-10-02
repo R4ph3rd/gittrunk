@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Button, Input, Label, SegmentedControl, Spinner } from "@/design/components";
+import { Badge, Button, Input, Label, SegmentedControl, Spinner } from "@/design/components";
 import { resetAvatarImages } from "@/features/graph/avatarImages";
 import type { AvatarMode } from "@/ipc/bindings";
 import {
@@ -53,9 +53,12 @@ function GithubToken() {
   };
 
   return (
-    <section aria-labelledby="integrations-github" className="border-b border-border py-3">
+    <section
+      aria-labelledby="integrations-github"
+      className="my-3 rounded-md border border-border bg-surface p-3"
+    >
       <h3 id="integrations-github" className="text-base font-medium text-fg">
-        GitHub token
+        GitHub
       </h3>
       <p className="mb-2 text-sm text-fg-muted" role="status">
         {source.data ? STATUS[source.data] : "Checking token…"}
@@ -90,9 +93,31 @@ function GithubToken() {
         </p>
       ) : null}
       <p className="mt-2 text-sm text-fg-muted">
-        Use a classic token with the repo scope (or public_repo for public repositories), or a
-        fine-grained token with Issues and Contents read and write access. The token is stored in
-        the system keychain and never shown again.
+        Use a classic token with the repo scope (or public_repo for public repositories) for issues
+        and pull requests, plus the notifications scope for GitHub notifications. Or use a
+        fine-grained token with Issues, Pull requests and Contents read and write access;
+        fine-grained tokens cannot read notifications. The token is stored in the system keychain
+        and never shown again.
+      </p>
+    </section>
+  );
+}
+
+function ComingSoon({ id, title, host }: { id: string; title: string; host: string }) {
+  return (
+    <section
+      aria-labelledby={id}
+      className="my-3 rounded-md border border-border bg-surface p-3 opacity-80"
+    >
+      <div className="flex items-center gap-2">
+        <h3 id={id} className="text-base font-medium text-fg">
+          {title}
+        </h3>
+        <Badge>Coming soon</Badge>
+      </div>
+      <p className="mt-1 text-sm text-fg-muted">
+        Issues, merge requests and notifications are not available yet. Repositories on {host} still
+        work for fetch, pull and push.
       </p>
     </section>
   );
@@ -141,11 +166,17 @@ function Avatars() {
   );
 }
 
-/** Settings > Integrations: GitHub token and avatar source. */
+/** Settings > Integrations: GitHub, upcoming forges and the avatar source. */
 export function Integrations() {
   return (
     <>
       <GithubToken />
+      <ComingSoon id="integrations-gitlab" title="GitLab" host="GitLab" />
+      <ComingSoon
+        id="integrations-bitbucket"
+        title="Bitbucket and Gitea"
+        host="Bitbucket and Gitea"
+      />
       <Avatars />
     </>
   );
