@@ -3,8 +3,10 @@ import { ShellAppBar } from "@/app/layout/ShellAppBar";
 import type { RouteScreenProps } from "@/app/layout/registry";
 import { ListRow } from "@/design/components";
 import { Integrations } from "@/features/forge/Integrations";
+import { usePlatform } from "@/app/platform";
 import { useNav } from "@/stores/nav";
 import { AI_SETTINGS_COMMAND, Ai, General, Git } from "./SettingsDialog";
+import { SshKeysSection } from "./SshKeysSection";
 
 type Section = "general" | "git" | "ai" | "integrations" | "ssh";
 
@@ -23,10 +25,13 @@ const LABELS: Record<Section, string> = {
 export function SettingsPage({ repoId, route }: RouteScreenProps<"settings">) {
   const nav = useNav();
   const hasAi = useCommandStore((s) => AI_SETTINGS_COMMAND in s.commands);
-  const sections = (["general", "git", "ai", "integrations"] as const).filter(
-    (s) => s !== "ai" || hasAi,
+  const { supportsSsh } = usePlatform();
+  const sections = (["general", "git", "ai", "integrations", "ssh"] as const).filter(
+    (s) => (s !== "ai" || hasAi) && (s !== "ssh" || supportsSsh),
   );
-  const section = route.section;
+  // A route to a hidden section (SSH on Android) falls back to the section list.
+  const section =
+    route.section && sections.some((s) => s === route.section) ? route.section : undefined;
 
   if (!section) {
     return (
@@ -61,6 +66,7 @@ export function SettingsPage({ repoId, route }: RouteScreenProps<"settings">) {
         {section === "git" ? <Git /> : null}
         {section === "ai" ? <Ai /> : null}
         {section === "integrations" ? <Integrations /> : null}
+        {section === "ssh" ? <SshKeysSection /> : null}
       </div>
     </div>
   );

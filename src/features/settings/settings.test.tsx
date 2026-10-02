@@ -345,7 +345,7 @@ describe("integrations section", () => {
   const mockForge = () =>
     (commands.forgeTokenSource as ReturnType<typeof vi.fn>).mockImplementation(() => ok("none"));
 
-  it("is offered between AI and About in the dialog", async () => {
+  it("is offered between AI and SSH keys in the dialog", async () => {
     const user = userEvent.setup();
     mockForge();
     setup();
@@ -353,7 +353,8 @@ describe("integrations section", () => {
     const labels = within(within(dialog).getByRole("navigation", { name: "Settings sections" }))
       .getAllByRole("button")
       .map((b) => b.textContent);
-    expect(labels.indexOf("Integrations")).toBe(labels.indexOf("About") - 1);
+    expect(labels.indexOf("Integrations")).toBe(labels.indexOf("SSH keys") - 1);
+    expect(labels.indexOf("SSH keys")).toBe(labels.indexOf("About") - 1);
     await user.click(within(dialog).getByRole("button", { name: "Integrations" }));
     expect(
       await within(dialog).findByText("No token: public repositories only, read-only"),

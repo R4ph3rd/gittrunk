@@ -25,6 +25,7 @@ import { usePlatform } from "@/app/platform";
 import { Integrations } from "@/features/forge/Integrations";
 import { GitIdentityForm } from "./GitIdentityForm";
 import { KeyboardSection } from "./KeyboardSection";
+import { SshKeysSection } from "./SshKeysSection";
 
 export const AI_SETTINGS_COMMAND = "ai.settings";
 const DOCS_URL = "https://github.com/R4ph3rd/gittrunk#readme";
@@ -289,6 +290,7 @@ const SECTIONS: { id: SectionId; label: string }[] = [
   { id: "keyboard", label: "Keyboard" },
   { id: "ai", label: "AI" },
   { id: "integrations", label: "Integrations" },
+  { id: "ssh", label: "SSH keys" },
   { id: "about", label: "About" },
 ];
 
@@ -299,7 +301,10 @@ export function SettingsDialog() {
   const setSection = useSettingsStore((s) => s.setSection);
   const closeDialog = useSettingsStore((s) => s.closeDialog);
   const hasAi = useCommandStore((s) => AI_SETTINGS_COMMAND in s.commands);
-  const sections = SECTIONS.filter((s) => s.id !== "ai" || hasAi);
+  const { supportsSsh } = usePlatform();
+  const sections = SECTIONS.filter(
+    (s) => (s.id !== "ai" || hasAi) && (s.id !== "ssh" || supportsSsh),
+  );
   const active = sections.some((s) => s.id === section) ? section : "general";
   const label = sections.find((s) => s.id === active)?.label ?? "General";
 
@@ -338,6 +343,7 @@ export function SettingsDialog() {
             {active === "keyboard" ? <KeyboardSection /> : null}
             {active === "ai" ? <Ai /> : null}
             {active === "integrations" ? <Integrations /> : null}
+            {active === "ssh" ? <SshKeysSection /> : null}
             {active === "about" ? <About /> : null}
           </div>
         </div>
