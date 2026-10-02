@@ -5,6 +5,8 @@ import type {
   FileChange,
   FileDiff,
   ForgeComment,
+  ForgeNotification,
+  ForgePull,
   ForgeRepo,
   GraphEdge,
   GraphMeta,
@@ -12,12 +14,16 @@ import type {
   Hunk,
   Issue,
   IssueDetail,
+  KnownRepo,
   OplogEntry,
   OplogState,
+  PullDetail,
   RefColor,
   RefLabel,
   RefsSnapshot,
   RepoInfo,
+  SshKey,
+  SshKeyList,
   StatusSnapshot,
 } from "@/ipc/bindings";
 
@@ -597,6 +603,181 @@ export function commitComments(oid: string): ForgeComment[] {
       url: "https://github.com/R4ph3rd/gittrunk/commit/abc#commitcomment-2",
     },
   ];
+}
+
+const branchOid = (name: string): string =>
+  REFS.local.find((b) => b.name === name)?.oid ?? REFS.local[0]?.oid ?? HEAD_OID;
+
+const pullBranch = (name: string, repo: string | null, owner = "R4ph3rd") => ({
+  name,
+  label: `${owner}:${name}`,
+  sha: repo === null ? oidOf(900) : branchOid(name),
+  repo,
+  isFork: repo !== null && repo !== "R4ph3rd/gittrunk",
+});
+
+const MAIN_BASE = pullBranch("main", "R4ph3rd/gittrunk");
+
+export const PULLS: ForgePull[] = [
+  {
+    number: 41,
+    title: "Show author avatars in the graph",
+    state: "open",
+    draft: false,
+    author: { login: at(AUTHORS, 0).login },
+    head: pullBranch("feature/avatars", "R4ph3rd/gittrunk"),
+    base: MAIN_BASE,
+    labels: ["enhancement"],
+    createdAt: NEWEST - 2 * 86_400,
+    updatedAt: NEWEST - 3_600,
+    url: "https://github.com/R4ph3rd/gittrunk/pull/41",
+  },
+  {
+    number: 40,
+    title: "WIP: smoother scrolling past 50k commits",
+    state: "open",
+    draft: true,
+    author: { login: at(AUTHORS, 2).login },
+    head: pullBranch("fix/scroll", "R4ph3rd/gittrunk", at(AUTHORS, 2).login),
+    base: MAIN_BASE,
+    labels: ["performance"],
+    createdAt: NEWEST - 4 * 86_400,
+    updatedAt: NEWEST - 9_000,
+    url: "https://github.com/R4ph3rd/gittrunk/pull/40",
+  },
+  {
+    number: 38,
+    title: "Fix typo in the README install section",
+    state: "merged",
+    draft: false,
+    author: { login: at(AUTHORS, 4).login },
+    head: pullBranch("docs/readme-typo", null),
+    base: MAIN_BASE,
+    labels: [],
+    createdAt: NEWEST - 9 * 86_400,
+    updatedAt: NEWEST - 8 * 86_400,
+    url: "https://github.com/R4ph3rd/gittrunk/pull/38",
+  },
+  {
+    number: 37,
+    title: "Add Dutch translation",
+    state: "open",
+    draft: false,
+    author: { login: "translator-nl" },
+    head: pullBranch("add-dutch", "translator-nl/gittrunk", "translator-nl"),
+    base: MAIN_BASE,
+    labels: ["i18n", "good first issue"],
+    createdAt: NEWEST - 12 * 86_400,
+    updatedAt: NEWEST - 5 * 86_400,
+    url: "https://github.com/R4ph3rd/gittrunk/pull/37",
+  },
+];
+
+export function pullDetail(number: number): PullDetail {
+  const pull = PULLS.find((p) => p.number === number) ?? at(PULLS, 0);
+  const comment = (id: number, who: Author, body: string): ForgeComment => ({
+    id: `p${pull.number}-${id}`,
+    author: { login: who.login },
+    body,
+    createdAt: NEWEST - (3 - id) * 3_600,
+    url: `${pull.url}#issuecomment-${id}`,
+  });
+  return {
+    pull,
+    body:
+      "Adds avatars next to each commit author.\n\n- Loaded through the backend only\n" +
+      "- Falls back to initials\n\nText like <b>html</b> stays plain text.",
+    comments: [
+      comment(1, at(AUTHORS, 2), "Looks good. Does it respect the avatars setting?"),
+      comment(2, at(AUTHORS, 0), "Yes: with avatars off it shows initials only."),
+    ],
+    commits: 4,
+    additions: 212,
+    deletions: 37,
+    changedFiles: 9,
+    mergeable: true,
+  };
+}
+
+export const KNOWN_REPOS: KnownRepo[] = [
+  { path: fixtureRepoInfo.path, name: "gittrunk", lastOpened: NEWEST, exists: true },
+  { path: "/home/dev/dotfiles", name: "dotfiles", lastOpened: NEWEST - 86_400, exists: true },
+  {
+    path: "/home/dev/old-project",
+    name: "old-project",
+    lastOpened: NEWEST - 90 * 86_400,
+    exists: false,
+  },
+];
+
+export const NOTIFICATIONS: ForgeNotification[] = [
+  {
+    id: "1001",
+    title: "Show author avatars in the graph",
+    kind: "PullRequest",
+    reason: "review_requested",
+    repo: "R4ph3rd/gittrunk",
+    unread: true,
+    updatedAt: NEWEST - 1_200,
+    url: "https://github.com/R4ph3rd/gittrunk/pull/41",
+  },
+  {
+    id: "1002",
+    title: "Graph stutters when scrolling past 50k commits",
+    kind: "Issue",
+    reason: "mention",
+    repo: "R4ph3rd/gittrunk",
+    unread: true,
+    updatedAt: NEWEST - 7_200,
+    url: "https://github.com/R4ph3rd/gittrunk/issues/12",
+  },
+  {
+    id: "1003",
+    title: "v0.2.0",
+    kind: "Release",
+    reason: "subscribed",
+    repo: "R4ph3rd/gittrunk",
+    unread: false,
+    updatedAt: NEWEST - 3 * 86_400,
+    url: null,
+  },
+];
+
+export const SSH_KEYS: SshKeyList = {
+  dir: "/home/dev/.ssh",
+  keys: [
+    {
+      name: "id_ed25519",
+      path: "/home/dev/.ssh/id_ed25519",
+      publicKey:
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPreviewKeyPreviewKeyPreviewKeyPreview dev@gittrunk",
+      algorithm: "ssh-ed25519",
+      fingerprint: "SHA256:Zk3c1J0Qm9v1b0o3pQ5Yq0m8R7m1lKf0wYfX2u1aB4c",
+      comment: "dev@gittrunk",
+      hasPrivateKey: true,
+    },
+    {
+      name: "id_rsa_work",
+      path: "/home/dev/.ssh/id_rsa_work",
+      publicKey: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQPreviewRsaKeyPreviewRsaKey work@laptop",
+      algorithm: "ssh-rsa",
+      fingerprint: "SHA256:Q1w2E3r4T5y6U7i8O9p0A1s2D3f4G5h6J7k8L9z0X1c",
+      comment: "work@laptop",
+      hasPrivateKey: false,
+    },
+  ],
+};
+
+export function generatedSshKey(name: string, comment: string): SshKey {
+  return {
+    name,
+    path: `${SSH_KEYS.dir}/${name}`,
+    publicKey: `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGeneratedPreviewKeyGeneratedPreviewKey ${comment}`,
+    algorithm: "ssh-ed25519",
+    fingerprint: "SHA256:Gn3r4t3dPr3v13wK3yF1ng3rpr1nt0000000000000",
+    comment,
+    hasPrivateKey: true,
+  };
 }
 
 /** Text the fake terminal prints when a session opens. */

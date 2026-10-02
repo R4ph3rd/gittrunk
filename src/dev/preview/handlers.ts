@@ -7,10 +7,14 @@ import {
   GRAPH_ROWS,
   HEAD_OID,
   ISSUES,
+  KNOWN_REPOS,
+  NOTIFICATIONS,
   OPLOG,
   OPLOG_STATE,
+  PULLS,
   REFS,
   REMOTES,
+  SSH_KEYS,
   TERMINAL_BANNER,
   avatarForEmail,
   avatarForLogin,
@@ -19,9 +23,11 @@ import {
   commitFiles,
   fileDiff,
   fixtureRepoInfo,
+  generatedSshKey,
   issueDetail,
   makeStatus,
   oidOf,
+  pullDetail,
 } from "./fixtures";
 
 type CommandName = keyof typeof commands;
@@ -100,6 +106,9 @@ export const handlerTable: HandlerTable = {
     { path: "/home/dev/dotfiles", name: "dotfiles", lastOpened: 1_759_000_000 },
   ],
   repoDelete: nothing,
+  repoKnown: () => KNOWN_REPOS,
+  repoForget: nothing,
+  appOpenUrl: nothing,
 
   graphLoad: () => GRAPH_META,
   graphRows: (a) => GRAPH_ROWS.slice(num(a.start), num(a.start) + num(a.len)),
@@ -301,6 +310,27 @@ export const handlerTable: HandlerTable = {
     createdAt: 1_760_000_000,
     url: "https://github.com/R4ph3rd/gittrunk/issues/12#issuecomment-99",
   }),
+  forgePulls: (a) => {
+    const q = a.query as { state: "open" | "closed" | "all" };
+    const wanted = (p: (typeof PULLS)[number]) =>
+      q.state === "all" ||
+      (q.state === "open" ? p.state === "open" : p.state === "closed" || p.state === "merged");
+    return { items: PULLS.filter(wanted), nextPage: null };
+  },
+  forgePull: (a) => pullDetail(num(a.number)),
+  forgePullComment: (a) => ({
+    id: "new-pull-comment",
+    author: { login: "R4ph3rd" },
+    body: str(a.body),
+    createdAt: 1_760_000_000,
+    url: "https://github.com/R4ph3rd/gittrunk/pull/41#issuecomment-99",
+  }),
+  forgeNotifications: () => NOTIFICATIONS,
+  sshKeysList: () => SSH_KEYS,
+  sshKeyGenerate: (a) => {
+    const req = a.request as { name: string; comment: string };
+    return generatedSshKey(req.name, req.comment);
+  },
   forgeCommitComments: (a) => commitComments(str(a.oid)),
   forgeCommitComment: (a) => ({
     id: "new-commit-comment",
@@ -347,6 +377,8 @@ export const handlerTable: HandlerTable = {
     graphOrder: "topo",
     diffContextLines: 3,
     avatars: "github",
+    backdrop: true,
+    workspaces: [],
   }),
   settingsSet: (a) => a.settings as Data<"settingsSet">,
   keybindingsGet: () => [],
