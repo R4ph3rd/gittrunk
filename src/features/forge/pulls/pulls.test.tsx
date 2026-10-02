@@ -1,11 +1,19 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
-import { fail, ok } from "@/app/mockBindings";
-import { installDomShims, resetStore } from "@/app/testing";
+import { emitOpFinished, fail, ok } from "@/app/mockBindings";
+import { ANDROID_PLATFORM } from "@/app/platform";
+import {
+  installBackend,
+  installDomShims,
+  oid,
+  renderApp,
+  repoInfo,
+  resetStore,
+} from "@/app/testing";
 import { commands } from "@/ipc/bindings";
-import { useWorkspaceStore } from "@/stores/workspace";
+import { openPull, useWorkspaceStore } from "@/stores/workspace";
 import { makeComment, makeStatus, renderWithClient } from "../testing";
 import { PullMainView } from "./PullMainView";
 import { PullsSection } from "./PullsSection";
@@ -171,5 +179,174 @@ describe("PullMainView", () => {
     expect(
       await screen.findByText("GitLab merge requests are not supported yet"),
     ).toBeInTheDocument();
+  });
+});
+
+describe("in the app", () => {
+  const app = commands as unknown as ReturnType<typeof pullsReady> & {
+    refsList: ReturnType<typeof vi.fn>;
+    checkout: ReturnType<typeof vi.fn>;
+    fetch: ReturnType<typeof vi.fn>;
+    platformInfo: ReturnType<typeof vi.fn>;
+  };
+
+  const branch = (name: string, remote: string | null) => ({
+    name: remote ? `${remote}/${name}` : name,
+    fullName: remote ? `refs/remotes/${remote}/${name}` : `refs/heads/${name}`,
+    oid: oid(1),
+    upstream: null,
+    ahead: 0,
+    behind: 0,
+    isHead: false,
+    remote,
+  });
+  const setRefs = (parts: { local?: string[]; remote?: string[] }) =>
+    app.refsList.mockImplementation(() =>
+      ok({
+        head: repoInfo.head,
+        local: (parts.local ?? []).map((n) => branch(n, null)),
+        remote: (parts.remote ?? []).map((n) => branch(n, "origin")),
+        tags: [],
+        stashes: [],
+      }),
+    );
+
+  async function openPullView(n: number, pulls = [makePull(1), makePull(2)]) {
+    await installBackend();
+    pullsReady(commands, { pulls });
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderApp();
+    await user.click(await screen.findByRole("button", { name: /demo/ }));
+    await screen.findByRole("grid", { name: "Commit graph" });
+    act(() => openPull("r1", n));
+    await screen.findByRole("button", { name: "Check out branch" }).catch(() => null);
+    return user;
+  }
+
+  it("lists pull requests above Issues, opens the detail and Esc goes back", async () => {
+    await installBackend();
+    pullsReady(commands);
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderApp();
+    await user.click(await screen.findByRole("button", { name: /demo/ }));
+    const nav = await screen.findByRole("navigation", { name: "References" });
+    const row = await within(nav).findByRole("button", { name: /#2 Pull title 2/ });
+    const pullsTitle = within(nav).getByRole("button", { name: "Pull requests" });
+    const issuesTitle = within(nav).getByRole("button", { name: "Issues" });
+    expect(
+      pullsTitle.compareDocumentPosition(issuesTitle) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    await user.click(row);
+    const view = await screen.findByTestId("pull-main-view");
+    await waitFor(() => expect(view).toHaveAttribute("data-view", "pull"));
+    expect(screen.getByText("Pull request #2")).toBeInTheDocument();
+    fireEvent.keyDown(view, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByTestId("pull-main-view")).toBeNull());
+    await user.click(within(nav).getByRole("button", { name: "Show all pull requests" }));
+    await screen.findByRole("list", { name: "Pull requests" });
+    await user.click(screen.getByRole("radio", { name: "Closed" }));
+    await waitFor(() =>
+      expect(c.forgePulls).toHaveBeenCalledWith("r1", expect.objectContaining({ state: "closed" })),
+    );
+  });
+
+  it("checks out an existing local branch", async () => {
+    const user = await openPullView(1);
+    setRefs({ local: ["feature-1"] });
+    await user.click(await screen.findByRole("button", { name: "Check out branch" }));
+    await waitFor(() =>
+      expect(app.checkout).toHaveBeenCalledWith("r1", { kind: "branch", name: "feature-1" }, false),
+    );
+    expect(toast.success).toHaveBeenCalledWith("Checked out feature-1");
+  });
+
+  it("creates a tracking branch from the remote branch", async () => {
+    const user = await openPullView(1);
+    setRefs({ remote: ["feature-1"] });
+    await user.click(await screen.findByRole("button", { name: "Check out branch" }));
+    await waitFor(() =>
+      expect(app.checkout).toHaveBeenCalledWith(
+        "r1",
+        { kind: "remoteBranch", name: "origin/feature-1", localName: "feature-1" },
+        false,
+      ),
+    );
+  });
+
+  it("fetches first when the branch is unknown, then checks it out", async () => {
+    const user = await openPullView(1);
+    setRefs({});
+    await user.click(await screen.findByRole("button", { name: "Check out branch" }));
+    await waitFor(() =>
+      expect(app.fetch).toHaveBeenCalledWith("r1", { remote: "origin", prune: false, tags: false }),
+    );
+    expect(app.checkout).not.toHaveBeenCalled();
+    setRefs({ remote: ["feature-1"] });
+    act(() => emitOpFinished("op-fetch"));
+    await waitFor(() =>
+      expect(app.checkout).toHaveBeenCalledWith(
+        "r1",
+        { kind: "remoteBranch", name: "origin/feature-1", localName: "feature-1" },
+        false,
+      ),
+    );
+  });
+
+  it("reports a branch that is still missing after the fetch", async () => {
+    const user = await openPullView(1);
+    setRefs({});
+    await user.click(await screen.findByRole("button", { name: "Check out branch" }));
+    await waitFor(() => expect(app.fetch).toHaveBeenCalled());
+    act(() => emitOpFinished("op-fetch"));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith("Branch feature-1 not found on origin"),
+    );
+    expect(app.checkout).not.toHaveBeenCalled();
+  });
+
+  it("toasts a checkout failure", async () => {
+    const user = await openPullView(1);
+    setRefs({ local: ["feature-1"] });
+    app.checkout.mockImplementation(() => fail("conflict", "Your changes would be overwritten"));
+    await user.click(await screen.findByRole("button", { name: "Check out branch" }));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Could not check out feature-1: Your changes would be overwritten",
+      ),
+    );
+  });
+
+  it("offers no checkout for a fork", async () => {
+    await openPullView(3, [
+      makePull(3, { head: makeBranch("patch", { isFork: true, label: "bob:patch" }) }),
+    ]);
+    expect(await screen.findByText(/From a fork: open it on GitHub/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Check out branch" })).toBeNull();
+  });
+
+  it("shows Checked out when HEAD is on the head branch", async () => {
+    await installBackend();
+    pullsReady(commands, { pulls: [makePull(1, { head: makeBranch("main") })] });
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderApp();
+    await user.click(await screen.findByRole("button", { name: /demo/ }));
+    await screen.findByRole("grid", { name: "Commit graph" });
+    act(() => openPull("r1", 1));
+    expect(await screen.findByRole("button", { name: "Checked out" })).toBeDisabled();
+  });
+
+  it("keeps the section, detail, checkout and composer on Android", async () => {
+    await installBackend();
+    pullsReady(commands);
+    app.platformInfo.mockImplementation(() => ok(ANDROID_PLATFORM));
+    setRefs({ local: ["feature-1"] });
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderApp();
+    await user.click(await screen.findByRole("button", { name: /demo/ }));
+    const nav = await screen.findByRole("navigation", { name: "References" });
+    await user.click(await within(nav).findByRole("button", { name: /#1 Pull title 1/ }));
+    expect(await screen.findByRole("textbox", { name: "Add a comment" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Check out branch" }));
+    await waitFor(() => expect(app.checkout).toHaveBeenCalled());
   });
 });

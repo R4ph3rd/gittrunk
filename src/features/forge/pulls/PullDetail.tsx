@@ -1,6 +1,10 @@
-import { Spinner } from "@/design/components";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { GitBranch } from "lucide-react";
+import { Button, Spinner } from "@/design/components";
+import type { ForgePull } from "@/ipc/bindings";
 import { absoluteDate, relativeDate } from "@/features/graph/format";
-import { useAddPullComment, useForgeStatus, usePull } from "@/ipc/queries";
+import { useAddPullComment, useForgeStatus, usePull, useRefs } from "@/ipc/queries";
 import { cn } from "@/lib/cn";
 import {
   CommentComposer,
@@ -10,9 +14,42 @@ import {
   ForgeError,
   OpenInBrowserButton,
 } from "../parts";
+import { checkoutPull, isCheckedOut } from "./checkout";
 import { BranchChip, PullStateBadge } from "./parts";
 
 const VERB = { open: "wants to merge", merged: "merged", closed: "closed" } as const;
+
+function CheckoutButton({
+  repoId,
+  pull,
+  remote,
+}: {
+  repoId: string;
+  pull: ForgePull;
+  remote: string;
+}) {
+  const client = useQueryClient();
+  const refs = useRefs(repoId).data;
+  const [busy, setBusy] = useState(false);
+  if (pull.head.isFork) {
+    return <span className="text-sm text-fg-muted">From a fork: open it on GitHub to review</span>;
+  }
+  const done = isCheckedOut(refs, pull);
+  return (
+    <Button
+      size="sm"
+      disabled={done}
+      loading={busy}
+      onClick={() => {
+        setBusy(true);
+        void checkoutPull(client, repoId, pull, remote).finally(() => setBusy(false));
+      }}
+    >
+      <GitBranch />
+      {done ? "Checked out" : "Check out branch"}
+    </Button>
+  );
+}
 
 /** Pull request header, stats, actions, description and conversation. Pair with `PullComposer`. */
 export function PullDetail({
@@ -71,6 +108,7 @@ export function PullDetail({
             compact ? "flex-col items-stretch" : "flex-wrap items-center",
           )}
         >
+          <CheckoutButton repoId={repoId} pull={pull} remote={remote} />
           <OpenInBrowserButton url={pull.url} />
           <CopyLinkButton url={pull.url} />
         </div>
