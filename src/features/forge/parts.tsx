@@ -1,10 +1,10 @@
 import { useState, type ReactNode } from "react";
-import { Copy } from "lucide-react";
+import { Copy, ExternalLink } from "lucide-react";
 import { Avatar, Badge, Button, Spinner, Textarea, toast } from "@/design/components";
 import { relativeDate, absoluteDate } from "@/features/graph/format";
 import { isIpcError } from "@/ipc/client";
 import type { ForgeComment, Issue } from "@/ipc/bindings";
-import { useAvatar } from "@/ipc/queries";
+import { openUrl, useAvatar } from "@/ipc/queries";
 import { cn } from "@/lib/cn";
 import { commentsLabel, errorMessage, useOpenIntegrations } from "./helpers";
 
@@ -223,6 +223,23 @@ export function CopyLinkButton({ url }: { url: string }) {
     >
       <Copy />
       Copy link
+    </Button>
+  );
+}
+
+/** Opens a forge page in the system browser (the backend only allows known hosts). */
+export function OpenInBrowserButton({ url }: { url: string }) {
+  return (
+    <Button
+      size="sm"
+      onClick={() => {
+        openUrl(url).catch((e: unknown) =>
+          toast.error(`Could not open the link: ${errorMessage(e)}`),
+        );
+      }}
+    >
+      <ExternalLink />
+      Open on GitHub
     </Button>
   );
 }

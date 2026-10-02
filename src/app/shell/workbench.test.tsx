@@ -12,9 +12,10 @@ import {
   resetStore,
 } from "@/app/testing";
 import { ANDROID_PLATFORM, DESKTOP_PLATFORM } from "@/app/platform";
+import { pullsReady, makePull } from "@/features/forge/pulls/testing";
 import { forgeReady, makeIssue } from "@/features/forge/testing";
 import { LAYOUT_STORAGE_KEY } from "@/stores/layout";
-import { openIssues, useWorkspaceStore } from "@/stores/workspace";
+import { openIssues, openPull, openPulls, useWorkspaceStore } from "@/stores/workspace";
 
 vi.mock("@/ipc/bindings", async () => (await import("@/app/mockBindings")).bindingsMock());
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(() => Promise.resolve("/work/demo")) }));
@@ -217,6 +218,27 @@ describe("center views", () => {
     ).not.toBeNull();
     await user.click(screen.getByRole("button", { name: "Back to graph" }));
     await waitFor(() => expect(screen.queryByTestId("forge-main-view")).toBeNull());
+  });
+
+  it("renders the pull request list and detail with their headers", async () => {
+    pullsReady(await backend(), { pulls: [makePull(7, { title: "Add login" })] });
+    const user = await openRepo();
+    act(() => openPulls("r1"));
+    await waitFor(() =>
+      expect(screen.getByTestId("pull-main-view")).toHaveAttribute("data-view", "pulls"),
+    );
+    const center = screen.getByTestId("center-area");
+    expect(within(center).getByText("Pull requests", { selector: "span" })).toBeInTheDocument();
+    expect(await within(center).findByText("Add login")).toBeInTheDocument();
+    act(() => openPull("r1", 7));
+    expect(await screen.findByText("Pull request #7")).toBeInTheDocument();
+    expect(screen.getByTestId("pull-main-view")).toHaveAttribute("data-view", "pull");
+    fireEvent.keyDown(screen.getByTestId("pull-main-view"), { key: "Escape" });
+    await waitFor(() =>
+      expect(screen.getByTestId("pull-main-view")).toHaveAttribute("data-view", "pulls"),
+    );
+    await user.click(screen.getByRole("button", { name: "Back to graph" }));
+    await waitFor(() => expect(screen.queryByTestId("pull-main-view")).toBeNull());
   });
 });
 

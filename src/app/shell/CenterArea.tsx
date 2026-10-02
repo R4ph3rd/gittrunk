@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, type KeyboardEvent } from "react";
 import { Spinner } from "@/design/components";
 import { ForgeMainView } from "@/features/forge/ForgeMainView";
+import { PullMainView } from "@/features/forge/pulls/PullMainView";
 import { GraphView } from "@/features/graph/GraphView";
 import { FileDiffView } from "@/features/repo/FileDiffView";
 import { effectiveOpen } from "@/features/staging/effectiveOpen";
@@ -105,6 +106,11 @@ export function CenterArea({ repoId }: { repoId: string }) {
       {(shown.kind === "issues" || shown.kind === "issue" || shown.kind === "newIssue") && (
         <div className="min-h-0 flex-1 overflow-auto bg-surface">
           <ForgeMainView repoId={repoId} view={shown} />
+        </div>
+      )}
+      {(shown.kind === "pulls" || shown.kind === "pull") && (
+        <div className="min-h-0 flex-1 overflow-auto bg-surface">
+          <PullMainView repoId={repoId} view={shown} />
         </div>
       )}
     </div>

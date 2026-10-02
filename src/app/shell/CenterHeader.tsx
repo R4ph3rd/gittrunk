@@ -51,6 +51,12 @@ export function CenterHeader({ repoId, view }: { repoId: string; view: CenterVie
     case "issue":
       content = <span className="text-sm font-medium">{`Issue #${view.number}`}</span>;
       break;
+    case "pulls":
+      content = <span className="text-sm font-medium">Pull requests</span>;
+      break;
+    case "pull":
+      content = <span className="text-sm font-medium">{`Pull request #${view.number}`}</span>;
+      break;
     case "newIssue":
       content = <span className="text-sm font-medium">New issue</span>;
       break;
