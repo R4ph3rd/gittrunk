@@ -92,8 +92,9 @@ describe("PullsSection", () => {
         ],
       }),
     );
-    renderWithClient(<PullsSection repoId="r1" />);
-    await screen.findByRole("button", { name: /#1 / });
+    // The sidebar rows have no room for chips; the list shows them.
+    renderWithClient(<PullMainView repoId="r1" view={{ kind: "pulls" }} />);
+    await screen.findByText("Pull title 1");
     await waitFor(() =>
       expect(screen.getByTitle("acme:feature-1").style.color).toBe("var(--lane-2)"),
     );

@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 import { Badge } from "@/design/components";
 import { Item, Section } from "@/features/repo/SidebarParts";
-import { useForgeStatus, usePulls } from "@/ipc/queries";
+import { usePulls } from "@/ipc/queries";
 import { openPull, openPulls } from "@/stores/workspace";
 import { useForgeGate } from "../gate";
 import { ForgeError } from "../parts";
-import { AuthorAvatar, BranchChip, NO_REMOTE, UNSUPPORTED } from "./parts";
+import { AuthorAvatar, NO_REMOTE, UNSUPPORTED } from "./parts";
 
 const SIDEBAR_LIMIT = 10;
 
@@ -17,7 +17,6 @@ function Line({ children }: { children: ReactNode }) {
 export function PullsSection({ repoId }: { repoId: string }) {
   const gate = useForgeGate(repoId);
   const ready = gate.state === "ready";
-  const remote = useForgeStatus(repoId).data?.repo?.remote ?? "origin";
   // Fetches once per stale period, also while the section is collapsed (the query lives here).
   const pulls = usePulls(repoId, "open", { enabled: ready });
   const items = (pulls.data?.pages[0]?.items ?? []).slice(0, SIDEBAR_LIMIT);
@@ -49,15 +48,10 @@ export function PullsSection({ repoId }: { repoId: string }) {
             key={pull.number}
             label={`#${pull.number} ${pull.title}`}
             leading={<AuthorAvatar login={pull.author.login} />}
-            badges={
-              <>
-                {pull.draft ? <Badge>Draft</Badge> : null}
-                {/* Bounded so the title keeps room in the narrow sidebar row. */}
-                <span className="flex min-w-0 max-w-24">
-                  <BranchChip repoId={repoId} branch={pull.head} remote={remote} />
-                </span>
-              </>
-            }
+            // The sidebar is too narrow for a branch chip and a readable title; the
+            // head branch is in the tooltip and shown as a chip in the detail view.
+            title={`#${pull.number} ${pull.title}\n${pull.head}`}
+            badges={pull.draft ? <Badge>Draft</Badge> : undefined}
             onClick={() => openPull(repoId, pull.number)}
           />
         ))}
