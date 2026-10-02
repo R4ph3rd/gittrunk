@@ -13,6 +13,8 @@ pub mod mobile;
 pub mod platform;
 pub mod secrets;
 pub mod settings;
+#[cfg(not(target_os = "android"))]
+pub mod ssh;
 pub mod terminal;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -31,6 +33,11 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(
+            tauri_plugin_opener::Builder::new()
+                .open_js_links_on_click(false)
+                .build(),
+        )
         .manage(git::GitState::default())
         .manage(terminal::Terminals::default())
         .manage(avatars::AvatarCache::default())
