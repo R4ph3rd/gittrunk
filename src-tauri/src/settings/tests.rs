@@ -203,3 +203,54 @@ fn cli_path_is_inert_when_embedded() {
     );
     assert_eq!(usable_git_path(&saved), None);
 }
+
+fn ws(id: &str, name: &str, repos: &[&str]) -> Workspace {
+    Workspace {
+        id: id.into(),
+        name: name.into(),
+        repos: repos.iter().map(|r| (*r).to_string()).collect(),
+    }
+}
+
+fn with_workspaces(list: Vec<Workspace>) -> AppSettings {
+    let mut s = defaults();
+    s.workspaces = list;
+    s
+}
+
+#[test]
+fn workspaces_are_trimmed_and_deduplicated() {
+    let s = with_workspaces(vec![ws("a-1", "  Work  ", &["/x", "/y", "/x"])]);
+    let clean = validate(&s).unwrap();
+    assert_eq!(clean.workspaces, vec![ws("a-1", "Work", &["/x", "/y"])]);
+}
+
+#[test]
+fn workspace_rules_are_enforced() {
+    let bad = |list: Vec<Workspace>| {
+        let err = validate(&with_workspaces(list)).unwrap_err();
+        assert_eq!(err.kind, ErrorKind::InvalidInput);
+    };
+    bad((0..51).map(|i| ws(&format!("w{i}"), "n", &[])).collect());
+    bad(vec![ws("", "n", &[])]);
+    bad(vec![ws(&"a".repeat(65), "n", &[])]);
+    bad(vec![ws("has space", "n", &[])]);
+    bad(vec![ws("a", "n", &[]), ws("a", "m", &[])]);
+    bad(vec![ws("a", "   ", &[])]);
+    bad(vec![ws("a", &"n".repeat(65), &[])]);
+    let many: Vec<String> = (0..201).map(|i| format!("/r{i}")).collect();
+    let refs: Vec<&str> = many.iter().map(String::as_str).collect();
+    bad(vec![ws("a", "n", &refs)]);
+    bad(vec![ws("a", "n", &["  "])]);
+    bad(vec![ws("a", "n", &[&"p".repeat(4097)])]);
+    bad(vec![ws("a", "n", &["/a\0b"])]);
+    assert!(validate(&with_workspaces(vec![ws("a", &"n".repeat(64), &[])])).is_ok());
+}
+
+#[test]
+fn workspaces_round_trip_through_save_and_load() {
+    let d = tempfile::tempdir().unwrap();
+    let s = with_workspaces(vec![ws("one", "One", &["/a", "/b"]), ws("two", "Two", &[])]);
+    save(d.path(), &s).unwrap();
+    assert_eq!(load(d.path()).workspaces, s.workspaces);
+}

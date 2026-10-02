@@ -116,6 +116,7 @@ pub fn validate(settings: &AppSettings) -> AppResult<AppSettings> {
     if s.diff_context_lines > 20 {
         return Err(invalid("diffContextLines must be between 0 and 20"));
     }
+    s.workspaces = validate_workspaces(&s.workspaces)?;
     // Without a git CLI the path is inert: stored as given, never executed.
     if crate::platform::EMBEDDED {
         return Ok(s);
@@ -128,6 +129,63 @@ pub fn validate(settings: &AppSettings) -> AppResult<AppSettings> {
         }
     };
     Ok(s)
+}
+
+const MAX_WORKSPACES: usize = 50;
+const MAX_WORKSPACE_REPOS: usize = 200;
+const MAX_PATH_LEN: usize = 4096;
+
+/// Checks ids and names, trims names and removes duplicate repository paths
+/// (first occurrence wins).
+pub fn validate_workspaces(workspaces: &[Workspace]) -> AppResult<Vec<Workspace>> {
+    if workspaces.len() > MAX_WORKSPACES {
+        return Err(invalid("There can be at most 50 workspaces"));
+    }
+    let mut ids = HashSet::new();
+    let mut out = Vec::with_capacity(workspaces.len());
+    for w in workspaces {
+        let id_ok = (1..=64).contains(&w.id.len())
+            && w.id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+        if !id_ok {
+            return Err(invalid(
+                "A workspace id must be 1 to 64 letters, digits, `_` or `-`",
+            ));
+        }
+        if !ids.insert(w.id.clone()) {
+            return Err(invalid(format!("Duplicate workspace id `{}`", w.id)));
+        }
+        let name = w.name.trim();
+        if name.is_empty() || name.chars().count() > 64 {
+            return Err(invalid("A workspace name must be 1 to 64 characters"));
+        }
+        if w.repos.len() > MAX_WORKSPACE_REPOS {
+            return Err(invalid("A workspace can hold at most 200 repositories"));
+        }
+        let mut seen = HashSet::new();
+        let mut repos = Vec::with_capacity(w.repos.len());
+        for path in &w.repos {
+            if path.trim().is_empty() {
+                return Err(invalid("A workspace repository path cannot be empty"));
+            }
+            if path.len() > MAX_PATH_LEN {
+                return Err(invalid("A workspace repository path is too long"));
+            }
+            if path.contains('\0') {
+                return Err(invalid("A workspace repository path contains a NUL byte"));
+            }
+            if seen.insert(path.as_str()) {
+                repos.push(path.clone());
+            }
+        }
+        out.push(Workspace {
+            id: w.id.clone(),
+            name: name.to_string(),
+            repos,
+        });
+    }
+    Ok(out)
 }
 
 /// Must point to an existing file that answers `--version` like git.
