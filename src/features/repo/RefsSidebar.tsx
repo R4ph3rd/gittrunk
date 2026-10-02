@@ -32,6 +32,7 @@ import { SubmodulesSection, WorktreesSection } from "@/features/history-views/Si
 import { openReflog } from "@/features/history-views/store";
 import { baseFor, useBranchSummary } from "@/features/history-views/useBranchSummary";
 import { IssuesSection } from "@/features/forge/IssuesSection";
+import { PullsSection } from "@/features/forge/pulls/PullsSection";
 import { usePlatform } from "@/app/platform";
 import { useRefColors, useRefs } from "@/ipc/queries";
 import { useRepoStore } from "@/stores/repo";
@@ -233,6 +234,7 @@ export function RefsSidebar({ repoId }: { repoId: string }) {
       )}
       {platform.supportsSubmodules && <SubmodulesSection repoId={repoId} />}
       {platform.supportsWorktrees && <WorktreesSection repoId={repoId} />}
+      <PullsSection repoId={repoId} />
       <IssuesSection repoId={repoId} />
       {stash.dialog}
       {branchSummary.dialog}
