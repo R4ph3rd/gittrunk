@@ -34,7 +34,7 @@ A fast, native Git client for Windows, macOS, Linux and Android. An alternative 
 
 ## Download and install
 
-Get the latest build from the [releases page](https://github.com/R4ph3rd/gittrunk/releases/latest). This README describes release 0.2.0.
+Get the latest build from the [releases page](https://github.com/R4ph3rd/gittrunk/releases/latest). This README describes release 0.3.0.
 
 | Platform | Files                                                               |
 | -------- | ------------------------------------------------------------------- |

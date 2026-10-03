@@ -1,13 +1,25 @@
-# Builds installers for Windows, macOS and Linux and publishes a GitHub Release.
-# Run it from Actions -> Release -> Run workflow on `main` with the version
-# (e.g. 0.1.0). A pushed v* tag is also accepted if it points at a commit on
-# main. The release is created as a draft, and published by the final job only
-# when every platform built (including the Android APK). The verify job also
-# requires successful CI, Build Windows and Build Android runs for the commit.
-# See docs/RELEASING.md.
+# Builds installers for Windows, macOS, Linux and Android and publishes a
+# GitHub Release.
+#
+# Automatic: every push to `main` is released once its CI, Build Windows and
+# Build Android runs have all passed (this workflow runs when each of them
+# completes and only proceeds after the last one). The version comes from
+# tauri.conf.json; if that version is already released, the next patch after
+# the highest v* tag is used and stamped into the version files at build time.
+# Bump the version in a commit (node scripts/bump-version.mjs) for minor or
+# major releases.
+#
+# Manual: Actions -> Release -> Run workflow on `main` with the version, or push
+# a v* tag on a commit of main; both require the version files to match.
+# The release is created as a draft, and published by the final job only when
+# every platform built (including the Android APK). See docs/RELEASING.md.
 name: Release
 
 on:
+  workflow_run:
+    workflows: [CI, Build Windows, Build Android]
+    types: [completed]
+    branches: [main]
   push:
     tags: ["v*"]
   workflow_dispatch:
@@ -29,81 +41,137 @@ jobs:
   verify:
     name: Verify commit is releasable
     runs-on: ubuntu-24.04
+    # workflow_run fires for every completed run on main; only pushes count.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.event == 'push'
     outputs:
-      version: ${{ steps.meta.outputs.version }}
+      version: ${{ steps.version.outputs.version }}
       sha: ${{ steps.meta.outputs.sha }}
+      release: ${{ steps.gate.outputs.release }}
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Require main and a valid version
+      - name: Resolve the commit
         id: meta
         env:
-          INPUT_VERSION: ${{ inputs.version }}
           EVENT: ${{ github.event_name }}
           REF: ${{ github.ref }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ] && [ "$REF" != "refs/heads/main" ]; then
+            echo "::error::Releases can only be dispatched on main (got $REF)."
+            exit 1
+          fi
+          if [ "$EVENT" = "workflow_run" ]; then sha="$RUN_SHA"; else sha="$GITHUB_SHA"; fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ steps.meta.outputs.sha }}
+
+      - name: Commit must be on main
+        env:
+          SHA: ${{ steps.meta.outputs.sha }}
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$SHA" origin/main || {
+            echo "::error::Releases must be built from a commit on main."
+            exit 1
+          }
+
+      # Automatic runs wait for the last of the three workflows and stop quietly
+      # until then; manual runs fail loudly instead.
+      - name: CI, Build Windows and Build Android must have passed for this commit
+        id: gate
+        env:
+          EVENT: ${{ github.event_name }}
+          SHA: ${{ steps.meta.outputs.sha }}
+        run: |
+          missing=()
+          for wf in ci.yml build-windows.yml build-android.yml; do
+            ok=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" --commit "$SHA" \
+              --limit 50 --json conclusion,status \
+              --jq '[.[] | select(.status == "completed" and .conclusion == "success")] | length')
+            if [ "$ok" -eq 0 ]; then missing+=("$wf"); else echo "$wf succeeded for $SHA"; fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            if [ "$EVENT" = "workflow_run" ]; then
+              echo "::notice::Not releasing yet: ${missing[*]} has no successful run for $SHA."
+              echo "release=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::error::${missing[*]} has no successful run for commit $SHA. Wait for it to pass (or fix it) before releasing."
+            exit 1
+          fi
+          # An automatic run for a commit that is already released (another of
+          # the three workflows triggered it first) has nothing to do.
+          git fetch --tags --force origin
+          if [ "$EVENT" = "workflow_run" ] && [ -n "$(git tag --points-at "$SHA" -l 'v*')" ]; then
+            echo "::notice::$SHA is already released as $(git tag --points-at "$SHA" -l 'v*' | head -1)."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "release=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v7
+        if: steps.gate.outputs.release == 'true'
+        with:
+          node-version: 22
+
+      - name: Choose the version
+        id: version
+        if: steps.gate.outputs.release == 'true'
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
           REF_NAME: ${{ github.ref_name }}
         run: |
-          if [ "$EVENT" = "workflow_dispatch" ]; then
-            if [ "$REF" != "refs/heads/main" ]; then
-              echo "::error::Releases can only be dispatched on main (got $REF)."
-              exit 1
-            fi
-            version="$INPUT_VERSION"
-          else
-            version="${REF_NAME#v}"
-          fi
+          case "$EVENT" in
+            workflow_dispatch) version="$INPUT_VERSION" ;;
+            push) version="${REF_NAME#v}" ;;
+            *)
+              base=$(node -p "require('./src-tauri/tauri.conf.json').version")
+              if git rev-parse -q --verify "refs/tags/v$base" >/dev/null; then
+                # Highest released x.y.z (pre-releases ignored), then the next patch.
+                latest=$(git tag -l 'v*' | sed 's/^v//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
+                  | { cat; echo "$base"; } | sort -V | tail -1)
+                IFS=. read -r major minor patch <<< "$latest"
+                version="$major.$minor.$((patch + 1))"
+                echo "::notice::v$base is already released; releasing $version (stamped at build time)."
+              else
+                version="$base"
+              fi
+              ;;
+          esac
           semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
           if ! [[ "$version" =~ $semver ]]; then
             echo "::error::Version '$version' is not valid semver without a leading v (e.g. 0.1.0)."
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          ref: ${{ github.sha }}
-
-      - name: Tag commit must be on main
-        if: github.event_name == 'push'
-        run: |
-          git fetch origin main
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
-            echo "::error::Release tags must point at a commit on main."
-            exit 1
-          }
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
 
       - name: Version files match the release version
-        run: node scripts/check-version.mjs "${{ steps.meta.outputs.version }}"
+        if: steps.gate.outputs.release == 'true' && github.event_name != 'workflow_run'
+        run: node scripts/check-version.mjs "${{ steps.version.outputs.version }}"
 
-      - name: CI, Build Windows and Build Android must have passed for this commit
+      # Tauri derives the Android versionCode as major*1000000 + minor*1000 + patch.
+      - name: Version is usable on Android
+        if: steps.gate.outputs.release == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
-          SHA: ${{ github.sha }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          failed=0
-          for wf in ci.yml build-windows.yml build-android.yml; do
-            runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" --commit "$SHA" \
-              --limit 50 --json conclusion,status)
-            ok=$(echo "$runs" | jq '[.[] | select(.status == "completed" and .conclusion == "success")] | length')
-            if [ "$ok" -eq 0 ]; then
-              echo "::error::Workflow $wf has no successful run for commit $SHA. Wait for it to pass (or fix it) before releasing."
-              failed=1
-            else
-              echo "$wf succeeded for $SHA"
-            fi
-          done
-          exit $failed
+          IFS=. read -r _ minor patch <<< "${VERSION%%[-+]*}"
+          if [ "$minor" -ge 1000 ] || [ "$patch" -ge 1000 ]; then
+            echo "::error::Version $VERSION: minor and patch must be below 1000 (Android versionCode)."
+            exit 1
+          fi
 
       # A draft left by an earlier failed run points at that run's commit and
       # holds its assets, so it is removed and rebuilt from this commit.
       - name: Release must not already be published
+        if: steps.gate.outputs.release == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: v${{ steps.meta.outputs.version }}
+          TAG: v${{ steps.version.outputs.version }}
         run: |
           draft=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null || echo none)
           if [ "$draft" = "false" ]; then
@@ -117,6 +185,7 @@ jobs:
 
   build:
     needs: verify
+    if: needs.verify.outputs.release == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -171,6 +240,12 @@ jobs:
           workspaces: src-tauri
 
       - run: pnpm install --frozen-lockfile
+
+      # No-op when the files already carry the version; automatic patch
+      # releases stamp it here so the binaries report the released version.
+      - name: Stamp the release version
+        shell: bash
+        run: node scripts/bump-version.mjs "$VERSION"
 
       # Windows signing: import the PFX and hand its thumbprint to Tauri via a
       # generated config override. Without secrets the build is unsigned.
@@ -246,7 +321,7 @@ jobs:
           tagName: v${{ needs.verify.outputs.version }}
           releaseName: "gittrunk v${{ needs.verify.outputs.version }}"
           releaseBody: "See the assets below to download and install this version."
-          releaseCommitish: ${{ github.sha }}
+          releaseCommitish: ${{ needs.verify.outputs.sha }}
           releaseDraft: true
           prerelease: false
           args: ${{ runner.os == 'Windows' && steps.winsign.outputs.args || matrix.args }}
@@ -275,7 +350,7 @@ jobs:
   android:
     name: Android release APK
     needs: [verify, build]
-    if: ${{ needs.build.result == 'success' }}
+    if: ${{ needs.verify.outputs.release == 'true' && needs.build.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
@@ -284,6 +359,16 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.verify.outputs.sha }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # No-op when the files already carry the version; automatic patch
+      # releases stamp it here so the binaries report the released version.
+      - name: Stamp the release version
+        shell: bash
+        run: node scripts/bump-version.mjs "$VERSION"
 
       - name: Choose Android signing mode
         id: mode
@@ -328,7 +413,7 @@ jobs:
   publish:
     name: Publish release
     needs: [verify, build, android]
-    if: ${{ needs.build.result == 'success' && needs.android.result == 'success' }}
+    if: ${{ needs.verify.outputs.release == 'true' && needs.build.result == 'success' && needs.android.result == 'success' }}
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}

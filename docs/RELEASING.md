@@ -4,20 +4,24 @@ Releases are produced only by the **Release** workflow (`.github/workflows/relea
 
 ## Cutting a release
 
-1. Bump the version everywhere (no leading `v`):
-   ```sh
-   node scripts/bump-version.mjs 0.2.0
-   cargo update -p gittrunk --manifest-path src-tauri/Cargo.toml   # refresh Cargo.lock
-   ```
-2. Commit (`chore(release): 0.2.0`), open a PR into `main`, and merge it.
-3. Wait for the `CI`, `Build Windows` and `Build Android` workflows to go green on the merge commit.
-4. Actions → **Release** → **Run workflow**, branch `main`, enter the version (`0.2.0`).
+Every push to `main` is released automatically. The **Release** workflow runs each time `CI`, `Build Windows` or `Build Android` completes on `main`; when all three have passed for the pushed commit, it builds and publishes the release.
 
-Pushing a `v0.2.0` tag is also accepted, but only if the tagged commit is on `main`.
+- **Version:** taken from `tauri.conf.json`. If that version is already released, the workflow releases the next patch after the highest `v*` tag (for example `0.3.0` → `0.3.1`) and stamps it into `package.json`, `tauri.conf.json` and `Cargo.toml` at build time, so the binaries report it. Nothing is committed back.
+- **Minor or major release:** bump the version in a commit before pushing to `main`:
+  ```sh
+  node scripts/bump-version.mjs 0.4.0
+  cargo update -p gittrunk --manifest-path src-tauri/Cargo.toml   # refresh Cargo.lock
+  ```
+  then commit (`chore(release): 0.4.0`) and push or merge it into `main`.
+- **A failing workflow** on the commit means no release; fix it and push again.
+
+### Manual release
+
+Actions → **Release** → **Run workflow**, branch `main`, enter the version. Pushing a `v<version>` tag on a commit of `main` also works. Both require the version files to match the version exactly.
 
 ## What the workflow does
 
-1. **verify**: refuses to run off `main`, validates the semver input, runs `node scripts/check-version.mjs <version>` (`package.json`, `tauri.conf.json` and `Cargo.toml` must all match; minor and patch must also be below 1000 because Tauri derives the Android `versionCode` as `major*1000000 + minor*1000 + patch`), and requires a successful `CI`, `Build Windows` and `Build Android` run for the exact commit (checked with `gh run list --commit`). It also refuses to touch an already published release, and deletes a stale draft left by an earlier failed run.
+1. **verify**: refuses commits that are not on `main`, picks or validates the version (see above), runs `node scripts/check-version.mjs <version>` (`package.json`, `tauri.conf.json` and `Cargo.toml` must all match; minor and patch must also be below 1000 because Tauri derives the Android `versionCode` as `major*1000000 + minor*1000 + patch`), and requires a successful `CI`, `Build Windows` and `Build Android` run for the exact commit (checked with `gh run list --commit`). It also refuses to touch an already published release, and deletes a stale draft left by an earlier failed run.
 2. **build**: Windows (NSIS + MSI), macOS (universal DMG/app), Linux (deb, rpm, AppImage). Each leg uploads to a **draft** release `gittrunk v<version>` with tag `v<version>` at the released commit.
 3. **android** (`Android release APK`): runs after `build` succeeded, builds the universal APK (arm64-v8a, armeabi-v7a, x86_64), signs it (see below) and uploads `gittrunk_<version>_android-universal.apk` to the draft with `gh release upload --clobber`.
 4. **publish**: runs only if every build leg and the Android job succeeded, checks that the expected assets exist (`*_x64-setup.exe`, `*_x64_en-US.msi`, `.dmg` or `.app.tar.gz`, `.deb`, `.rpm`, `.AppImage`, `_android-universal.apk`) and then publishes the draft as the latest release. If any leg fails the draft stays unpublished; running the workflow again deletes that stale draft and rebuilds every platform from the current commit.
