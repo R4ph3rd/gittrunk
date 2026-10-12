@@ -105,6 +105,9 @@ export const commands = {
 	forgeTokenSource: (host: string) => typedError<ForgeTokenSource, AppError>(__TAURI_INVOKE("forge_token_source", { host })),
 	forgeTokenSet: (host: string, token: string) => typedError<ForgeUser, AppError>(__TAURI_INVOKE("forge_token_set", { host, token })),
 	forgeTokenClear: (host: string) => typedError<null, AppError>(__TAURI_INVOKE("forge_token_clear", { host })),
+	forgeOwners: (host: string) => typedError<ForgeOwner[], AppError>(__TAURI_INVOKE("forge_owners", { host })),
+	forgeRepoExists: (host: string, owner: string, name: string) => typedError<boolean, AppError>(__TAURI_INVOKE("forge_repo_exists", { host, owner, name })),
+	forgeCreateRepo: (host: string, request: ForgeRepoCreateRequest) => typedError<ForgeCreatedRepo, AppError>(__TAURI_INVOKE("forge_create_repo", { host, request })),
 	forgeIssues: (repo: string, query: IssueQuery) => typedError<IssuePage, AppError>(__TAURI_INVOKE("forge_issues", { repo, query })),
 	forgeIssue: (repo: string, number: number) => typedError<IssueDetail, AppError>(__TAURI_INVOKE("forge_issue", { repo, number })),
 	forgeIssueCreate: (repo: string, request: IssueCreateRequest) => typedError<Issue, AppError>(__TAURI_INVOKE("forge_issue_create", { repo, request })),
@@ -408,6 +411,12 @@ export type ForgeComment = {
 	url: string,
 };
 
+export type ForgeCreatedRepo = {
+	cloneUrl: string,
+	sshUrl: string,
+	htmlUrl: string,
+};
+
 export type ForgeKind = "github" | "gitlab";
 
 export type ForgeNotification = {
@@ -424,6 +433,14 @@ export type ForgeNotification = {
 	/**  https://github.com/... page of the subject; None when unknown. */
 	url: string | null,
 };
+
+/**  An account a new repository can be created under. */
+export type ForgeOwner = {
+	login: string,
+	kind: ForgeOwnerKind,
+};
+
+export type ForgeOwnerKind = "user" | "org";
 
 export type ForgePull = {
 	number: number,
@@ -450,6 +467,14 @@ export type ForgeRepo = {
 	webUrl: string,
 	/**  Remote the repo was derived from, e.g. "origin". */
 	remote: string,
+};
+
+export type ForgeRepoCreateRequest = {
+	/**  User or organisation login. */
+	owner: string,
+	name: string,
+	description: string | null,
+	private: boolean,
 };
 
 export type ForgeStatus = {

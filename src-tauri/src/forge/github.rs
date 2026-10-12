@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
-use super::Forge;
+use super::{remote, Forge};
 use crate::ai::provider::{clip, scrub, BoxFuture};
 use crate::ipc::error::{AppError, AppResult, ErrorKind};
 use crate::ipc::types::*;
@@ -533,7 +533,185 @@ pub async fn validate_token(
     })
 }
 
+const SCOPE_HINT: &str = "The token cannot create repositories. Use a classic token with the `repo` scope, or a fine-grained token with Repository permission \"Administration: write\" (and access to the organisation)";
+
+impl GithubForge {
+    async fn do_owners(&self) -> AppResult<Vec<ForgeOwner>> {
+        self.require_token()?;
+        let mut out = vec![ForgeOwner {
+            login: self.do_login().await?,
+            kind: ForgeOwnerKind::User,
+        }];
+        let mut page = 1;
+        for _ in 0..MAX_COMMENT_PAGES {
+            let url = format!("{}/user/orgs?per_page=100&page={page}", self.api);
+            let resp = self
+                .send(self.request(Method::GET, &url), Scope::Repo)
+                .await?;
+            let next = next_page(&resp);
+            let v = Self::json(resp).await?;
+            out.extend(
+                v.as_array()
+                    .map(Vec::as_slice)
+                    .unwrap_or_default()
+                    .iter()
+                    .filter_map(|o| o.get("login").and_then(Value::as_str))
+                    .map(|l| ForgeOwner {
+                        login: l.to_string(),
+                        kind: ForgeOwnerKind::Org,
+                    }),
+            );
+            match next {
+                Some(n) => page = n,
+                None => break,
+            }
+        }
+        Ok(out)
+    }
+
+    async fn do_repo_exists(&self, owner: &str, name: &str) -> AppResult<bool> {
+        let url = format!("{}/repos/{owner}/{name}", self.api);
+        let resp = self
+            .request(Method::GET, &url)
+            .send()
+            .await
+            .map_err(network)?;
+        match resp.status() {
+            s if s.is_success() => Ok(true),
+            StatusCode::NOT_FOUND => Ok(false),
+            _ => Err(error_for(resp, self.token.is_some(), Scope::Repo).await),
+        }
+    }
+
+    async fn do_login(&self) -> AppResult<String> {
+        let url = format!("{}/user", self.api);
+        let v = Self::json(
+            self.send(self.request(Method::GET, &url), Scope::Repo)
+                .await?,
+        )
+        .await?;
+        v.get("login")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .ok_or_else(unexpected)
+    }
+
+    async fn do_create_repo(&self, req: &ForgeRepoCreateRequest) -> AppResult<ForgeCreatedRepo> {
+        self.require_token()?;
+        let name = req.name.trim();
+        if !remote::valid_segment(name) || name.ends_with(".git") {
+            return Err(AppError::new(
+                ErrorKind::InvalidInput,
+                "Repository names can only contain letters, digits, '-', '_' and '.'",
+            ));
+        }
+        if !remote::valid_segment(&req.owner) {
+            return Err(AppError::new(ErrorKind::InvalidInput, "Invalid owner"));
+        }
+        let description = req.description.as_deref().map(str::trim).unwrap_or("");
+        if description.chars().count() > 350 {
+            return Err(AppError::new(
+                ErrorKind::InvalidInput,
+                "The description is too long (limit 350 characters)",
+            ));
+        }
+        let body = json!({
+            "name": name,
+            "description": description,
+            "private": req.private,
+            "auto_init": false,
+        });
+        // The authenticated user's own account uses /user/repos; anything else
+        // is an organisation.
+        let me = self.do_login().await?;
+        let url = if me.eq_ignore_ascii_case(&req.owner) {
+            format!("{}/user/repos", self.api)
+        } else {
+            format!("{}/orgs/{}/repos", self.api, req.owner)
+        };
+        let resp = self
+            .request(Method::POST, &url)
+            .json(&body)
+            .send()
+            .await
+            .map_err(network)?;
+        if !resp.status().is_success() {
+            return Err(create_error(resp, self.token.is_some(), &req.owner, name).await);
+        }
+        let v = Self::json(resp).await?;
+        Ok(ForgeCreatedRepo {
+            clone_url: str_of(&v, "clone_url"),
+            ssh_url: str_of(&v, "ssh_url"),
+            html_url: str_of(&v, "html_url"),
+        })
+    }
+}
+
+/// Error for a failed repository creation (never includes the token).
+async fn create_error(resp: Response, authed: bool, owner: &str, name: &str) -> AppError {
+    let status = resp.status();
+    let rate_limited = resp
+        .headers()
+        .get("x-ratelimit-remaining")
+        .and_then(|h| h.to_str().ok())
+        == Some("0");
+    if status == StatusCode::FORBIDDEN && !rate_limited {
+        return AppError::new(ErrorKind::AuthRequired, SCOPE_HINT);
+    }
+    if status == StatusCode::NOT_FOUND {
+        return AppError::new(
+            ErrorKind::InvalidInput,
+            format!(
+                "Cannot create repositories in {owner}: it does not exist or the token has no access to it"
+            ),
+        );
+    }
+    if status == StatusCode::UNPROCESSABLE_ENTITY {
+        let text = resp.text().await.unwrap_or_default();
+        let v = serde_json::from_str::<Value>(&text).unwrap_or(Value::Null);
+        let exists = v
+            .get("errors")
+            .and_then(Value::as_array)
+            .is_some_and(|errs| {
+                errs.iter().any(|e| {
+                    e.get("message")
+                        .and_then(Value::as_str)
+                        .is_some_and(|m| m.contains("already exists"))
+                })
+            });
+        if exists {
+            return AppError::new(
+                ErrorKind::InvalidInput,
+                format!("A repository named {name} already exists in {owner}"),
+            )
+            .with_detail("already_exists");
+        }
+        let msg = v
+            .get("message")
+            .and_then(Value::as_str)
+            .map(|m| clip(m, 300))
+            .unwrap_or_else(|| "GitHub rejected the request".to_string());
+        return AppError::new(ErrorKind::InvalidInput, msg);
+    }
+    error_for(resp, authed, Scope::Repo).await
+}
+
 impl Forge for GithubForge {
+    fn owners<'a>(&'a self) -> BoxFuture<'a, AppResult<Vec<ForgeOwner>>> {
+        Box::pin(self.do_owners())
+    }
+
+    fn repo_exists<'a>(&'a self, owner: &'a str, name: &'a str) -> BoxFuture<'a, AppResult<bool>> {
+        Box::pin(self.do_repo_exists(owner, name))
+    }
+
+    fn create_repo<'a>(
+        &'a self,
+        req: &'a ForgeRepoCreateRequest,
+    ) -> BoxFuture<'a, AppResult<ForgeCreatedRepo>> {
+        Box::pin(self.do_create_repo(req))
+    }
+
     fn list_issues<'a>(&'a self, q: &'a IssueQuery) -> BoxFuture<'a, AppResult<IssuePage>> {
         Box::pin(self.do_list(q))
     }

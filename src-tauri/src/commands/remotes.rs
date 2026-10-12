@@ -37,25 +37,77 @@ pub async fn remote_add(
 ) -> AppResult<RemoteInfo> {
     let st = state.inner().clone();
     blocking(move || {
-        let info = st.write_repo(&repo, |r| LibGit.remote_add(r, &request))?;
-        if request.fetch {
-            let sess = ops::sync_session(&app, &st, st.cli().clone())?;
-            let git_dir = st.entry(&repo)?.git_dir.clone();
-            let dir = net::run_dir(&Repository::open(&git_dir)?);
-            let fetch = FetchRequest {
-                remote: Some(info.name.clone()),
-                prune: false,
-                tags: false,
-            };
-            net::fetch(&sess, &dir, &fetch).map_err(|mut e| {
-                e.message = format!("Remote added, but fetching failed: {}", e.message);
-                e
-            })?;
-            st.entry(&repo)?.invalidate_graph();
-        }
-        Ok(info)
+        add_remote(
+            || st.write_repo(&repo, |r| LibGit.remote_add(r, &request)),
+            request.fetch,
+            |info| {
+                let sess = ops::sync_session(&app, &st, st.cli().clone())?;
+                let git_dir = st.entry(&repo)?.git_dir.clone();
+                let dir = net::run_dir(&Repository::open(&git_dir)?);
+                let fetch = FetchRequest {
+                    remote: Some(info.name.clone()),
+                    prune: false,
+                    tags: false,
+                };
+                net::fetch(&sess, &dir, &fetch)?;
+                st.entry(&repo)?.invalidate_graph();
+                Ok(())
+            },
+        )
     })
     .await
+}
+
+/// Adds the remote, then optionally fetches it. The fetch is best effort: the
+/// remote may not exist yet (it is about to be created on the host) or be
+/// unreachable, and that must never fail the add.
+fn add_remote(
+    add: impl FnOnce() -> AppResult<RemoteInfo>,
+    fetch: bool,
+    do_fetch: impl FnOnce(&RemoteInfo) -> AppResult<()>,
+) -> AppResult<RemoteInfo> {
+    let info = add()?;
+    if fetch {
+        // Intentionally ignored; the UI offers an explicit fetch with visible errors.
+        let _ = do_fetch(&info);
+    }
+    Ok(info)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::git::fixtures;
+    use crate::ipc::error::ErrorKind;
+
+    #[test]
+    fn add_succeeds_when_the_remote_does_not_exist() {
+        let t = fixtures::empty();
+        let req = RemoteAddRequest {
+            name: "origin".into(),
+            url: "https://github.com/nobody/does-not-exist.git".into(),
+            fetch: true,
+        };
+        let info = add_remote(
+            || LibGit.remote_add(&t.repo, &req),
+            true,
+            |_| Err(AppError::new(ErrorKind::Network, "Repository not found")),
+        )
+        .unwrap();
+        assert_eq!(info.name, "origin");
+        assert_eq!(LibGit.remote_list(&t.repo).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn add_errors_still_fail() {
+        let err = add_remote(
+            || Err(AppError::new(ErrorKind::InvalidInput, "bad name")),
+            true,
+            |_| Ok(()),
+        )
+        .unwrap_err();
+        assert_eq!(err.kind, ErrorKind::InvalidInput);
+    }
 }
 
 #[tauri::command]

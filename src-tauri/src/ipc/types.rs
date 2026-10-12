@@ -931,6 +931,11 @@ wire_enum! {
         None,
     }
 
+    pub enum ForgeOwnerKind {
+        User,
+        Org,
+    }
+
     pub enum IssueState {
         Open,
         Closed,
@@ -978,6 +983,26 @@ wire! {
 
     pub struct ForgeUser {
         pub login: String,
+    }
+
+    /// An account a new repository can be created under.
+    pub struct ForgeOwner {
+        pub login: String,
+        pub kind: ForgeOwnerKind,
+    }
+
+    pub struct ForgeRepoCreateRequest {
+        /// User or organisation login.
+        pub owner: String,
+        pub name: String,
+        pub description: Option<String>,
+        pub private: bool,
+    }
+
+    pub struct ForgeCreatedRepo {
+        pub clone_url: String,
+        pub ssh_url: String,
+        pub html_url: String,
     }
 
     pub struct Issue {

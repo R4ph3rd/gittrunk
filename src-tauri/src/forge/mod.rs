@@ -16,6 +16,15 @@ pub use github::GithubForge;
 
 /// A code forge's issue and comment API.
 pub trait Forge: Send + Sync {
+    /// Accounts (the user and their organisations) a repository can be created under.
+    fn owners<'a>(&'a self) -> BoxFuture<'a, AppResult<Vec<ForgeOwner>>>;
+    /// Whether `owner/name` exists and is visible to the token.
+    fn repo_exists<'a>(&'a self, owner: &'a str, name: &'a str) -> BoxFuture<'a, AppResult<bool>>;
+    /// Creates an empty repository (no README, license or gitignore).
+    fn create_repo<'a>(
+        &'a self,
+        req: &'a ForgeRepoCreateRequest,
+    ) -> BoxFuture<'a, AppResult<ForgeCreatedRepo>>;
     fn list_issues<'a>(&'a self, q: &'a IssueQuery) -> BoxFuture<'a, AppResult<IssuePage>>;
     fn issue<'a>(&'a self, number: u32) -> BoxFuture<'a, AppResult<IssueDetail>>;
     fn create_issue<'a>(&'a self, req: &'a IssueCreateRequest) -> BoxFuture<'a, AppResult<Issue>>;
@@ -89,4 +98,26 @@ pub async fn github_for(state: &crate::git::GitState, repo: &str) -> AppResult<G
         &fr.name,
         token,
     ))
+}
+
+/// The GitHub forge for a host (not tied to a repository), authenticated with
+/// the best available token. Only `github.com` is supported.
+pub async fn github_for_host(host: &str, api: &str) -> AppResult<GithubForge> {
+    if host != remote::GITHUB_HOST {
+        return Err(AppError::new(
+            ErrorKind::Unsupported,
+            "Creating repositories is only available for github.com for now",
+        ));
+    }
+    let host = host.to_string();
+    let (token, _) = crate::git::blocking(move || {
+        Ok(tokens::resolve(
+            &tokens::SystemTokens,
+            &crate::git::remote::keychain::Keychain,
+            &host,
+        ))
+    })
+    .await?;
+    let client = crate::http::client(github::TIMEOUT)?;
+    Ok(GithubForge::new(client, api, "", "", token))
 }

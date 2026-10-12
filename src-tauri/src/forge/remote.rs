@@ -5,7 +5,7 @@ use crate::ipc::types::{ForgeKind, ForgeRepo};
 
 pub const GITHUB_HOST: &str = "github.com";
 
-fn valid_segment(s: &str) -> bool {
+pub(crate) fn valid_segment(s: &str) -> bool {
     !s.is_empty()
         && s != "."
         && s != ".."

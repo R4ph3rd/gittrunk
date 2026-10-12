@@ -971,3 +971,208 @@ fn notification_web_url_table() {
     assert_eq!(w(None, "Issue", "a/b/c"), None);
     assert_eq!(w(None, "Issue", ""), None);
 }
+
+// ---------------------------------------------------------- create repo
+
+fn create_req(owner: &str) -> ForgeRepoCreateRequest {
+    ForgeRepoCreateRequest {
+        owner: owner.into(),
+        name: "demo".into(),
+        description: Some("A demo".into()),
+        private: true,
+    }
+}
+
+fn created_json() -> String {
+    json!({
+        "clone_url": "https://github.com/alice/demo.git",
+        "ssh_url": "git@github.com:alice/demo.git",
+        "html_url": "https://github.com/alice/demo"
+    })
+    .to_string()
+}
+
+async fn mock_login(server: &mut ServerGuard) -> mockito::Mock {
+    server
+        .mock("GET", "/user")
+        .with_status(200)
+        .with_body(r#"{"login":"alice"}"#)
+        .create_async()
+        .await
+}
+
+#[tokio::test]
+async fn create_user_repo() {
+    let mut server = Server::new_async().await;
+    let _me = mock_login(&mut server).await;
+    let create = server
+        .mock("POST", "/user/repos")
+        .match_header("authorization", format!("Bearer {SENTINEL}").as_str())
+        .match_body(Matcher::PartialJson(json!({
+            "name": "demo", "private": true, "auto_init": false, "description": "A demo"
+        })))
+        .with_status(201)
+        .with_body(created_json())
+        .create_async()
+        .await;
+    let out = forge(&server, Some(SENTINEL))
+        .create_repo(&create_req("alice"))
+        .await
+        .unwrap();
+    assert_eq!(out.clone_url, "https://github.com/alice/demo.git");
+    assert_eq!(out.ssh_url, "git@github.com:alice/demo.git");
+    assert_eq!(out.html_url, "https://github.com/alice/demo");
+    create.assert_async().await;
+}
+
+#[tokio::test]
+async fn create_org_repo() {
+    let mut server = Server::new_async().await;
+    let _me = mock_login(&mut server).await;
+    let create = server
+        .mock("POST", "/orgs/acme/repos")
+        .with_status(201)
+        .with_body(created_json())
+        .create_async()
+        .await;
+    forge(&server, Some(SENTINEL))
+        .create_repo(&create_req("acme"))
+        .await
+        .unwrap();
+    create.assert_async().await;
+}
+
+#[tokio::test]
+async fn create_name_taken_is_reported() {
+    let mut server = Server::new_async().await;
+    let _me = mock_login(&mut server).await;
+    server
+        .mock("POST", "/user/repos")
+        .with_status(422)
+        .with_body(
+            r#"{"message":"Repository creation failed.","errors":[{"resource":"Repository","code":"custom","field":"name","message":"name already exists on this account"}]}"#,
+        )
+        .create_async()
+        .await;
+    let err = forge(&server, Some(SENTINEL))
+        .create_repo(&create_req("alice"))
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, ErrorKind::InvalidInput);
+    assert_eq!(
+        err.message,
+        "A repository named demo already exists in alice"
+    );
+    assert_eq!(err.detail.as_deref(), Some("already_exists"));
+    assert_no_token(&err);
+}
+
+#[tokio::test]
+async fn create_without_scope_explains_the_permission() {
+    let mut server = Server::new_async().await;
+    let _me = mock_login(&mut server).await;
+    server
+        .mock("POST", "/user/repos")
+        .with_status(403)
+        .with_body(r#"{"message":"Resource not accessible by personal access token"}"#)
+        .create_async()
+        .await;
+    let err = forge(&server, Some(SENTINEL))
+        .create_repo(&create_req("alice"))
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, ErrorKind::AuthRequired);
+    assert!(err.message.contains("`repo` scope"), "{}", err.message);
+    assert!(err.message.contains("Administration: write"));
+    assert_no_token(&err);
+}
+
+#[tokio::test]
+async fn create_without_token_asks_for_one() {
+    let server = Server::new_async().await;
+    let err = forge(&server, None)
+        .create_repo(&create_req("alice"))
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, ErrorKind::AuthRequired);
+    assert_eq!(err.message, "Add a GitHub token in Settings > Integrations");
+}
+
+#[tokio::test]
+async fn create_rejects_bad_names_before_any_request() {
+    let server = Server::new_async().await;
+    let mut req = create_req("alice");
+    for bad in ["", "a b", "x.git", "..", "a/b"] {
+        req.name = bad.into();
+        let err = forge(&server, Some(SENTINEL))
+            .create_repo(&req)
+            .await
+            .unwrap_err();
+        assert_eq!(err.kind, ErrorKind::InvalidInput, "{bad:?}");
+    }
+}
+
+#[tokio::test]
+async fn owners_lists_user_then_orgs() {
+    let mut server = Server::new_async().await;
+    let _me = mock_login(&mut server).await;
+    server
+        .mock("GET", "/user/orgs?per_page=100&page=1")
+        .with_status(200)
+        .with_body(r#"[{"login":"acme"},{"login":"beta"}]"#)
+        .create_async()
+        .await;
+    let owners = forge(&server, Some(SENTINEL)).owners().await.unwrap();
+    let got: Vec<_> = owners.iter().map(|o| (o.login.as_str(), o.kind)).collect();
+    assert_eq!(
+        got,
+        vec![
+            ("alice", ForgeOwnerKind::User),
+            ("acme", ForgeOwnerKind::Org),
+            ("beta", ForgeOwnerKind::Org)
+        ]
+    );
+}
+
+#[tokio::test]
+async fn owners_without_token_asks_for_one() {
+    let server = Server::new_async().await;
+    let err = forge(&server, None).owners().await.unwrap_err();
+    assert_eq!(err.kind, ErrorKind::AuthRequired);
+}
+
+#[tokio::test]
+async fn repo_exists_maps_404_to_false() {
+    let mut server = Server::new_async().await;
+    server
+        .mock("GET", "/repos/alice/demo")
+        .with_status(200)
+        .with_body("{}")
+        .create_async()
+        .await;
+    server
+        .mock("GET", "/repos/alice/missing")
+        .with_status(404)
+        .with_body(r#"{"message":"Not Found"}"#)
+        .create_async()
+        .await;
+    server
+        .mock("GET", "/repos/alice/boom")
+        .with_status(500)
+        .create_async()
+        .await;
+    let f = forge(&server, Some(SENTINEL));
+    assert!(f.repo_exists("alice", "demo").await.unwrap());
+    assert!(!f.repo_exists("alice", "missing").await.unwrap());
+    let err = f.repo_exists("alice", "boom").await.unwrap_err();
+    assert_eq!(err.kind, ErrorKind::Network);
+}
+
+#[tokio::test]
+async fn github_for_host_rejects_other_hosts() {
+    let err = github_for_host("gitlab.com", "http://unused")
+        .await
+        .err()
+        .unwrap();
+    assert_eq!(err.kind, ErrorKind::Unsupported);
+}

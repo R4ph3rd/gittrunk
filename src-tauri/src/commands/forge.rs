@@ -174,3 +174,33 @@ pub async fn forge_notifications(host: String) -> AppResult<Vec<ForgeNotificatio
     let client = crate::http::client(forge::github::TIMEOUT)?;
     forge::notifications::list(&client, forge::github::API_BASE, token.as_deref()).await
 }
+
+#[tauri::command]
+#[specta::specta]
+pub async fn forge_owners(host: String) -> AppResult<Vec<ForgeOwner>> {
+    forge::github_for_host(&host, forge::github::API_BASE)
+        .await?
+        .owners()
+        .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn forge_repo_exists(host: String, owner: String, name: String) -> AppResult<bool> {
+    forge::github_for_host(&host, forge::github::API_BASE)
+        .await?
+        .repo_exists(&owner, &name)
+        .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn forge_create_repo(
+    host: String,
+    request: ForgeRepoCreateRequest,
+) -> AppResult<ForgeCreatedRepo> {
+    forge::github_for_host(&host, forge::github::API_BASE)
+        .await?
+        .create_repo(&request)
+        .await
+}
