@@ -550,6 +550,32 @@ export function useForgeTokenSource(host: string) {
   });
 }
 
+/** Accounts a new repository can be created under (needs a stored token). */
+export function useForgeOwners(host: string, enabled: boolean) {
+  return useQuery({
+    queryKey: [...queryKeys.forge.all, "owners", host] as const,
+    queryFn: () => unwrap(commands.forgeOwners(host)),
+    enabled,
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+/** Whether `owner/name` exists on the host; null/false input disables the query. */
+export function useForgeRepoExists(
+  host: string,
+  target: { owner: string; name: string } | null,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: [...queryKeys.forge.all, "exists", host, target?.owner, target?.name] as const,
+    queryFn: () => unwrap(commands.forgeRepoExists(host, target!.owner, target!.name)),
+    enabled: enabled && target !== null,
+    staleTime: 10_000,
+    retry: false,
+  });
+}
+
 export function useIssues(
   repoId: string,
   state: IssueStateFilter,

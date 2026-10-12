@@ -350,6 +350,8 @@ export async function installBackend(rowCount = 1000, searchHits: number[] = [])
     ok({ repo: null, supported: false, tokenSource: "none" }),
   );
   commands.forgeTokenSource.mockImplementation(() => ok("none"));
+  commands.forgeOwners.mockImplementation(() => ok([]));
+  commands.forgeRepoExists.mockImplementation(() => ok(true));
   commands.forgeIssues.mockImplementation(() => ok({ items: [], nextPage: null }));
   commands.forgeCommitComments.mockImplementation(() => ok([]));
   commands.terminalOpen.mockImplementation(() => ok("term-1"));

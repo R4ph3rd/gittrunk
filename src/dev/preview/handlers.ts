@@ -297,6 +297,20 @@ export const handlerTable: HandlerTable = {
   forgeTokenSource: () => "forge",
   forgeTokenSet: () => ({ login: "R4ph3rd" }),
   forgeTokenClear: nothing,
+  forgeOwners: () => [
+    { login: "R4ph3rd", kind: "user" },
+    { login: "gittrunk", kind: "org" },
+  ],
+  forgeRepoExists: () => true,
+  forgeCreateRepo: (a) => {
+    const r = a.request as { owner?: string; name?: string };
+    const slug = `${str(r.owner)}/${str(r.name)}`;
+    return {
+      cloneUrl: `https://github.com/${slug}.git`,
+      sshUrl: `git@github.com:${slug}.git`,
+      htmlUrl: `https://github.com/${slug}`,
+    };
+  },
   forgeIssues: (a) => {
     const q = a.query as { state: "open" | "closed" | "all" };
     return {

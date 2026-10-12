@@ -40,3 +40,39 @@ export function joinPath(parent: string, name: string): string {
   const base = parent.replace(/[/\\]+$/, "");
   return name ? `${base}${sep}${name}` : base;
 }
+
+export interface RepoUrl {
+  host: string;
+  owner: string;
+  name: string;
+}
+
+const URL_RE =
+  /^(?:https?|ssh|git):\/\/(?:[^@/\s]+@)?([^/:\s]+)(?::\d+)?\/([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/i;
+const SCP_RE = /^[^@/\s]+@([^:/\s]+):([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/;
+
+/** `host/owner/name` of an https, ssh:// or scp-style remote URL; null for local paths and odd shapes. */
+export function parseRepoUrl(url: string): RepoUrl | null {
+  const u = url.trim();
+  const m = URL_RE.exec(u) ?? SCP_RE.exec(u);
+  if (!m) return null;
+  return { host: m[1]!.toLowerCase(), owner: m[2]!, name: m[3]! };
+}
+
+/** A repository name GitHub accepts, derived from a folder name. */
+export function suggestRepoName(folder: string): string {
+  const cleaned = folder
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return cleaned.replace(/\.git$/, "");
+}
+
+export function validateRepoName(name: string): string | null {
+  if (name.length === 0) return "Enter a repository name";
+  if (!NAME_RE.test(name) || name === "." || name === "..") {
+    return "Use letters, digits, dot, dash and underscore only";
+  }
+  if (name.endsWith(".git")) return "The name cannot end with .git";
+  return null;
+}

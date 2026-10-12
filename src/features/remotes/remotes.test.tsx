@@ -370,8 +370,14 @@ describe("remotes management", () => {
     expect(commands.remoteAdd).toHaveBeenCalledWith("r1", {
       name: "up.stream-1",
       url: "https://example.com/up.git",
-      fetch: true,
+      fetch: false,
     });
+    await waitFor(() =>
+      expect(commands.fetch).toHaveBeenCalledWith(
+        "r1",
+        expect.objectContaining({ remote: "up.stream-1" }),
+      ),
+    );
   });
 
   it("merges and rebases onto a remote branch from its context menu", async () => {

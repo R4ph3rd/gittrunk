@@ -132,6 +132,7 @@ AI is off by default. While it is off, no provider client is constructed. Every 
 - **Forge tokens** are validated against GitHub before they are stored, kept in the OS keychain (service `gittrunk-forge`, account = host) or the 0600 file store on Android, and never cross IPC or logs. If none is stored, the HTTPS credential remembered for the host is used.
 - **Pull requests** are fetched by the backend, displayed in a sidebar section and list/detail view; users can check out, comment, and open on GitHub. Requires a token with `repo` scope.
 - **Notifications** are fetched from GitHub and displayed in a popover (app activity and GitHub notifications); GitHub notifications need a classic token with the `notifications` scope.
+- **Repository creation** (`Forge::create_repo`, GitHub only for now): the Add remote dialog can create the repository (`POST /user/repos` or `/orgs/{org}/repos`, `auto_init=false`) with the stored token, add the returned URL and push with upstream. `remote_add` never fails because the remote is missing: its optional fetch is best effort and the UI runs a visible fetch op instead.
 - **Forge content** (issue, PR and comment bodies) is rendered as plain text, never as Markdown or HTML, because it is untrusted input in a privileged webview.
 - **Links** are opened only through an allowlist (github.com, gitlab.com, bitbucket.org) via the `app_open_url` command using the opener plugin.
 
@@ -158,7 +159,7 @@ The Home and repository pages feature a subtle scroll-parallax gradient backdrop
 - Credentials: git runs with `GIT_TERMINAL_PROMPT=0` and an askpass helper that emits `credential-requested`; the UI answers with `credential_respond`.
 - Terminal output is streamed with the `terminal-output` and `terminal-exit` events; the terminal commands are `terminal_open`, `terminal_write`, `terminal_resize` and `terminal_close`.
 
-Command groups: repo (including `repo_known`, `repo_forget`), graph, refs, worktree (staging and commit), stash, history (merge, rebase, interactive rebase, cherry-pick, revert, reset, sequencer control), conflicts, remotes, advanced (submodules, worktrees, blame, file history, reflog), oplog (including `oplog_state`), forge (`forge_status`, `forge_token_*`, `forge_issues`, `forge_issue*`, `forge_commit_comment*`, `forge_pulls`, `forge_pull`, `forge_pull_comment`, `forge_notifications`), terminal, avatars (`avatars_get`), app (`app_open_url`), ssh (`ssh_keys_list`, `ssh_key_generate`), ai, settings. See `src-tauri/src/commands/`.
+Command groups: repo (including `repo_known`, `repo_forget`), graph, refs, worktree (staging and commit), stash, history (merge, rebase, interactive rebase, cherry-pick, revert, reset, sequencer control), conflicts, remotes, advanced (submodules, worktrees, blame, file history, reflog), oplog (including `oplog_state`), forge (`forge_status`, `forge_token_*`, `forge_owners`, `forge_repo_exists`, `forge_create_repo`, `forge_issues`, `forge_issue*`, `forge_commit_comment*`, `forge_pulls`, `forge_pull`, `forge_pull_comment`, `forge_notifications`), terminal, avatars (`avatars_get`), app (`app_open_url`), ssh (`ssh_keys_list`, `ssh_key_generate`), ai, settings. See `src-tauri/src/commands/`.
 
 ## Agent workflow
 

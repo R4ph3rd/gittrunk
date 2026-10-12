@@ -31,8 +31,8 @@ const credentialRequested = eventMock<{
 const terminalOutput = eventMock<{ id: string; data: string }>();
 const terminalExit = eventMock<{ id: string; code: number | null }>();
 export const ok = <T>(data: T) => Promise.resolve({ status: "ok" as const, data });
-export const fail = (kind: string, message: string) =>
-  Promise.resolve({ status: "error" as const, error: { kind, message, detail: null } });
+export const fail = (kind: string, message: string, detail: string | null = null) =>
+  Promise.resolve({ status: "error" as const, error: { kind, message, detail } });
 
 export const names = [
   "appInfo",
@@ -124,6 +124,9 @@ export const names = [
   "forgeTokenSource",
   "forgeTokenSet",
   "forgeTokenClear",
+  "forgeOwners",
+  "forgeRepoExists",
+  "forgeCreateRepo",
   "forgeIssues",
   "forgeIssue",
   "forgeIssueCreate",
