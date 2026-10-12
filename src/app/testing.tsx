@@ -284,6 +284,13 @@ export async function installBackend(rowCount = 1000, searchHits: number[] = [])
   commands.discardPaths.mockImplementation(dryRunnable("discard changes"));
   commands.discardLines.mockImplementation(dryRunnable("discard lines"));
   commands.stashDrop.mockImplementation(dryRunnable("drop stash"));
+  commands.untrackPaths.mockImplementation(dryRunnable("stop tracking"));
+  commands.ignoreAdd.mockImplementation((_r: string, patterns: string[]) =>
+    ok({ file: ".gitignore", added: patterns, alreadyPresent: [], tracked: [] }),
+  );
+  commands.difftoolOpen.mockImplementation(() => ok(null));
+  commands.diffPatch.mockImplementation(() => ok("diff --git a/x b/x\n"));
+  commands.diffPatchSave.mockImplementation(() => ok(20));
   commands.commitCreate.mockImplementation(() => ok(applied("Committed abc1234")));
   commands.stashList.mockImplementation(() => ok([]));
   commands.stashSave.mockImplementation(() => ok(applied("Changes stashed")));

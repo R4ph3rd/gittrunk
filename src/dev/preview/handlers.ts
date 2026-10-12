@@ -147,6 +147,17 @@ export const handlerTable: HandlerTable = {
   unstageLines: nothing,
   discardLines: mutation("discard the selected lines"),
   commitCreate: mutation("create the commit"),
+  ignoreAdd: (a) => ({
+    file: ".gitignore",
+    added: Array.isArray(a.patterns) ? (a.patterns as string[]) : [],
+    alreadyPresent: [],
+    tracked: [],
+  }),
+  untrackPaths: mutation("stop tracking the files"),
+  difftoolOpen: nothing,
+  diffPatch: (a) =>
+    `diff --git a/${str((a.paths as string[] | undefined)?.[0], "file.txt")} b/file.txt\n`,
+  diffPatchSave: () => 0,
 
   stashList: () => REFS.stashes,
   stashSave: mutation("stash the changes"),
