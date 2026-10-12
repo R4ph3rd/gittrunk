@@ -23,6 +23,7 @@ let queryClient: QueryClient | null = null;
 /** Finish events that arrived before the command that started the op resolved. */
 const early = new Map<string, OpFinishedPayload>();
 const callbacks = new Map<string, RunOpSpec["onSuccess"]>();
+const silent = new Map<string, () => void>();
 let starting = 0;
 
 function errorToast(title: string, error: AppError) {
@@ -40,6 +41,12 @@ function errorToast(title: string, error: AppError) {
 
 /** Removes the op, refreshes the repo's queries and reports the outcome. */
 export function finishOp(payload: OpFinishedPayload) {
+  const quiet = silent.get(payload.opId);
+  if (quiet) {
+    silent.delete(payload.opId);
+    quiet();
+    return;
+  }
   const op = useOpsStore.getState().ops[payload.opId];
   if (!op) {
     if (starting > 0) early.set(payload.opId, payload);
@@ -88,6 +95,32 @@ export async function runOp(spec: RunOpSpec): Promise<string | null> {
   early.delete(id);
   if (done) finishOp(done);
   return id;
+}
+
+/**
+ * Runs a background operation (auto-fetch): refreshes the repo's queries when it finishes but
+ * shows no toast or progress, whatever the outcome. Resolves once the op has finished; a failure
+ * to start is swallowed too.
+ */
+export async function runSilentOp(repoId: string, start: () => Promise<string>): Promise<void> {
+  starting++;
+  let id: string;
+  try {
+    id = await start();
+  } catch {
+    return;
+  } finally {
+    starting--;
+  }
+  await new Promise<void>((resolve) => {
+    silent.set(id, () => {
+      if (queryClient) void invalidateAfterOp(queryClient, repoId);
+      resolve();
+    });
+    const done = early.get(id);
+    early.delete(id);
+    if (done) finishOp(done);
+  });
 }
 
 export function useRunOp() {

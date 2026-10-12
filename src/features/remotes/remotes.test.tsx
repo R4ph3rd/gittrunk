@@ -17,6 +17,7 @@ import {
   resetStore,
 } from "@/app/testing";
 import { fail } from "@/app/mockBindings";
+import { runSilentOp } from "@/features/ops/ops";
 import { useOpsStore } from "@/features/ops/store";
 import type { BranchInfo, RefsSnapshot } from "@/ipc/bindings";
 import { useRepoStore } from "@/stores/repo";
@@ -35,6 +36,7 @@ const branch = (parts: Partial<BranchInfo>): BranchInfo => ({
   fullName: "refs/heads/main",
   oid: oid(0),
   upstream: null,
+  upstreamGone: false,
   ahead: 0,
   behind: 0,
   isHead: true,
@@ -114,6 +116,26 @@ describe("operation tracker", () => {
     await waitFor(() => expect(commands.refsList.mock.calls.length).toBeGreaterThan(before));
     expect(commands.graphLoad.mock.calls.length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: /^Fetch/ })).toBeEnabled();
+  });
+
+  it("runs a background op silently and still refreshes the repo", async () => {
+    const commands = await backend();
+    await openRepo();
+    const before = commands.refsList.mock.calls.length;
+    const done = runSilentOp("r1", () => Promise.resolve("op-bg"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(useOpsStore.getState().ops).toEqual({});
+    act(() =>
+      emitOpFinished("op-bg", {
+        error: { kind: "authRequired", message: "no creds", detail: null },
+      }),
+    );
+    await done;
+    await waitFor(() => expect(commands.refsList.mock.calls.length).toBeGreaterThan(before));
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it("handles an op that finishes before its id is returned", async () => {

@@ -33,6 +33,8 @@ pub fn defaults() -> AppSettings {
         diff_context_lines: 3,
         avatars: AvatarMode::Github,
         backdrop: true,
+        auto_fetch_minutes: 5,
+        prune_on_fetch: true,
         workspaces: Vec::new(),
     }
 }
@@ -115,6 +117,9 @@ pub fn validate(settings: &AppSettings) -> AppResult<AppSettings> {
     let mut s = settings.clone();
     if s.diff_context_lines > 20 {
         return Err(invalid("diffContextLines must be between 0 and 20"));
+    }
+    if s.auto_fetch_minutes > 24 * 60 {
+        return Err(invalid("autoFetchMinutes must be between 0 and 1440"));
     }
     s.workspaces = validate_workspaces(&s.workspaces)?;
     // Without a git CLI the path is inert: stored as given, never executed.

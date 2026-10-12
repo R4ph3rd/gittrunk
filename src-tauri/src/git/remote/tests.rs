@@ -16,6 +16,7 @@ use crate::askpass;
 use crate::git::cli::GitCli;
 use crate::git::libgit::LibGit;
 use crate::git::oplog::Oplog;
+use crate::git::service::GitService;
 use crate::ipc::error::{AppResult, ErrorKind};
 use crate::ipc::types::*;
 
@@ -799,6 +800,110 @@ fn fetch_updates_remote_tracking_refs() {
     )
     .unwrap_err();
     assert_eq!(err.kind, ErrorKind::GitCli);
+}
+
+fn tracking_exists(repo: &Repository, name: &str) -> bool {
+    repo.find_reference(&format!("refs/remotes/{name}")).is_ok()
+}
+
+#[test]
+fn fetch_prunes_deleted_remote_branches_only_when_asked() {
+    let f = fixture();
+    let (b, b_dir) = f.clone_to("b");
+    let c = head(&f.a);
+    f.a.branch("topic", &f.a.find_commit(c).unwrap(), false)
+        .unwrap();
+    push(&plain(), &f.a_dir, &push_req(&["topic"], false, false)).unwrap();
+    let req = |prune| FetchRequest {
+        remote: None,
+        prune,
+        tags: false,
+    };
+    fetch(&plain(), &b_dir, &req(false)).unwrap();
+    assert!(tracking_exists(&b, "origin/topic"));
+
+    push(&plain(), &f.a_dir, &push_req(&[":topic"], false, false)).unwrap();
+    fetch(&plain(), &b_dir, &req(false)).unwrap();
+    assert!(tracking_exists(&b, "origin/topic"), "kept without prune");
+    fetch(&plain(), &b_dir, &req(true)).unwrap();
+    assert!(!tracking_exists(&b, "origin/topic"));
+    assert!(tracking_exists(&b, "origin/main"));
+}
+
+#[test]
+fn cli_fetch_args_prune_flag() {
+    let args = fetch_args(&FetchRequest {
+        remote: None,
+        prune: true,
+        tags: false,
+    })
+    .unwrap();
+    assert!(args.contains(&"--prune".to_string()));
+}
+
+#[test]
+fn branch_whose_remote_branch_was_pruned_is_marked_gone() {
+    let f = fixture();
+    let (mut b, b_dir) = f.clone_to("b");
+    let c = head(&f.a);
+    f.a.branch("topic", &f.a.find_commit(c).unwrap(), false)
+        .unwrap();
+    push(&plain(), &f.a_dir, &push_req(&["topic"], false, false)).unwrap();
+    let all = |prune| FetchRequest {
+        remote: None,
+        prune,
+        tags: false,
+    };
+    fetch(&plain(), &b_dir, &all(true)).unwrap();
+    {
+        let tip = b.find_commit(head(&b)).unwrap();
+        let mut local = b.branch("topic", &tip, false).unwrap();
+        local.set_upstream(Some("origin/topic")).unwrap();
+    }
+    let snap = LibGit.refs_list(&mut b).unwrap();
+    let topic = snap.local.iter().find(|x| x.name == "topic").unwrap();
+    assert_eq!(topic.upstream.as_deref(), Some("origin/topic"));
+    assert!(!topic.upstream_gone);
+
+    push(&plain(), &f.a_dir, &push_req(&[":topic"], false, false)).unwrap();
+    fetch(&plain(), &b_dir, &all(true)).unwrap();
+    let snap = LibGit.refs_list(&mut b).unwrap();
+    let topic = snap.local.iter().find(|x| x.name == "topic").unwrap();
+    assert!(topic.upstream_gone);
+    assert_eq!(topic.upstream, None);
+    // Never-tracked branches are not "gone".
+    let main = snap.local.iter().find(|x| x.name == "main").unwrap();
+    assert!(!main.upstream_gone);
+}
+
+#[test]
+fn quiet_resolver_uses_keychain_but_never_prompts() {
+    let store = Arc::new(FakeStore::default());
+    store.set("example.com", "bob", "sekret").unwrap();
+    let notified = Arc::new(Mutex::new(0u32));
+    let n = notified.clone();
+    let resolver = CredentialResolver::new(
+        store,
+        PendingCredentials::default(),
+        Arc::new(move |_| *n.lock() += 1),
+        Duration::from_secs(5),
+    )
+    .quiet(true);
+    let got = resolver.ask(
+        CredentialKind::Password,
+        "example.com",
+        "https://example.com/r.git",
+        Some("bob"),
+    );
+    assert_eq!(got.as_deref(), Some("sekret"));
+    let none = resolver.ask(
+        CredentialKind::Password,
+        "other.com",
+        "https://other.com/r.git",
+        Some("bob"),
+    );
+    assert_eq!(none, None);
+    assert_eq!(*notified.lock(), 0);
 }
 
 #[test]

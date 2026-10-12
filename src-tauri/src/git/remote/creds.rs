@@ -218,6 +218,27 @@ impl CredentialBridge {
         secrets: Arc<dyn SecretStore>,
         timeout: Duration,
     ) -> std::io::Result<Self> {
+        Self::start_full(pending, notifier, op, secrets, timeout, false)
+    }
+
+    /// Like `start`, but never prompts the UI (see [`CredentialResolver::quiet`]).
+    pub fn start_quiet(
+        pending: PendingCredentials,
+        notifier: Notifier,
+        op: Option<Arc<OpHandle>>,
+        secrets: Arc<dyn SecretStore>,
+    ) -> std::io::Result<Self> {
+        Self::start_full(pending, notifier, op, secrets, PROMPT_TIMEOUT, true)
+    }
+
+    fn start_full(
+        pending: PendingCredentials,
+        notifier: Notifier,
+        op: Option<Arc<OpHandle>>,
+        secrets: Arc<dyn SecretStore>,
+        timeout: Duration,
+        quiet: bool,
+    ) -> std::io::Result<Self> {
         let exe = std::env::current_exe()?;
         let listener = TcpListener::bind("127.0.0.1:0")?;
         listener.set_nonblocking(true)?;
@@ -225,7 +246,9 @@ impl CredentialBridge {
         let token = random_hex(32);
         let shared = Arc::new(Shared {
             token: token.clone(),
-            resolver: CredentialResolver::new(secrets, pending, notifier, timeout).with_op(op),
+            resolver: CredentialResolver::new(secrets, pending, notifier, timeout)
+                .with_op(op)
+                .quiet(quiet),
             stop: AtomicBool::new(false),
         });
         let s = shared.clone();
@@ -335,6 +358,9 @@ pub struct CredentialResolver {
     notifier: Notifier,
     timeout: Duration,
     op: Option<Arc<OpHandle>>,
+    /// Background operations never interrupt the user: the keychain is
+    /// consulted, but missing credentials fail the operation silently.
+    quiet: bool,
     stop: AtomicBool,
     last_username: Mutex<Option<String>>,
 }
@@ -352,6 +378,7 @@ impl CredentialResolver {
             notifier,
             timeout,
             op: None,
+            quiet: false,
             stop: AtomicBool::new(false),
             last_username: Mutex::new(None),
         }
@@ -360,6 +387,12 @@ impl CredentialResolver {
     /// Prompts give up as soon as `op` is cancelled.
     pub fn with_op(mut self, op: Option<Arc<OpHandle>>) -> Self {
         self.op = op;
+        self
+    }
+
+    /// Never asks the UI (background operations); the keychain still answers.
+    pub fn quiet(mut self, quiet: bool) -> Self {
+        self.quiet = quiet;
         self
     }
 
@@ -432,6 +465,9 @@ impl CredentialResolver {
         url: &str,
         username: Option<String>,
     ) -> Option<String> {
+        if self.quiet {
+            return None;
+        }
         let (request_id, rx) = self.pending.register();
         (self.notifier)(CredentialRequested {
             request_id: request_id.clone(),

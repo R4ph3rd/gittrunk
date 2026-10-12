@@ -71,6 +71,11 @@ export const commands = {
 	remoteRename: (repo: string, oldName: string, newName: string) => typedError<null, AppError>(__TAURI_INVOKE("remote_rename", { repo, oldName, newName })),
 	remoteSetUrl: (repo: string, name: string, url: string, push: boolean) => typedError<null, AppError>(__TAURI_INVOKE("remote_set_url", { repo, name, url, push })),
 	fetch: (repo: string, request: FetchRequest) => typedError<string, AppError>(__TAURI_INVOKE("fetch", { repo, request })),
+	/**
+	 *  Background fetch of all remotes: never prompts for credentials. The UI
+	 *  tracks it like any op but stays silent about the outcome.
+	 */
+	fetchBackground: (repo: string, prune: boolean) => typedError<string, AppError>(__TAURI_INVOKE("fetch_background", { repo, prune })),
 	pull: (repo: string, request: PullRequest) => typedError<string, AppError>(__TAURI_INVOKE("pull", { repo, request })),
 	push: (repo: string, request: PushRequest) => typedError<string, AppError>(__TAURI_INVOKE("push", { repo, request })),
 	setUpstream: (repo: string, branch: string, upstream: string | null) => typedError<null, AppError>(__TAURI_INVOKE("set_upstream", { repo, branch, upstream })),
@@ -194,6 +199,10 @@ export type AppSettings = {
 	avatars: AvatarMode,
 	/**  Decorative gradients behind the graph and on the Home page. */
 	backdrop: boolean,
+	/**  Minutes between background fetches of all remotes; 0 turns them off. */
+	autoFetchMinutes: number,
+	/**  Drop remote-tracking branches that were deleted on the remote when fetching. */
+	pruneOnFetch: boolean,
 	/**  Named groups of repository paths (Home page). */
 	workspaces: Workspace[],
 };
@@ -237,6 +246,8 @@ export type BranchInfo = {
 	fullName: string,
 	oid: string,
 	upstream: string | null,
+	/**  The branch tracks a remote branch that no longer exists (deleted on the remote and pruned). */
+	upstreamGone: boolean,
 	ahead: number,
 	behind: number,
 	isHead: boolean,

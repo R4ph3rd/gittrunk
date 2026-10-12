@@ -127,6 +127,8 @@ describe("graph view", () => {
         diffContextLines: 3,
         avatars: "github",
         backdrop: true,
+        autoFetchMinutes: 5,
+        pruneOnFetch: true,
         workspaces: [],
       }),
     );

@@ -11,7 +11,7 @@ import {
 import { unwrap } from "@/ipc/client";
 import { queryKeys } from "@/ipc/queries";
 import { useRemotesUi } from "@/stores/remotes";
-import { getPullStrategy } from "@/stores/settings";
+import { getPruneOnFetch, getPullStrategy } from "@/stores/settings";
 
 export const STRATEGY_LABEL: Record<PullStrategy, string> = {
   merge: "Merge",
@@ -54,7 +54,7 @@ export function fetchRemote(repoId: string, remote: string | null) {
     repoId,
     label: remote ? `Fetching ${remote}` : "Fetching all remotes",
     doneLabel: "Fetch complete",
-    start: () => unwrap(commands.fetch(repoId, { remote, prune: true, tags: false })),
+    start: () => unwrap(commands.fetch(repoId, { remote, prune: getPruneOnFetch(), tags: false })),
   });
 }
 

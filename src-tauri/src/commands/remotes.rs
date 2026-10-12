@@ -115,6 +115,36 @@ pub async fn fetch(
     ))
 }
 
+/// Background fetch of all remotes: never prompts for credentials. The UI
+/// tracks it like any op but stays silent about the outcome.
+#[tauri::command]
+#[specta::specta]
+pub async fn fetch_background(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, GitState>,
+    repo: RepoId,
+    prune: bool,
+) -> AppResult<OpId> {
+    let request = FetchRequest {
+        remote: None,
+        prune,
+        tags: false,
+    };
+    let entry = state.entry(&repo)?;
+    let git_dir = entry.git_dir.clone();
+    Ok(ops::spawn_op_with(
+        app,
+        state.inner(),
+        Some(entry),
+        true,
+        move |sess| {
+            let dir = net::run_dir(&Repository::open(&git_dir)?);
+            net::fetch(sess, &dir, &request)?;
+            Ok(None)
+        },
+    ))
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn pull(

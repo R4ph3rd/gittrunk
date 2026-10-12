@@ -341,6 +341,7 @@ const branch = (
   fullName: remote ? `refs/remotes/${name}` : `refs/heads/${name}`,
   oid: at(oids, row),
   upstream: null,
+  upstreamGone: false,
   ahead: 0,
   behind: 0,
   isHead: false,

@@ -29,6 +29,8 @@ fn settings_without_m10_fields_get_their_defaults() {
     let s = load(d.path());
     assert_eq!(s.theme, ThemePreference::Dark);
     assert!(s.backdrop);
+    assert_eq!(s.auto_fetch_minutes, 5);
+    assert!(s.prune_on_fetch);
     assert!(s.workspaces.is_empty());
 }
 
@@ -253,4 +255,22 @@ fn workspaces_round_trip_through_save_and_load() {
     let s = with_workspaces(vec![ws("one", "One", &["/a", "/b"]), ws("two", "Two", &[])]);
     save(d.path(), &s).unwrap();
     assert_eq!(load(d.path()).workspaces, s.workspaces);
+}
+
+#[test]
+fn auto_fetch_interval_is_bounded_and_old_files_get_defaults() {
+    let d = tempfile::tempdir().unwrap();
+    let mut s = defaults();
+    s.auto_fetch_minutes = 24 * 60 + 1;
+    assert_eq!(
+        save(d.path(), &s).unwrap_err().kind,
+        ErrorKind::InvalidInput
+    );
+    s.auto_fetch_minutes = 0;
+    assert_eq!(save(d.path(), &s).unwrap().auto_fetch_minutes, 0);
+    // A settings file written before these fields existed keeps working.
+    std::fs::write(d.path().join(SETTINGS_FILE), r#"{"theme":"dark"}"#).unwrap();
+    let loaded = load(d.path());
+    assert_eq!(loaded.auto_fetch_minutes, 5);
+    assert!(loaded.prune_on_fetch);
 }

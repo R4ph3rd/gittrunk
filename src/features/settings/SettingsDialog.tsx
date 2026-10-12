@@ -197,6 +197,34 @@ export function Git() {
           ]}
         />
       </Row>
+      <Row
+        title="Fetch automatically"
+        description="Check all remotes for new and deleted branches in the background, and when the window regains focus. Failures stay silent."
+      >
+        <SegmentedControl<string>
+          aria-label="Fetch automatically"
+          value={String(s.autoFetchMinutes)}
+          onValueChange={(v) => void updateSettings({ autoFetchMinutes: Number(v) })}
+          options={[
+            { value: "0", label: "Off" },
+            { value: "1", label: "1 min" },
+            { value: "5", label: "5 min" },
+            { value: "15", label: "15 min" },
+            { value: "30", label: "30 min" },
+          ]}
+        />
+      </Row>
+      <Row
+        title="Prune deleted remote branches on fetch"
+        description="Drop remote-tracking branches that no longer exist on the remote. Local branches are never deleted."
+        htmlFor="settings-prune"
+      >
+        <Switch
+          id="settings-prune"
+          checked={s.pruneOnFetch}
+          onCheckedChange={(pruneOnFetch) => void updateSettings({ pruneOnFetch })}
+        />
+      </Row>
       <Row title="Graph order" description="How commits are ordered in the graph.">
         <SegmentedControl<CommitOrder>
           aria-label="Graph order"

@@ -16,6 +16,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   diffContextLines: 3,
   avatars: "github",
   backdrop: true,
+  autoFetchMinutes: 5,
+  pruneOnFetch: true,
   workspaces: [],
 };
 
@@ -153,3 +155,4 @@ export const getConfirmDestructive = () => current().confirmDestructive;
 export const getPullStrategy = () => current().pullStrategy;
 export const getDiffContextLines = () => current().diffContextLines;
 export const getGraphOrder = () => current().graphOrder;
+export const getPruneOnFetch = () => current().pruneOnFetch;

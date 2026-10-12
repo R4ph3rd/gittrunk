@@ -64,6 +64,28 @@ pub fn ref_labels(repo: &Repository) -> AppResult<HashMap<Oid, Vec<RefLabel>>> {
     Ok(map)
 }
 
+/// True when `name` is configured to track a branch of a real remote whose
+/// remote-tracking ref no longer exists (deleted upstream, then pruned).
+fn upstream_is_gone(repo: &Repository, name: &str) -> bool {
+    let Ok(cfg) = repo.config() else {
+        return false;
+    };
+    let (Ok(remote), Ok(merge)) = (
+        cfg.get_string(&format!("branch.{name}.remote")),
+        cfg.get_string(&format!("branch.{name}.merge")),
+    ) else {
+        return false;
+    };
+    if remote == "." {
+        return false;
+    }
+    let Some(short) = merge.strip_prefix("refs/heads/") else {
+        return false;
+    };
+    repo.find_reference(&format!("refs/remotes/{remote}/{short}"))
+        .is_err()
+}
+
 fn branch_infos(repo: &Repository, ty: BranchType) -> AppResult<Vec<BranchInfo>> {
     let mut out = Vec::new();
     for b in repo.branches(Some(ty))? {
@@ -80,9 +102,10 @@ fn branch_infos(repo: &Repository, ty: BranchType) -> AppResult<Vec<BranchInfo>>
         };
         let oid = commit.id();
         let (mut upstream, mut ahead, mut behind, mut remote) = (None, 0, 0, None);
+        let mut upstream_gone = false;
         match ty {
-            BranchType::Local => {
-                if let Ok(up) = branch.upstream() {
+            BranchType::Local => match branch.upstream() {
+                Ok(up) => {
                     upstream = up.name()?.map(str::to_string);
                     if let Ok(up_commit) = up.get().peel_to_commit() {
                         if let Ok((a, b)) = repo.graph_ahead_behind(oid, up_commit.id()) {
@@ -91,7 +114,8 @@ fn branch_infos(repo: &Repository, ty: BranchType) -> AppResult<Vec<BranchInfo>>
                         }
                     }
                 }
-            }
+                Err(_) => upstream_gone = upstream_is_gone(repo, &name),
+            },
             BranchType::Remote => {
                 remote = repo
                     .branch_remote_name(full)
@@ -104,6 +128,7 @@ fn branch_infos(repo: &Repository, ty: BranchType) -> AppResult<Vec<BranchInfo>>
             full_name: full.to_string(),
             oid: oid.to_string(),
             upstream,
+            upstream_gone,
             ahead,
             behind,
             is_head: branch.is_head(),

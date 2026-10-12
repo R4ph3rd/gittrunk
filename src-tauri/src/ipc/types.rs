@@ -350,6 +350,8 @@ wire! {
         pub full_name: String,
         pub oid: Oid,
         pub upstream: Option<String>,
+        /// The branch tracks a remote branch that no longer exists (deleted on the remote and pruned).
+        pub upstream_gone: bool,
         pub ahead: u32,
         pub behind: u32,
         pub is_head: bool,
@@ -857,6 +859,10 @@ wire! {
         pub avatars: AvatarMode,
         /// Decorative gradients behind the graph and on the Home page.
         pub backdrop: bool,
+        /// Minutes between background fetches of all remotes; 0 turns them off.
+        pub auto_fetch_minutes: u32,
+        /// Drop remote-tracking branches that were deleted on the remote when fetching.
+        pub prune_on_fetch: bool,
         /// Named groups of repository paths (Home page).
         pub workspaces: Vec<Workspace>,
     }

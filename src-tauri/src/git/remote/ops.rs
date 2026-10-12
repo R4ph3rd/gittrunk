@@ -69,7 +69,7 @@ pub fn sync_session(
     cli: GitCli,
 ) -> AppResult<NetSession> {
     if native::enabled() {
-        let resolver = resolver(state, app, None);
+        let resolver = resolver(state, app, None, false);
         return Ok(NetSession::plain(cli).with_resolver(resolver));
     }
     let bridge = CredentialBridge::start(
@@ -87,6 +87,7 @@ fn resolver(
     state: &GitState,
     app: &tauri::AppHandle,
     op: Option<Arc<crate::git::cli::OpHandle>>,
+    quiet: bool,
 ) -> Arc<CredentialResolver> {
     Arc::new(
         CredentialResolver::new(
@@ -95,7 +96,8 @@ fn resolver(
             credential_notifier(app.clone()),
             PROMPT_TIMEOUT,
         )
-        .with_op(op),
+        .with_op(op)
+        .quiet(quiet),
     )
 }
 
@@ -106,6 +108,20 @@ pub fn spawn_op<F>(
     app: tauri::AppHandle,
     state: &GitState,
     entry: Option<Arc<RepoEntry>>,
+    work: F,
+) -> OpId
+where
+    F: FnOnce(&NetSession) -> AppResult<Option<OpOutcome>> + Send + 'static,
+{
+    spawn_op_with(app, state, entry, false, work)
+}
+
+/// Like [`spawn_op`]; `quiet` operations never ask the user for credentials.
+pub fn spawn_op_with<F>(
+    app: tauri::AppHandle,
+    state: &GitState,
+    entry: Option<Arc<RepoEntry>>,
+    quiet: bool,
     work: F,
 ) -> OpId
 where
@@ -132,10 +148,15 @@ where
         });
         let result = if native::enabled() {
             let sess = NetSession::new(st.cli().clone(), Some(handle.clone()), None, progress)
-                .with_resolver(resolver(&st, &app, Some(handle)));
+                .with_resolver(resolver(&st, &app, Some(handle), quiet));
             work(&sess)
         } else {
-            CredentialBridge::start(
+            let start = if quiet {
+                CredentialBridge::start_quiet
+            } else {
+                CredentialBridge::start
+            };
+            start(
                 st.credentials().clone(),
                 credential_notifier(app.clone()),
                 Some(handle.clone()),

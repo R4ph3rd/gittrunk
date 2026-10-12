@@ -27,6 +27,7 @@ import { useWorkspaceStore } from "@/stores/workspace";
 import { fetchRemote, loadRefs, pullCurrent, pushBranch } from "./actions";
 import { CloneDialog } from "./CloneDialog";
 import { CredentialPrompt } from "./CredentialPrompt";
+import { useAutoFetch } from "./autoFetch";
 import { useCredentialEvents } from "./credentials";
 import { promptBranchAtHead, requestOplogStep } from "./oplogActions";
 import { PushDialog } from "./PushDialog";
@@ -312,6 +313,7 @@ function ForcePushDialog() {
  */
 export function RemotesHost() {
   useOpEvents();
+  useAutoFetch();
   useCredentialEvents();
   useRemoteCommands();
   const addRemoteFor = useRemotesUi((s) => s.addRemoteFor);

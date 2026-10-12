@@ -179,6 +179,8 @@ describe("Workspaces", () => {
         diffContextLines: 3,
         avatars: "github",
         backdrop: true,
+        autoFetchMinutes: 5,
+        pruneOnFetch: true,
         workspaces: [{ id: "w1", name: "Team", repos: ["/work/a", "/work/b"] }],
       }),
     );

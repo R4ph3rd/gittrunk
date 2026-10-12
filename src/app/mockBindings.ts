@@ -96,6 +96,7 @@ export const names = [
   "remoteRename",
   "remoteSetUrl",
   "fetch",
+  "fetchBackground",
   "pull",
   "push",
   "repoClone",

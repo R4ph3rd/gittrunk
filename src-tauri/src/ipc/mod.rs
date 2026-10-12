@@ -80,6 +80,7 @@ pub fn builder() -> Builder<tauri::Wry> {
             commands::remotes::remote_rename,
             commands::remotes::remote_set_url,
             commands::remotes::fetch,
+            commands::remotes::fetch_background,
             commands::remotes::pull,
             commands::remotes::push,
             commands::remotes::set_upstream,

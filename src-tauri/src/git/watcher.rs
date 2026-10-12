@@ -165,6 +165,16 @@ mod tests {
     }
 
     #[test]
+    fn fetched_and_pruned_remote_refs_are_refs_changes() {
+        assert_eq!(
+            scope(&[".git", "refs", "remotes", "origin", "feature", "x"]),
+            Some(ChangeScope::Refs)
+        );
+        assert_eq!(scope(&[".git", "packed-refs"]), Some(ChangeScope::Refs));
+        assert_eq!(scope(&[".git", "FETCH_HEAD"]), Some(ChangeScope::Worktree));
+    }
+
+    #[test]
     fn index_and_config() {
         assert_eq!(scope(&[".git", "index"]), Some(ChangeScope::Index));
         assert_eq!(scope(&[".git", "config"]), Some(ChangeScope::Config));
