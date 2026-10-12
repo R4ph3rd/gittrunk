@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   change,
+  emitOpFinished,
   installBackend,
   installDomShims,
   makeStatus,
@@ -14,6 +15,7 @@ import {
 } from "@/app/testing";
 import { useCommandStore } from "@/app/commands";
 import { ANDROID_PLATFORM } from "@/app/platform";
+import { useOpsStore } from "@/features/ops/store";
 import type { OplogState, RefsSnapshot, StatusSnapshot } from "@/ipc/bindings";
 import { LAYOUT_STORAGE_KEY, useLayoutStore } from "@/stores/layout";
 import { useWorkspaceStore } from "@/stores/workspace";
@@ -283,6 +285,106 @@ describe("branch and stash buttons", () => {
       "Branch",
       "Stash",
     ]);
+  });
+});
+
+describe("running operation icons", () => {
+  const PULL = /^Pull(?! options)/;
+  const PUSH = /^Push(?! options)/;
+  const FETCH = /^Fetch/;
+  const withUpstream = () =>
+    refs({
+      local: [
+        {
+          name: "main",
+          fullName: "refs/heads/main",
+          oid: oid(0),
+          upstream: "origin/main",
+          ahead: 1,
+          behind: 2,
+          isHead: true,
+          remote: null,
+        },
+      ],
+    });
+  const icon = (name: RegExp, glyph: string) => button(name).querySelector(`svg.lucide-${glyph}`);
+
+  async function expectSpinnerUntilFinished(
+    user: ReturnType<typeof userEvent.setup>,
+    name: RegExp,
+    opId: string,
+    glyph: string,
+  ) {
+    expect(button(name)).not.toHaveAttribute("aria-busy");
+    expect(icon(name, glyph)).not.toBeNull();
+
+    await user.click(button(name));
+    await waitFor(() => expect(button(name)).toHaveAttribute("aria-busy", "true"));
+    expect(button(name)).toHaveTextContent(name === PUSH ? "Push" : "Pull");
+    expect(button(name)).toBeDisabled();
+    expect(icon(name, glyph)).toBeNull();
+    expect(icon(name, "refresh-cw")).toHaveClass("motion-safe:animate-spin");
+
+    act(() => emitOpFinished(opId));
+    await waitFor(() => expect(button(name)).not.toHaveAttribute("aria-busy"));
+    expect(icon(name, glyph)).not.toBeNull();
+    expect(button(name).querySelector("svg.lucide-refresh-cw")).toBeNull();
+  }
+
+  it("spins the Push icon and sets aria-busy until the push finishes", async () => {
+    await backend(withUpstream());
+    const { user } = await openRepo();
+    await waitFor(() => expect(button(PUSH)).toBeEnabled());
+    await expectSpinnerUntilFinished(user, PUSH, "op-push", "arrow-up");
+  });
+
+  it("spins the Pull icon and sets aria-busy until the pull finishes", async () => {
+    await backend(withUpstream());
+    const { user } = await openRepo();
+    await waitFor(() => expect(button(PULL)).toBeEnabled());
+    await expectSpinnerUntilFinished(user, PULL, "op-pull", "arrow-down");
+  });
+
+  it("spins the Fetch icon while a fetch runs", async () => {
+    await backend(withUpstream());
+    const { user } = await openRepo();
+    await user.click(button(FETCH));
+    await waitFor(() => expect(button(FETCH)).toHaveAttribute("aria-busy", "true"));
+    expect(button(FETCH)).toBeDisabled();
+    expect(icon(FETCH, "refresh-cw")).toHaveClass("motion-safe:animate-spin");
+    act(() => emitOpFinished("op-fetch"));
+    await waitFor(() => expect(button(FETCH)).not.toHaveAttribute("aria-busy"));
+    expect(icon(FETCH, "refresh-cw")).not.toHaveClass("motion-safe:animate-spin");
+  });
+
+  it("leaves the other actions' icons alone while a push runs", async () => {
+    await backend(withUpstream());
+    const { user } = await openRepo();
+    await waitFor(() => expect(button(PUSH)).toBeEnabled());
+    await user.click(button(PUSH));
+    await waitFor(() => expect(button(PUSH)).toHaveAttribute("aria-busy", "true"));
+
+    expect(button(PULL)).not.toHaveAttribute("aria-busy");
+    expect(icon(PULL, "arrow-down")).not.toBeNull();
+    expect(icon(PULL, "refresh-cw")).toBeNull();
+    expect(button(FETCH)).not.toHaveAttribute("aria-busy");
+    expect(icon(FETCH, "refresh-cw")).not.toHaveClass("motion-safe:animate-spin");
+    expect(useOpsStore.getState().ops["op-push"]?.kind).toBe("push");
+  });
+
+  it("restores the icon when a push is cancelled", async () => {
+    await backend(withUpstream());
+    const { user } = await openRepo();
+    await waitFor(() => expect(button(PUSH)).toBeEnabled());
+    await user.click(button(PUSH));
+    await waitFor(() => expect(button(PUSH)).toHaveAttribute("aria-busy", "true"));
+    act(() =>
+      emitOpFinished("op-push", {
+        error: { kind: "cancelled", message: "Cancelled", detail: null },
+      }),
+    );
+    await waitFor(() => expect(button(PUSH)).not.toHaveAttribute("aria-busy"));
+    expect(icon(PUSH, "arrow-up")).not.toBeNull();
   });
 });
 

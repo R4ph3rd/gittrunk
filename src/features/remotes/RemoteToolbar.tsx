@@ -22,7 +22,7 @@ import {
   Tooltip,
 } from "@/design/components";
 import { formatShortcut } from "@/app/shortcuts";
-import { useRepoBusy } from "@/features/ops/store";
+import { useOpRunning, useRepoBusy } from "@/features/ops/store";
 import { useOplogState, useRefs, useStatus } from "@/ipc/queries";
 import type { PullStrategy } from "@/ipc/bindings";
 import { updateSettings, useSettings } from "@/stores/settings";
@@ -49,6 +49,9 @@ export function RemoteToolbar({ repoId }: { repoId: string }) {
   const refs = useRefs(repoId);
   const status = useStatus(repoId);
   const busy = useRepoBusy(repoId);
+  const fetching = useOpRunning(repoId, "fetch");
+  const pulling = useOpRunning(repoId, "pull");
+  const pushing = useOpRunning(repoId, "push");
   const strategy = useSettings().pullStrategy;
   const oplogState = useOplogState(repoId);
   const setForcePushFor = useRemotesUi((s) => s.setForcePushFor);
@@ -123,8 +126,12 @@ export function RemoteToolbar({ repoId }: { repoId: string }) {
       )}
 
       <Tooltip content="Fetch all remotes and prune" shortcut={formatShortcut("mod+alt+f")}>
-        <Button disabled={busy} onClick={() => void fetchRemote(repoId, null)}>
-          <RefreshCw />
+        <Button
+          disabled={busy || fetching}
+          aria-busy={fetching || undefined}
+          onClick={() => void fetchRemote(repoId, null)}
+        >
+          <RefreshCw className={fetching ? "motion-safe:animate-spin" : undefined} />
           Fetch
         </Button>
       </Tooltip>
@@ -141,13 +148,14 @@ export function RemoteToolbar({ repoId }: { repoId: string }) {
           shortcut={formatShortcut("mod+shift+l")}
         >
           <Button
-            disabled={!canPull}
+            disabled={!canPull || pulling}
+            aria-busy={pulling || undefined}
             className={platform.readOnly ? "" : "rounded-r-none"}
             onClick={() =>
               void pullCurrent(client, repoId, platform.readOnly ? "ffOnly" : strategy)
             }
           >
-            <ArrowDown />
+            {pulling ? <RefreshCw className="motion-safe:animate-spin" /> : <ArrowDown />}
             Pull
             <Count n={branch?.behind ?? 0} label="behind" />
           </Button>
@@ -158,7 +166,7 @@ export function RemoteToolbar({ repoId }: { repoId: string }) {
               <IconButton
                 aria-label="Pull options"
                 variant="secondary"
-                disabled={!canPull}
+                disabled={!canPull || pulling}
                 className="w-6 rounded-l-none"
               >
                 <ChevronDown />
@@ -191,11 +199,12 @@ export function RemoteToolbar({ repoId }: { repoId: string }) {
               shortcut={formatShortcut("mod+shift+k")}
             >
               <Button
-                disabled={!canPush}
+                disabled={!canPush || pushing}
+                aria-busy={pushing || undefined}
                 className="rounded-r-none"
                 onClick={() => void pushBranch(client, repoId)}
               >
-                <ArrowUp />
+                {pushing ? <RefreshCw className="motion-safe:animate-spin" /> : <ArrowUp />}
                 Push
                 <Count n={branch?.ahead ?? 0} label="ahead" />
               </Button>
@@ -205,7 +214,7 @@ export function RemoteToolbar({ repoId }: { repoId: string }) {
                 <IconButton
                   aria-label="Push options"
                   variant="secondary"
-                  disabled={!canPush}
+                  disabled={!canPush || pushing}
                   className="w-6 rounded-l-none"
                 >
                   <ChevronDown />

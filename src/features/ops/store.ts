@@ -75,3 +75,10 @@ export function useOpProgress(repoId: string | null): number | "indeterminate" |
 export function useRepoBusy(repoId: string): boolean {
   return useOpsStore((s) => Object.values(s.ops).some((o) => o.repoId === repoId));
 }
+
+/** True while an operation of this kind runs for the repository (drives toolbar spinners). */
+export function useOpRunning(repoId: string | null, kind: OpKind): boolean {
+  return useOpsStore((s) =>
+    Object.values(s.ops).some((o) => o.kind === kind && o.repoId === repoId),
+  );
+}

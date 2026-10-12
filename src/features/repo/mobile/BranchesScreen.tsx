@@ -32,6 +32,7 @@ import { branchActionTarget } from "@/features/operations/dnd/refs";
 import { buildActionEntries } from "@/features/operations/actions/entries";
 import type { ActionEntry } from "@/features/operations/actions/types";
 import { useActionContext } from "@/features/operations/actions/useActionContext";
+import { useOpRunning } from "@/features/ops/store";
 import { fetchRemote, pushBranch } from "@/features/remotes/actions";
 import { RemoteFormDialog, type RemoteFormMode } from "@/features/remotes/RemoteFormDialog";
 import { SetUpstreamDialog } from "@/features/remotes/SetUpstreamDialog";
@@ -67,6 +68,7 @@ export function BranchesScreen({ repoId }: TabScreenProps) {
   const nav = useNav();
   const client = useQueryClient();
   const refs = useRefs(repoId);
+  const fetching = useOpRunning(repoId, "fetch");
   const remotes = useRemotes(repoId);
   const makeContext = useActionContext(repoId);
   const aiEnabled = useAiEnabled();
@@ -161,8 +163,13 @@ export function BranchesScreen({ repoId }: TabScreenProps) {
                 <Plus />
               </IconButton>
             )}
-            <IconButton aria-label="Fetch" onClick={() => void fetchRemote(repoId, null)}>
-              <RefreshCw />
+            <IconButton
+              aria-label="Fetch"
+              disabled={fetching}
+              aria-busy={fetching || undefined}
+              onClick={() => void fetchRemote(repoId, null)}
+            >
+              <RefreshCw className={fetching ? "motion-safe:animate-spin" : undefined} />
             </IconButton>
           </>
         }
