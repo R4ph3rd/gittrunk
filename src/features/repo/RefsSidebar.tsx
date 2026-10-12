@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDownToLine,
@@ -10,9 +10,11 @@ import {
   Sparkles,
   Tag,
   Trash2,
+  Unlink,
   Undo2,
 } from "lucide-react";
 import {
+  Badge,
   Button,
   ContextMenu,
   ContextMenuContent,
@@ -23,6 +25,8 @@ import {
 } from "@/design/components";
 import { stashLabel, useStashActions } from "@/features/stash/useStashActions";
 import { pushBranch } from "@/features/remotes/actions";
+import { GoneBranchesDialog } from "@/features/remotes/GoneBranchesDialog";
+import { deletableGoneBranches } from "@/features/remotes/goneBranches";
 import { RemotesSection } from "@/features/remotes/RemotesSection";
 import { SetUpstreamDialog } from "@/features/remotes/SetUpstreamDialog";
 import type { BranchInfo } from "@/ipc/bindings";
@@ -52,7 +56,9 @@ export function RefsSidebar({ repoId }: { repoId: string }) {
   const branchSummary = useBranchSummary(repoId);
   const refColors = useRefColors(repoId);
   const [upstreamFor, setUpstreamFor] = useState<BranchInfo | null>(null);
+  const [goneOpen, setGoneOpen] = useState(false);
   const data = refs.data;
+  const gone = useMemo(() => deletableGoneBranches(data?.local ?? []), [data?.local]);
 
   const createBranch = () => {
     if (!data || data.head.kind === "unborn") return;
@@ -81,17 +87,31 @@ export function RefsSidebar({ repoId }: { repoId: string }) {
             count={data.local.length}
             actions={
               !platform.readOnly && (
-                <Tooltip content="Create branch at HEAD" shortcut="Mod+Shift+B">
-                  <Button
-                    size="icon-xs"
-                    variant="ghost"
-                    disabled={data.head.kind === "unborn"}
-                    onClick={createBranch}
-                    aria-label="Create branch"
-                  >
-                    <Plus />
-                  </Button>
-                </Tooltip>
+                <>
+                  {gone.length > 0 && (
+                    <Tooltip content="Delete branches whose remote is gone…">
+                      <Button
+                        size="icon-xs"
+                        variant="ghost"
+                        onClick={() => setGoneOpen(true)}
+                        aria-label="Delete branches whose remote is gone"
+                      >
+                        <Unlink />
+                      </Button>
+                    </Tooltip>
+                  )}
+                  <Tooltip content="Create branch at HEAD" shortcut="Mod+Shift+B">
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      disabled={data.head.kind === "unborn"}
+                      onClick={createBranch}
+                      aria-label="Create branch"
+                    >
+                      <Plus />
+                    </Button>
+                  </Tooltip>
+                </>
               )
             }
           >
@@ -104,6 +124,12 @@ export function RefsSidebar({ repoId }: { repoId: string }) {
                       label={b.name}
                       active={b.isHead}
                       hint={b.ahead || b.behind ? `+${b.ahead} -${b.behind}` : undefined}
+                      title={
+                        b.upstreamGone
+                          ? "The remote branch this tracks was deleted (gone)"
+                          : undefined
+                      }
+                      badges={b.upstreamGone ? <Badge variant="warning">gone</Badge> : undefined}
                       leading={
                         <GitBranch
                           className="size-3.5 shrink-0"
@@ -133,6 +159,11 @@ export function RefsSidebar({ repoId }: { repoId: string }) {
                         </ContextMenuItem>
                         <ContextMenuSeparator />
                       </>
+                    )}
+                    {!platform.readOnly && gone.length > 0 && (
+                      <ContextMenuItem icon={<Unlink />} onSelect={() => setGoneOpen(true)}>
+                        Delete branches whose remote is gone…
+                      </ContextMenuItem>
                     )}
                     <ContextMenuItem
                       icon={<History />}
@@ -239,6 +270,12 @@ export function RefsSidebar({ repoId }: { repoId: string }) {
       {stash.dialog}
       {branchSummary.dialog}
       <HistoryViewsHost repoId={repoId} />
+      <GoneBranchesDialog
+        repoId={repoId}
+        open={goneOpen}
+        branches={gone}
+        onClose={() => setGoneOpen(false)}
+      />
       <SetUpstreamDialog
         repoId={repoId}
         branch={upstreamFor}

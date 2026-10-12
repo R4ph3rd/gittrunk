@@ -168,3 +168,7 @@ Development is split across Claude Code subagents defined in `.claude/agents/`. 
 2. The owning agent works in its own git worktree on `feat/<area>-<task>` and commits with Conventional Commits.
 3. The checker runs the full gate on that branch. It fixes small integration issues and returns larger ones to the owner with a failure report.
 4. On PASS the branch is rebased onto the integration branch and fast-forward merged. At each milestone the integration branch goes to `main` through a pull request.
+
+## Background fetch and pruning
+
+`features/remotes/autoFetch.ts` fetches every open repository with remotes in the background: shortly after it opens, every `AppSettings.autoFetchMinutes` (0 turns it off, default 5) and when the window regains focus (at most once a minute per repository). It skips a repository while another operation runs on it. It uses `fetch_background`, whose credential resolver is quiet: the keychain still answers, but nothing is ever prompted, and `runSilentOp` shows no toast or progress on any outcome while still refreshing the repo's queries. Manual and background fetches pass `prune` from `AppSettings.pruneOnFetch` (default on), which maps to `git fetch --prune` and libgit2 `FetchPrune::On`. Local branches whose upstream was deleted are never removed automatically; `BranchInfo.upstreamGone` marks them (badge in the Local section, plus a confirmed "Delete branches whose remote is gone" action that never touches the checked-out branch and skips branches with unmerged commits unless forced).

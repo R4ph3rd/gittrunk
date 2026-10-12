@@ -209,6 +209,31 @@ describe("settings dialog", () => {
     );
   });
 
+  it("configures automatic fetching and pruning", async () => {
+    const user = userEvent.setup();
+    setup();
+    const dialog = await openDialog(user);
+    await user.click(within(dialog).getByRole("button", { name: "Git" }));
+    const group = within(dialog).getByRole("radiogroup", { name: "Fetch automatically" });
+    expect(within(group).getByRole("radio", { name: "5 min" })).toBeChecked();
+    await user.click(within(group).getByRole("radio", { name: "Off" }));
+    await waitFor(() =>
+      expect(mocks().settingsSet).toHaveBeenCalledWith(
+        expect.objectContaining({ autoFetchMinutes: 0 }),
+      ),
+    );
+    const prune = within(dialog).getByRole("switch", {
+      name: "Prune deleted remote branches on fetch",
+    });
+    expect(prune).toBeChecked();
+    await user.click(prune);
+    await waitFor(() =>
+      expect(mocks().settingsSet).toHaveBeenCalledWith(
+        expect.objectContaining({ pruneOnFetch: false }),
+      ),
+    );
+  });
+
   it("opens the documentation through the backend", async () => {
     const user = userEvent.setup();
     setup();

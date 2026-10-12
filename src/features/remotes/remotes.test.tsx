@@ -422,6 +422,76 @@ describe("remotes management", () => {
     );
   });
 
+  it("marks branches whose remote is gone and deletes them after confirmation", async () => {
+    const commands = await backend(
+      refs([
+        branch({ name: "main", fullName: "refs/heads/main" }),
+        branch({ name: "old", fullName: "refs/heads/old", upstreamGone: true, isHead: false }),
+        branch({
+          name: "wip",
+          fullName: "refs/heads/wip",
+          upstreamGone: true,
+          isHead: false,
+        }),
+      ]),
+    );
+    commands.branchDelete.mockImplementation(
+      (_r: string, q: { name: string; force: boolean }, dryRun: boolean) =>
+        dryRun && q.name === "wip"
+          ? fail("invalidInput", "not fully merged")
+          : ok(previewOutcome("ok")),
+    );
+    const { user } = await openRepo();
+    const old = await screen.findByRole("button", { name: /^old/ });
+    expect(within(old).getByText("gone")).toBeInTheDocument();
+    expect(old).toHaveAttribute("title", expect.stringContaining("deleted"));
+
+    await user.click(screen.getByRole("button", { name: "Delete branches whose remote is gone" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "Delete branches whose remote is gone",
+    });
+    expect(await within(dialog).findByText("unpushed commits")).toBeInTheDocument();
+    // Unpushed work is kept unless forced: only `old` goes.
+    commands.branchDelete.mockClear();
+    await user.click(await within(dialog).findByRole("button", { name: /^Delete 1/ }));
+    await waitFor(() =>
+      expect(commands.branchDelete).toHaveBeenCalledWith(
+        "r1",
+        { name: "old", remote: false, force: false },
+        false,
+      ),
+    );
+    expect(commands.branchDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it("can force-delete gone branches with unpushed commits, never the checked-out one", async () => {
+    const commands = await backend(
+      refs([
+        branch({ name: "main", fullName: "refs/heads/main", upstreamGone: true }),
+        branch({ name: "wip", fullName: "refs/heads/wip", upstreamGone: true, isHead: false }),
+      ]),
+    );
+    commands.branchDelete.mockImplementation((_r: string, _q: unknown, dryRun: boolean) =>
+      dryRun ? fail("invalidInput", "not fully merged") : ok(previewOutcome("ok")),
+    );
+    const { user } = await openRepo();
+    await user.click(screen.getByRole("button", { name: "Delete branches whose remote is gone" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "Delete branches whose remote is gone",
+    });
+    expect(within(dialog).queryByText("main")).toBeNull();
+    await user.click(await within(dialog).findByRole("checkbox", { name: /unpushed commits/ }));
+    commands.branchDelete.mockClear();
+    await user.click(within(dialog).getByRole("button", { name: "Delete 1" }));
+    await waitFor(() =>
+      expect(commands.branchDelete).toHaveBeenCalledWith(
+        "r1",
+        { name: "wip", remote: false, force: true },
+        false,
+      ),
+    );
+  });
+
   it("removes a remote only after confirmation", async () => {
     const commands = await backend();
     const { user } = await openRepo();
