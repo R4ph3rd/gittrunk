@@ -16,6 +16,7 @@ import {
   type GraphFilter,
   type IssueCreateRequest,
   type IssueStateFilter,
+  type IgnoreTarget,
   type LineSelection,
   type PullStateFilter,
   type RepoChanged,
@@ -346,6 +347,20 @@ export function useDiscardPaths(repoId: string) {
 export function useDiscardLines(repoId: string) {
   return useRepoMutation(repoId, (v: { selection: LineSelection; dryRun: boolean }) =>
     unwrap(commands.discardLines(repoId, v.selection, v.dryRun)),
+  );
+}
+
+export function useIgnoreAdd(repoId: string) {
+  return useRepoMutation(
+    repoId,
+    (v: { patterns: string[]; target: IgnoreTarget; dryRun: boolean }) =>
+      unwrap(commands.ignoreAdd(repoId, v.patterns, v.target, v.dryRun)),
+  );
+}
+
+export function useUntrackPaths(repoId: string) {
+  return useRepoMutation(repoId, (v: { paths: string[]; dryRun: boolean }) =>
+    unwrap(commands.untrackPaths(repoId, v.paths, v.dryRun)),
   );
 }
 

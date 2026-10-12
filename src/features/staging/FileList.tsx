@@ -1,12 +1,10 @@
 import { Fragment, useMemo, useState, type KeyboardEvent, type MouseEvent } from "react";
-import { Copy, FolderTree, List, Minus, Plus, Undo2 } from "lucide-react";
+import { FolderTree, List, Minus, Plus } from "lucide-react";
 import {
   Badge,
   Button,
   ContextMenu,
   ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
   ContextMenuTrigger,
   IconButton,
   Separator,
@@ -27,6 +25,7 @@ import {
   type TreeItem,
 } from "./fileTreeModel";
 import { TreeRow } from "./FileTree";
+import { FileMenuContent, type MenuTarget } from "./FileMenu";
 import { errorMessage, useDiscard } from "./ops";
 
 export type Section = "conflicted" | "unstaged" | "staged";
@@ -164,7 +163,38 @@ export function FileList({ repoId, status, open, onOpen }: Props) {
 
   const requestDiscard = (item: Item) => {
     if (item.section === "staged") return;
-    void discard.request({ kind: "paths", paths: pathsOf(item) });
+    if (item.file || !item.tree) {
+      void discard.request({ kind: "paths", paths: pathsOf(item) });
+      return;
+    }
+    // A folder: untracked files inside are only deleted when the user opts in.
+    const files = filesUnder(item.tree.node);
+    void discard.request({
+      kind: "paths",
+      paths: files.filter((f) => f.status !== "untracked").map((f) => f.path),
+      optionalUntracked: files.filter((f) => f.status === "untracked").map((f) => f.path),
+    });
+  };
+
+  const menuTarget = (item: Item): MenuTarget => {
+    if (!item.file && item.tree) {
+      return {
+        section: item.section,
+        folder: item.tree.node.path,
+        files: filesUnder(item.tree.node),
+        primary: item.tree.node.path,
+      };
+    }
+    const file = item.file;
+    const picked =
+      file && selected.has(item.key)
+        ? fileItems
+            .filter((r) => selected.has(r.key) && r.section === item.section)
+            .flatMap((r) => (r.file ? [r.file] : []))
+        : file
+          ? [file]
+          : [];
+    return { section: item.section, folder: null, files: picked, primary: file?.path ?? "" };
   };
 
   const copyPaths = (item: Item) => {
@@ -278,30 +308,13 @@ export function FileList({ repoId, status, open, onOpen }: Props) {
     <ContextMenu key={item.key}>
       <ContextMenuTrigger asChild>{trigger}</ContextMenuTrigger>
       <ContextMenuContent>
-        {item.section !== "staged" && (
-          <ContextMenuItem icon={<Plus />} shortcut="Space" onSelect={() => toggleStage(item)}>
-            Stage
-          </ContextMenuItem>
-        )}
-        {item.section === "staged" && (
-          <ContextMenuItem icon={<Minus />} shortcut="Space" onSelect={() => toggleStage(item)}>
-            Unstage
-          </ContextMenuItem>
-        )}
-        {item.section !== "staged" && (
-          <ContextMenuItem
-            icon={<Undo2 />}
-            shortcut="Del"
-            destructive
-            onSelect={() => requestDiscard(item)}
-          >
-            Discard changes
-          </ContextMenuItem>
-        )}
-        <ContextMenuSeparator />
-        <ContextMenuItem icon={<Copy />} onSelect={() => copyPaths(item)}>
-          Copy path
-        </ContextMenuItem>
+        <FileMenuContent
+          repoId={repoId}
+          target={menuTarget(item)}
+          onToggleStage={() => toggleStage(item)}
+          onDiscard={() => requestDiscard(item)}
+          onCopyPath={() => copyPaths(item)}
+        />
       </ContextMenuContent>
     </ContextMenu>
   );

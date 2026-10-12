@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactNode } from "react";
-import { AlertDialog, toast } from "@/design/components";
+import { AlertDialog, Checkbox, toast } from "@/design/components";
 import type { LineSelection, OpOutcome, OpPreview } from "@/ipc/bindings";
 import { useDiscardLines, useDiscardPaths, useUndo } from "@/ipc/queries";
 
@@ -33,7 +33,13 @@ export function useOutcomeToast(repoId: string) {
 }
 
 export type DiscardTarget =
-  { kind: "paths"; paths: string[] } | { kind: "lines"; selection: LineSelection };
+  | {
+      kind: "paths";
+      paths: string[];
+      /** Untracked files that are deleted only when the user opts in (folder discards). */
+      optionalUntracked?: string[];
+    }
+  | { kind: "lines"; selection: LineSelection };
 
 function targetLabel(target: DiscardTarget): string[] {
   if (target.kind === "paths") return target.paths;
@@ -45,10 +51,14 @@ function targetLabel(target: DiscardTarget): string[] {
 }
 
 /** Confirmation body: the backend summary, the affected files and any warnings. */
-function discardPreview(preview: OpPreview, target: DiscardTarget) {
+function discardPreview(
+  preview: OpPreview | null,
+  target: DiscardTarget,
+  untracked: { count: number; checked: boolean; onChange: (checked: boolean) => void },
+) {
   return (
     <div className="flex flex-col gap-2">
-      <p className="whitespace-pre-wrap text-fg">{preview.summary}</p>
+      {preview && <p className="whitespace-pre-wrap text-fg">{preview.summary}</p>}
       <ul aria-label="Changes to discard">
         {targetLabel(target).map((p) => (
           <li key={p} className="truncate">
@@ -56,7 +66,15 @@ function discardPreview(preview: OpPreview, target: DiscardTarget) {
           </li>
         ))}
       </ul>
-      {preview.warnings.map((w) => (
+      {untracked.count > 0 && (
+        <Checkbox
+          label={`Also delete ${untracked.count} untracked file${untracked.count === 1 ? "" : "s"}`}
+          checked={untracked.checked}
+          onCheckedChange={untracked.onChange}
+          className="font-sans"
+        />
+      )}
+      {(preview?.warnings ?? []).map((w) => (
         <p key={w} className="text-warning">
           {w}
         </p>
@@ -76,9 +94,11 @@ export function useDiscard(repoId: string): {
   const discardPaths = useDiscardPaths(repoId);
   const discardLines = useDiscardLines(repoId);
   const notify = useOutcomeToast(repoId);
-  const [pending, setPending] = useState<{ target: DiscardTarget; preview: OpPreview } | null>(
-    null,
-  );
+  const [pending, setPending] = useState<{
+    target: DiscardTarget;
+    preview: OpPreview | null;
+  } | null>(null);
+  const [includeUntracked, setIncludeUntracked] = useState(false);
 
   const run = useCallback(
     (target: DiscardTarget, dryRun: boolean) =>
@@ -91,6 +111,12 @@ export function useDiscard(repoId: string): {
   const request = useCallback(
     async (target: DiscardTarget) => {
       try {
+        setIncludeUntracked(false);
+        if (target.kind === "paths" && target.paths.length === 0) {
+          // Only untracked files: nothing to dry-run, the user decides in the dialog.
+          setPending({ target, preview: null });
+          return;
+        }
         const outcome = await run(target, true);
         if (outcome.kind === "preview") setPending({ target, preview: outcome.preview });
         else notify(outcome, "Changes discarded");
@@ -104,7 +130,16 @@ export function useDiscard(repoId: string): {
   const confirm = async () => {
     if (!pending) return;
     try {
-      notify(await run(pending.target, false), "Changes discarded");
+      let target = pending.target;
+      if (target.kind === "paths") {
+        const extra = includeUntracked ? (target.optionalUntracked ?? []) : [];
+        target = { kind: "paths", paths: [...target.paths, ...extra] };
+        if (target.paths.length === 0) {
+          toast.info("Nothing to discard");
+          return;
+        }
+      }
+      notify(await run(target, false), "Changes discarded");
     } catch (e) {
       toast.error(`Discard failed: ${errorMessage(e)}`);
     }
@@ -118,7 +153,18 @@ export function useDiscard(repoId: string): {
       }}
       title="Discard changes?"
       description="These uncommitted changes will be lost. You can undo right after."
-      preview={pending ? discardPreview(pending.preview, pending.target) : null}
+      preview={
+        pending
+          ? discardPreview(pending.preview, pending.target, {
+              count:
+                pending.target.kind === "paths"
+                  ? (pending.target.optionalUntracked?.length ?? 0)
+                  : 0,
+              checked: includeUntracked,
+              onChange: setIncludeUntracked,
+            })
+          : null
+      }
       confirmLabel="Discard"
       destructive
       onConfirm={() => void confirm()}
