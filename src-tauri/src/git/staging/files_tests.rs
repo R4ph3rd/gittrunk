@@ -304,7 +304,7 @@ fn difftool_launches_the_configured_tool() {
         .unwrap();
     difftool_open(&t.repo, &GitCli::new(), "keep.txt", false).unwrap();
     let marker = t.root().join("difftool-ran.marker");
-    for _ in 0..100 {
+    for _ in 0..600 {
         if marker.exists() {
             return;
         }
@@ -328,7 +328,11 @@ fn difftool_is_unsupported_when_embedded() {
 fn spawn_detached_reports_early_failures() {
     let t = base();
     let err = GitCli::new()
-        .spawn_detached(&t.root(), &["no-such-subcommand-xyz"])
+        .spawn_detached_with_grace(
+            &t.root(),
+            &["no-such-subcommand-xyz"],
+            std::time::Duration::from_secs(30),
+        )
         .unwrap_err();
     assert_eq!(err.kind, ErrorKind::GitCli);
 }

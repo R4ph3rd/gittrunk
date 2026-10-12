@@ -192,6 +192,17 @@ impl GitCli {
     /// A process that fails within a short grace period is reported as an
     /// error; one that keeps running is left to finish in the background.
     pub fn spawn_detached<S: AsRef<str>>(&self, dir: &Path, args: &[S]) -> AppResult<()> {
+        self.spawn_detached_with_grace(dir, args, Duration::from_millis(600))
+    }
+
+    /// [`Self::spawn_detached`] with an explicit grace period (tests use a long
+    /// one so a slow machine can't turn an early failure into a "still running").
+    pub(crate) fn spawn_detached_with_grace<S: AsRef<str>>(
+        &self,
+        dir: &Path,
+        args: &[S],
+        grace: Duration,
+    ) -> AppResult<()> {
         if self.embedded {
             return Err(AppError::new(
                 ErrorKind::Unsupported,
@@ -230,7 +241,7 @@ impl GitCli {
             let code = child.wait().ok().and_then(|s| s.code()).unwrap_or(-1);
             let _ = tx.send((code, String::from_utf8_lossy(&text).into_owned()));
         });
-        match rx.recv_timeout(Duration::from_millis(600)) {
+        match rx.recv_timeout(grace) {
             Ok((code, stderr)) if code != 0 => Err(CliOutput {
                 stdout: Vec::new(),
                 stderr,
