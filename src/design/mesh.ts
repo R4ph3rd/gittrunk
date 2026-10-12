@@ -1,73 +1,92 @@
-/** Pure shape and parallax math for MeshBackdrop. */
+/** Pure wave-shape math for MeshBackdrop. Coordinates live in a 100x100 viewBox (y grows downward). */
 
-export interface BlobSpec {
-  /** Token index 1..3 (--backdrop-N). */
-  color: 1 | 2 | 3;
-  /** Position and size in % of the container. */
-  x: number;
-  y: number;
-  size: number;
-  /** Parallax: horizontal and vertical amplitude in px, period in px of scroll, phase in radians. */
-  ampX: number;
-  ampY: number;
+export interface WaveLayerSpec {
+  /** Baseline y (% from the top) of the crest line; the wave fills below it. */
+  base: number;
+  /** Two sine components: amplitude (% of height), wavelength (% of width), phase (rad). */
+  a1: number;
+  l1: number;
+  p1: number;
+  a2: number;
+  l2: number;
+  p2: number;
+  /** Scroll response: radians of phase shift per px, amplitude modulation depth (0..1) and period (px). */
+  speed: number;
+  breathe: number;
   period: number;
-  phase: number;
-  seed: number;
+  /** Share of the intensity alpha this layer paints (the layers stack in the contrast test). */
+  weight: number;
 }
 
-export const BLOBS: readonly BlobSpec[] = [
-  { color: 1, x: -12, y: -18, size: 62, ampX: 90, ampY: 18, period: 1800, phase: 0, seed: 11 },
-  { color: 2, x: 38, y: 22, size: 70, ampX: 70, ampY: 14, period: 2400, phase: 2.1, seed: 23 },
-  { color: 3, x: 62, y: -10, size: 54, ampX: 55, ampY: 20, period: 1300, phase: 4.2, seed: 37 },
+/** Back layer is taller and slower, front layer lower and faster in the opposite direction. */
+export const WAVE_LAYERS: readonly WaveLayerSpec[] = [
+  {
+    base: 62,
+    a1: 7,
+    l1: 85,
+    p1: 0.6,
+    a2: 3.5,
+    l2: 38,
+    p2: 2.4,
+    speed: 0.0032,
+    breathe: 0.3,
+    period: 2600,
+    weight: 0.6,
+  },
+  {
+    base: 72,
+    a1: 6,
+    l1: 70,
+    p1: 3.4,
+    a2: 3,
+    l2: 30,
+    p2: 0.9,
+    speed: -0.0046,
+    breathe: 0.25,
+    period: 1900,
+    weight: 1,
+  },
 ];
 
-/** Small deterministic PRNG returning values in [0, 1). */
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+/** Horizontal overscan (in viewBox units) so blurred side edges stay inside the container. */
+export const WAVE_X_MIN = -12;
+export const WAVE_X_MAX = 112;
+/** The fill closes below the container (clipped) so the blur does not fade the bottom edge. */
+export const WAVE_BOTTOM = 140;
+
+const TAU = Math.PI * 2;
+const SEGMENTS = 10;
+
+/** Crest height (y) of a layer at x for a scroll position. */
+export function waveY(x: number, scrollTop: number, layer: WaveLayerSpec): number {
+  const shift = scrollTop * layer.speed;
+  const amp = 1 + layer.breathe * Math.sin((TAU * scrollTop) / layer.period + layer.p1);
+  return (
+    layer.base +
+    amp * layer.a1 * Math.sin((TAU * x) / layer.l1 + layer.p1 + shift) +
+    amp * layer.a2 * Math.sin((TAU * x) / layer.l2 + layer.p2 - shift * 1.7)
+  );
 }
 
-const clamp = (v: number) => Math.min(100, Math.max(0, v));
-const fmt = (v: number) => clamp(v).toFixed(2);
+const f = (v: number) => v.toFixed(2);
 
-/** Smooth closed SVG path ("M ... C ... Z") of a wavy organic blob in a 100x100 box. Deterministic per seed. */
-export function blobPath(seed: number, points = 7): string {
-  const n = Math.min(8, Math.max(6, Math.round(points)));
-  const rand = mulberry32(seed);
+/** Smooth closed path ("M ... C ... L ... Z"): Catmull-Rom curve along the crest, closed below the container. */
+export function wavePath(scrollTop: number, layer: WaveLayerSpec): string {
+  const step = (WAVE_X_MAX - WAVE_X_MIN) / SEGMENTS;
   const pts: [number, number][] = [];
-  const offset = rand() * Math.PI * 2;
-  for (let i = 0; i < n; i++) {
-    const angle = offset + (i / n) * Math.PI * 2;
-    const r = 26 + rand() * 18; // 26..44
-    pts.push([50 + Math.cos(angle) * r, 50 + Math.sin(angle) * r]);
+  for (let i = -1; i <= SEGMENTS + 1; i++) {
+    const x = WAVE_X_MIN + i * step;
+    pts.push([x, waveY(x, scrollTop, layer)]);
   }
-  const at = (i: number) => pts[((i % n) + n) % n]!;
-  let d = `M ${fmt(at(0)[0])} ${fmt(at(0)[1])}`;
-  for (let i = 0; i < n; i++) {
-    const p0 = at(i - 1);
-    const p1 = at(i);
-    const p2 = at(i + 1);
-    const p3 = at(i + 2);
-    const c1x = p1[0] + (p2[0] - p0[0]) / 6;
-    const c1y = p1[1] + (p2[1] - p0[1]) / 6;
-    const c2x = p2[0] - (p3[0] - p1[0]) / 6;
-    const c2y = p2[1] - (p3[1] - p1[1]) / 6;
-    d += ` C ${fmt(c1x)} ${fmt(c1y)} ${fmt(c2x)} ${fmt(c2y)} ${fmt(p2[0])} ${fmt(p2[1])}`;
+  let d = `M ${f(pts[1]![0])} ${f(pts[1]![1])}`;
+  for (let i = 1; i <= SEGMENTS; i++) {
+    const p0 = pts[i - 1]!;
+    const p1 = pts[i]!;
+    const p2 = pts[i + 1]!;
+    const p3 = pts[i + 2]!;
+    d += ` C ${f(p1[0] + (p2[0] - p0[0]) / 6)} ${f(p1[1] + (p2[1] - p0[1]) / 6)}`;
+    d += ` ${f(p2[0] - (p3[0] - p1[0]) / 6)} ${f(p2[1] - (p3[1] - p1[1]) / 6)}`;
+    d += ` ${f(p2[0])} ${f(p2[1])}`;
   }
-  return `${d} Z`;
-}
-
-/** Parallax offset for a scroll position. Bounded: |x| <= ampX, |y| <= ampY. */
-export function blobOffset(scrollTop: number, blob: BlobSpec): { x: number; y: number } {
-  const tau = Math.PI * 2;
-  return {
-    x: blob.ampX * Math.sin((tau * scrollTop) / blob.period + blob.phase),
-    y: blob.ampY * Math.sin((tau * scrollTop) / (1.6 * blob.period) + blob.phase),
-  };
+  return `${d} L ${WAVE_X_MAX} ${WAVE_BOTTOM} L ${WAVE_X_MIN} ${WAVE_BOTTOM} Z`;
 }

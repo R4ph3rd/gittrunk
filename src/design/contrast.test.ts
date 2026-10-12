@@ -3,6 +3,7 @@ import { readFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { describe, it, expect } from "vitest";
+import { WAVE_LAYERS } from "./mesh";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -372,15 +373,26 @@ describe("WCAG contrast", () => {
       base[1] * (1 - a) + top[1] * a,
       base[2] * (1 - a) + top[2] * a,
     ];
-    /** All three blobs stacked at peak alpha over the base color. */
-    const stacked = (tokens: Record<string, string>, base: string, alphaToken: string) => {
+    /** Wave layers stacked at peak alpha (bottom of the container) over the base, for one wave color. */
+    const stackedWith = (
+      tokens: Record<string, string>,
+      base: string,
+      alphaToken: string,
+      wave: [number, number, number],
+    ) => {
       const alpha = parseFloat(getToken(tokens, alphaToken));
       let c: [number, number, number] = resolveColor(getToken(tokens, base), tokens);
-      for (const n of [1, 2, 3]) {
-        c = blend(c, resolveColor(getToken(tokens, `backdrop-${n}`), tokens), alpha);
-      }
+      for (const layer of WAVE_LAYERS) c = blend(c, wave, alpha * layer.weight);
       return c;
     };
+    /** Left (red), middle and right (blue) of the horizontal gradient. */
+    const waveColors = (tokens: Record<string, string>) => {
+      const red = resolveColor(getToken(tokens, "backdrop-red"), tokens);
+      const blue = resolveColor(getToken(tokens, "backdrop-blue"), tokens);
+      return [red, blend(red, blue, 0.5), blue];
+    };
+    const stacked = (tokens: Record<string, string>, base: string, alphaToken: string) =>
+      waveColors(tokens).map((w) => stackedWith(tokens, base, alphaToken, w));
     const rnd = (c: [number, number, number]): [number, number, number] => [
       Math.round(c[0]),
       Math.round(c[1]),
@@ -393,22 +405,26 @@ describe("WCAG contrast", () => {
     ];
     for (const [name, tokens] of themes) {
       it(`${name}: subtle over --surface keeps text >= 4.5 and lanes >= 3`, () => {
-        const base = rnd(stacked(tokens, "surface", "backdrop-alpha-subtle"));
-        for (const t of ["fg", "fg-muted", "fg-subtle", "accent"]) {
-          const fg = resolveColor(getToken(tokens, t), tokens);
-          expect(getContrast(fg, base), t).toBeGreaterThanOrEqual(4.5);
-        }
-        for (let i = 0; i < 8; i++) {
-          const lane = resolveColor(getToken(tokens, `lane-${i}`), tokens);
-          expect(getContrast(lane, base), `lane-${i}`).toBeGreaterThanOrEqual(3);
+        for (const c of stacked(tokens, "surface", "backdrop-alpha-subtle")) {
+          const base = rnd(c);
+          for (const t of ["fg", "fg-muted", "fg-subtle", "accent"]) {
+            const fg = resolveColor(getToken(tokens, t), tokens);
+            expect(getContrast(fg, base), t).toBeGreaterThanOrEqual(4.5);
+          }
+          for (let i = 0; i < 8; i++) {
+            const lane = resolveColor(getToken(tokens, `lane-${i}`), tokens);
+            expect(getContrast(lane, base), `lane-${i}`).toBeGreaterThanOrEqual(3);
+          }
         }
       });
 
       it(`${name}: page over --bg keeps fg and fg-muted >= 4.5`, () => {
-        const base = rnd(stacked(tokens, "bg", "backdrop-alpha-page"));
-        for (const t of ["fg", "fg-muted"]) {
-          const fg = resolveColor(getToken(tokens, t), tokens);
-          expect(getContrast(fg, base), t).toBeGreaterThanOrEqual(4.5);
+        for (const c of stacked(tokens, "bg", "backdrop-alpha-page")) {
+          const base = rnd(c);
+          for (const t of ["fg", "fg-muted"]) {
+            const fg = resolveColor(getToken(tokens, t), tokens);
+            expect(getContrast(fg, base), t).toBeGreaterThanOrEqual(4.5);
+          }
         }
       });
     }

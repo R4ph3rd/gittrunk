@@ -7,8 +7,10 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const blobs = (root: HTMLElement) => [...root.querySelectorAll<HTMLElement>("[data-blob]")];
-const transforms = (root: HTMLElement) => blobs(root).map((b) => b.style.transform);
+const layers = (root: HTMLElement) => [
+  ...root.querySelectorAll<SVGPathElement>("[data-wave-layer]"),
+];
+const paths = (root: HTMLElement) => layers(root).map((p) => p.getAttribute("d"));
 
 function stubRaf() {
   vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
@@ -22,32 +24,36 @@ const renderWith = (scroller: HTMLDivElement) =>
   render(<MeshBackdrop intensity="subtle" scrollRef={{ current: scroller }} />);
 
 describe("MeshBackdrop", () => {
-  it("renders three token-colored blobs with the intensity variables", () => {
+  it("renders a red-to-blue token gradient wave with the intensity variables", () => {
     const { getByTestId } = render(<MeshBackdrop intensity="page" />);
     const root = getByTestId("mesh-backdrop");
     expect(root).toHaveAttribute("aria-hidden", "true");
     expect(root).toHaveAttribute("data-intensity", "page");
     expect(root.className).toContain("pointer-events-none");
-    const items = blobs(root);
-    expect(items).toHaveLength(3);
-    items.forEach((el, i) => {
-      expect(el.style.opacity).toBe("var(--backdrop-alpha-page)");
-      expect(el.style.filter).toBe("blur(var(--backdrop-blur-page))");
-      expect(el.querySelector("path")).toHaveAttribute("fill", `var(--backdrop-${i + 1})`);
+    const stops = [...root.querySelectorAll("stop")].map((s) => s.getAttribute("stop-color"));
+    expect(stops).toEqual(["var(--backdrop-red)", "var(--backdrop-blue)"]);
+    expect(root.querySelector<HTMLElement>("[data-wave]")!.style.filter).toBe(
+      "blur(var(--backdrop-blur-page))",
+    );
+    const items = layers(root);
+    expect(items).toHaveLength(2);
+    items.forEach((el) => {
+      expect(el.getAttribute("d")).toMatch(/^M .* Z$/);
+      expect(el.getAttribute("fill")).toMatch(/^url\(#wave-/);
+      expect(el.style.opacity).toContain("var(--backdrop-alpha-page)");
     });
   });
 
-  it("moves the blobs on scroll through direct transform writes", () => {
+  it("morphs the wave on scroll through direct d writes", () => {
     stubRaf();
     const scroller = document.createElement("div");
     const { getByTestId } = renderWith(scroller);
     const root = getByTestId("mesh-backdrop");
-    const before = transforms(root);
+    const before = paths(root);
     scroller.scrollTop = 700;
     fireEvent.scroll(scroller);
-    const after = transforms(root);
-    expect(after).not.toEqual(before);
-    after.forEach((t) => expect(t).toMatch(/^translate3d\(/));
+    const after = paths(root);
+    after.forEach((d, i) => expect(d).not.toBe(before[i]));
   });
 
   it("stays static under prefers-reduced-motion", () => {
@@ -60,10 +66,10 @@ describe("MeshBackdrop", () => {
     const add = vi.spyOn(scroller, "addEventListener");
     const { getByTestId } = renderWith(scroller);
     const root = getByTestId("mesh-backdrop");
-    const before = transforms(root);
+    const before = paths(root);
     scroller.scrollTop = 700;
     fireEvent.scroll(scroller);
-    expect(transforms(root)).toEqual(before);
+    expect(paths(root)).toEqual(before);
     expect(add).not.toHaveBeenCalledWith("scroll", expect.anything(), expect.anything());
   });
 

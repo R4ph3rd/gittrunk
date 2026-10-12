@@ -1,33 +1,30 @@
-import { useEffect, useMemo, useRef, type RefObject } from "react";
+import { useEffect, useId, useRef, type RefObject } from "react";
 import { cn } from "@/lib/cn";
 import { usePrefersReducedMotion } from "../hooks/usePrefersReducedMotion";
-import { BLOBS, blobOffset, blobPath } from "../mesh";
+import { WAVE_LAYERS, wavePath } from "../mesh";
 
 export interface MeshBackdropProps {
   /** "subtle": behind dense content such as the graph. "page": the Home page. */
   intensity: "subtle" | "page";
-  /** Scroll container driving the parallax; omit for a static backdrop. */
+  /** Scroll container whose position morphs the wave; omit for a static backdrop. */
   scrollRef?: RefObject<HTMLElement | null>;
   /** Change it when the scroll element is replaced so the listener re-subscribes. */
   scrollKey?: string | number;
   className?: string;
 }
 
-const transformAt = (scrollTop: number, i: number) => {
-  const { x, y } = blobOffset(scrollTop, BLOBS[i]!);
-  return `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
-};
+const MASK = "linear-gradient(to top, #000 0%, #000 26%, transparent 62%)";
 
-/** Decorative blurred blobs. Place as the first child of a `relative isolate` container. */
+/** Decorative soft wave rising from the bottom (red left, blue right). Place as the first child of a `relative isolate` container. */
 export function MeshBackdrop({ intensity, scrollRef, scrollKey, className }: MeshBackdropProps) {
   const reduced = usePrefersReducedMotion();
-  const blobRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const paths = useMemo(() => BLOBS.map((b) => blobPath(b.seed)), []);
+  const gradientId = `wave-${useId().replace(/:/g, "")}`;
+  const pathRefs = useRef<(SVGPathElement | null)[]>([]);
 
   useEffect(() => {
     const apply = (scrollTop: number) => {
-      blobRefs.current.forEach((el, i) => {
-        if (el) el.style.transform = transformAt(scrollTop, i);
+      pathRefs.current.forEach((el, i) => {
+        if (el) el.setAttribute("d", wavePath(scrollTop, WAVE_LAYERS[i]!));
       });
     };
     const el = scrollRef?.current;
@@ -58,34 +55,41 @@ export function MeshBackdrop({ intensity, scrollRef, scrollKey, className }: Mes
       data-intensity={intensity}
       className={cn("pointer-events-none absolute inset-0 overflow-hidden", className)}
     >
-      {BLOBS.map((b, i) => (
-        <div
-          key={b.color}
-          ref={(node) => {
-            blobRefs.current[i] = node;
-          }}
-          data-blob={b.color}
-          className="absolute will-change-transform"
-          style={{
-            left: `${b.x}%`,
-            top: `${b.y}%`,
-            width: `${b.size}%`,
-            height: `${b.size}%`,
-            opacity: `var(--backdrop-alpha-${intensity})`,
-            filter: `blur(var(--backdrop-blur-${intensity}))`,
-            transform: transformAt(0, i),
-          }}
+      <div
+        data-wave
+        className="absolute inset-0"
+        style={{
+          filter: `blur(var(--backdrop-blur-${intensity}))`,
+          maskImage: MASK,
+          WebkitMaskImage: MASK,
+        }}
+      >
+        <svg
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          className="size-full overflow-visible"
+          focusable="false"
         >
-          <svg
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-            className="size-full"
-            focusable="false"
-          >
-            <path d={paths[i]} fill={`var(--backdrop-${b.color})`} />
-          </svg>
-        </div>
-      ))}
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stopColor="var(--backdrop-red)" />
+              <stop offset="1" stopColor="var(--backdrop-blue)" />
+            </linearGradient>
+          </defs>
+          {WAVE_LAYERS.map((layer, i) => (
+            <path
+              key={i}
+              ref={(node) => {
+                pathRefs.current[i] = node;
+              }}
+              data-wave-layer={i}
+              d={wavePath(0, layer)}
+              fill={`url(#${gradientId})`}
+              style={{ opacity: `calc(var(--backdrop-alpha-${intensity}) * ${layer.weight})` }}
+            />
+          ))}
+        </svg>
+      </div>
     </div>
   );
 }

@@ -583,7 +583,18 @@ function Page() {
           </div>
         </Section>
 
-        <Section title="MeshBackdrop (scroll the lists)">
+        <Section title="MeshBackdrop wave, red to blue (scroll the lists; the curve morphs)">
+          <div className="mb-3 flex gap-3 text-xs text-fg-muted">
+            {["--backdrop-red", "--backdrop-blue"].map((t) => (
+              <span key={t} className="flex items-center gap-1.5 font-mono">
+                <span
+                  className="size-4 rounded-sm border border-border"
+                  style={{ background: `var(${t})` }}
+                />
+                {t}
+              </span>
+            ))}
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <BackdropDemo intensity="subtle" />
             <BackdropDemo intensity="page" />
