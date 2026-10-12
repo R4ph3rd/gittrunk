@@ -565,6 +565,33 @@ wire_tagged! {
     }
 }
 
+// ---------------------------------------------------------------- path operations
+
+wire_enum! {
+    /// Where `ignore_add` writes its patterns.
+    pub enum IgnoreTarget {
+        /// `.gitignore` at the repository root.
+        Gitignore,
+        /// `.git/info/exclude` (local only).
+        Exclude,
+    }
+}
+
+wire! {
+    /// Result of `ignore_add` (also returned by a dry run, without writing).
+    pub struct IgnoreAddResult {
+        /// Display name of the file the patterns went to.
+        pub file: String,
+        /// Patterns appended (or that would be appended).
+        pub added: Vec<String>,
+        /// Patterns that were already in the file.
+        pub already_present: Vec<String>,
+        /// Tracked files the new patterns match: ignoring does not affect them
+        /// until they are untracked.
+        pub tracked: Vec<String>,
+    }
+}
+
 // ---------------------------------------------------------------- conflicts
 
 wire! {

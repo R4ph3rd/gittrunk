@@ -50,6 +50,11 @@ export const commands = {
 	unstageLines: (repo: string, selection: LineSelection) => typedError<null, AppError>(__TAURI_INVOKE("unstage_lines", { repo, selection })),
 	discardLines: (repo: string, selection: LineSelection, dryRun: boolean) => typedError<OpOutcome, AppError>(__TAURI_INVOKE("discard_lines", { repo, selection, dryRun })),
 	commitCreate: (repo: string, request: CommitRequest) => typedError<OpOutcome, AppError>(__TAURI_INVOKE("commit_create", { repo, request })),
+	ignoreAdd: (repo: string, patterns: string[], target: IgnoreTarget, dryRun: boolean) => typedError<IgnoreAddResult, AppError>(__TAURI_INVOKE("ignore_add", { repo, patterns, target, dryRun })),
+	untrackPaths: (repo: string, paths: string[], dryRun: boolean) => typedError<OpOutcome, AppError>(__TAURI_INVOKE("untrack_paths", { repo, paths, dryRun })),
+	difftoolOpen: (repo: string, path: string, staged: boolean) => typedError<null, AppError>(__TAURI_INVOKE("difftool_open", { repo, path, staged })),
+	diffPatch: (repo: string, paths: string[], staged: boolean) => typedError<string, AppError>(__TAURI_INVOKE("diff_patch", { repo, paths, staged })),
+	diffPatchSave: (repo: string, paths: string[], staged: boolean, dest: string) => typedError<number, AppError>(__TAURI_INVOKE("diff_patch_save", { repo, paths, staged, dest })),
 	stashList: (repo: string) => typedError<StashEntry[], AppError>(__TAURI_INVOKE("stash_list", { repo })),
 	stashSave: (repo: string, request: StashSaveRequest) => typedError<OpOutcome, AppError>(__TAURI_INVOKE("stash_save", { repo, request })),
 	stashApply: (repo: string, index: number, pop: boolean) => typedError<OpOutcome, AppError>(__TAURI_INVOKE("stash_apply", { repo, index, pop })),
@@ -533,6 +538,28 @@ export type HunkSelection = {
 	hunkIndex: number,
 	lines: number[] | null,
 };
+
+/**  Result of `ignore_add` (also returned by a dry run, without writing). */
+export type IgnoreAddResult = {
+	/**  Display name of the file the patterns went to. */
+	file: string,
+	/**  Patterns appended (or that would be appended). */
+	added: string[],
+	/**  Patterns that were already in the file. */
+	alreadyPresent: string[],
+	/**
+	 *  Tracked files the new patterns match: ignoring does not affect them
+	 *  until they are untracked.
+	 */
+	tracked: string[],
+};
+
+/**  Where `ignore_add` writes its patterns. */
+export type IgnoreTarget = 
+/**  `.gitignore` at the repository root. */
+"gitignore" | 
+/**  `.git/info/exclude` (local only). */
+"exclude";
 
 export type InitRequest = {
 	path: string,

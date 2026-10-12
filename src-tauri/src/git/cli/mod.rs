@@ -188,6 +188,59 @@ impl GitCli {
         self.run_streaming(dir, args, opts, None, &mut |_| {})
     }
 
+    /// Starts git without waiting for it (GUI tools such as `git difftool`).
+    /// A process that fails within a short grace period is reported as an
+    /// error; one that keeps running is left to finish in the background.
+    pub fn spawn_detached<S: AsRef<str>>(&self, dir: &Path, args: &[S]) -> AppResult<()> {
+        if self.embedded {
+            return Err(AppError::new(
+                ErrorKind::Unsupported,
+                "external tools are not available on this platform",
+            ));
+        }
+        let args: Vec<String> = args.iter().map(|a| a.as_ref().to_string()).collect();
+        let mut cmd = self.command(dir, &args, &CliOptions::default());
+        cmd.stdout(Stdio::null());
+        let mut child = cmd.spawn().map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                AppError::new(
+                    ErrorKind::GitCli,
+                    format!("git executable `{}` not found", self.program.display()),
+                )
+            } else {
+                AppError::from(e)
+            }
+        })?;
+        let stderr = child.stderr.take();
+        let (tx, rx) = mpsc::channel::<(i32, String)>();
+        // Keeps draining stderr so a chatty tool never blocks, and reaps the child.
+        std::thread::spawn(move || {
+            let mut text = Vec::new();
+            if let Some(mut s) = stderr {
+                let mut chunk = [0u8; 4096];
+                while let Ok(n) = s.read(&mut chunk) {
+                    if n == 0 {
+                        break;
+                    }
+                    if text.len() < 64 * 1024 {
+                        text.extend_from_slice(&chunk[..n]);
+                    }
+                }
+            }
+            let code = child.wait().ok().and_then(|s| s.code()).unwrap_or(-1);
+            let _ = tx.send((code, String::from_utf8_lossy(&text).into_owned()));
+        });
+        match rx.recv_timeout(Duration::from_millis(600)) {
+            Ok((code, stderr)) if code != 0 => Err(CliOutput {
+                stdout: Vec::new(),
+                stderr,
+                code,
+            }
+            .error()),
+            _ => Ok(()),
+        }
+    }
+
     /// Runs git, calling `on_stderr` for every stderr line (split on `\n` and
     /// `\r`, so `--progress` updates arrive individually). When `op` is given
     /// the child is registered so `OpRegistry::cancel` can kill it, in which

@@ -18,3 +18,4 @@ pub mod ssh;
 pub mod stash;
 pub mod terminal;
 pub mod worktree;
+pub mod worktree_files;

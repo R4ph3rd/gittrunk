@@ -2,6 +2,7 @@
 //! Kept in its own trait so it does not touch `GitService`.
 
 pub(crate) mod commit;
+pub mod files;
 pub mod patch;
 
 use std::collections::BTreeSet;
