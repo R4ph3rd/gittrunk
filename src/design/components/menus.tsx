@@ -1,5 +1,6 @@
 import * as ContextPrimitive from "@radix-ui/react-context-menu";
 import * as DropdownPrimitive from "@radix-ui/react-dropdown-menu";
+import { ChevronRight } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { floating, menuItem, popIn } from "./shared";
@@ -116,4 +117,36 @@ export function ContextMenuSeparator({
   ...props
 }: ComponentProps<typeof ContextPrimitive.Separator>) {
   return <ContextPrimitive.Separator className={cn(separator, className)} {...props} />;
+}
+
+/* ContextMenu submenus */
+export const ContextMenuSub = ContextPrimitive.Sub;
+
+export function ContextMenuSubTrigger({
+  className,
+  icon,
+  children,
+  ...props
+}: ComponentProps<typeof ContextPrimitive.SubTrigger> & Pick<ItemExtras, "icon">) {
+  return (
+    <ContextPrimitive.SubTrigger
+      className={cn(menuItem, "data-[state=open]:bg-surface-hover", className)}
+      {...props}
+    >
+      {icon}
+      {children}
+      <ChevronRight aria-hidden className="ml-auto" />
+    </ContextPrimitive.SubTrigger>
+  );
+}
+
+export function ContextMenuSubContent({
+  className,
+  ...props
+}: ComponentProps<typeof ContextPrimitive.SubContent>) {
+  return (
+    <ContextPrimitive.Portal>
+      <ContextPrimitive.SubContent className={cn(content, className)} {...props} />
+    </ContextPrimitive.Portal>
+  );
 }
