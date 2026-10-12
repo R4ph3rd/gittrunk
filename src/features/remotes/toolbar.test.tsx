@@ -304,6 +304,7 @@ describe("running operation icons", () => {
           ahead: 1,
           behind: 2,
           isHead: true,
+          upstreamGone: false,
           remote: null,
         },
       ],
